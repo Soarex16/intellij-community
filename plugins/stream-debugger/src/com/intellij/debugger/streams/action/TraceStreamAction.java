@@ -8,6 +8,9 @@ import com.intellij.debugger.streams.lib.LibrarySupportProvider;
 import com.intellij.debugger.streams.psi.DebuggerPositionResolver;
 import com.intellij.debugger.streams.psi.impl.DebuggerPositionResolverImpl;
 import com.intellij.debugger.streams.trace.*;
+import com.intellij.debugger.streams.trace.breakpoint.BreakpointConfigurator;
+import com.intellij.debugger.streams.trace.breakpoint.BulkBreakpointConfigurator;
+import com.intellij.debugger.streams.trace.breakpoint.MethodBreakpointTracer;
 import com.intellij.debugger.streams.trace.impl.TraceResultInterpreterImpl;
 import com.intellij.debugger.streams.ui.ChooserOption;
 import com.intellij.debugger.streams.ui.impl.ElementChooserImpl;
@@ -110,8 +113,9 @@ public final class TraceStreamAction extends AnAction {
     ApplicationManager.getApplication().invokeLater(window::show);
     final Project project = session.getProject();
     final TraceExpressionBuilder expressionBuilder = provider.getExpressionBuilder(project);
-    final TraceResultInterpreterImpl resultInterpreter = new TraceResultInterpreterImpl(provider.getLibrarySupport().getInterpreterFactory());
-    final StreamTracer tracer = new EvaluateExpressionTracer(session, expressionBuilder, resultInterpreter);
+    final TraceResultInterpreter resultInterpreter = new TraceResultInterpreterImpl(provider.getLibrarySupport().getInterpreterFactory());
+    final BreakpointConfigurator breakpointConfigurator = new BulkBreakpointConfigurator();
+    final StreamTracer tracer = new MethodBreakpointTracer(session, breakpointConfigurator, resultInterpreter);
     tracer.trace(chain, new TracingCallback() {
       @Override
       public void evaluated(@NotNull TracingResult result, @NotNull EvaluationContextImpl context) {
