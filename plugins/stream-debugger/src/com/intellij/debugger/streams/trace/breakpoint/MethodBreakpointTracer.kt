@@ -50,14 +50,17 @@ class MethodBreakpointTracer(private val mySession: XDebugSession,
 
       override fun breakpointSetupFailed(e: Throwable) {
         callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.find.places.for.breakpoints"))
+        LOG.error(e)
       }
 
       override fun tracingSetupFailed(e: Throwable) {
         callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.initialize.breakpoints"))
+        LOG.error(e)
       }
 
       override fun streamExecutionFailed(e: Throwable) {
-        TODO("not implemented")
+        callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.exception.occurred.during.stream.execution"))
+        LOG.error(e)
       }
     }
 

@@ -28,8 +28,7 @@ class ValueContainerImpl(private val myEvalContext: EvaluationContextImpl) : Val
 
     val threadRef = myEvalContext.suspendContext.thread?.threadReference ?: return null
     val instance = classType.newInstance(threadRef, constructorMethod, args, ClassType.INVOKE_SINGLE_THREADED)
-    keepValue(instance)
-    myInstantiatedObjects.add(className, instance)
+    keepValue(className, instance)
 
     return instance
   }
@@ -39,10 +38,11 @@ class ValueContainerImpl(private val myEvalContext: EvaluationContextImpl) : Val
     return factory()
   }
 
-  private fun keepValue(value: Value) {
+  private fun keepValue(className: String, value: Value) {
     if (value is ObjectReference) {
       if (!Patches.IBM_JDK_DISABLE_COLLECTION_BUG) {
         value.disableCollection()
+        myInstantiatedObjects.add(className, value)
       }
     }
   }
