@@ -1,6 +1,7 @@
 // Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.debugger.streams.action;
 
+import com.intellij.debugger.engine.JavaDebugProcess;
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl;
 import com.intellij.debugger.streams.diagnostic.ex.TraceCompilationException;
 import com.intellij.debugger.streams.diagnostic.ex.TraceEvaluationException;
@@ -8,13 +9,12 @@ import com.intellij.debugger.streams.lib.LibrarySupportProvider;
 import com.intellij.debugger.streams.psi.DebuggerPositionResolver;
 import com.intellij.debugger.streams.psi.impl.DebuggerPositionResolverImpl;
 import com.intellij.debugger.streams.trace.*;
-import com.intellij.debugger.streams.trace.breakpoint.BreakpointConfigurator;
-import com.intellij.debugger.streams.trace.breakpoint.BulkBreakpointConfigurator;
-import com.intellij.debugger.streams.trace.breakpoint.MethodBreakpointTracer;
+import com.intellij.debugger.streams.trace.breakpoint.*;
 import com.intellij.debugger.streams.trace.impl.TraceResultInterpreterImpl;
 import com.intellij.debugger.streams.ui.ChooserOption;
 import com.intellij.debugger.streams.ui.impl.ElementChooserImpl;
 import com.intellij.debugger.streams.ui.impl.EvaluationAwareTraceWindow;
+import com.intellij.debugger.streams.wrapper.StreamCall;
 import com.intellij.debugger.streams.wrapper.StreamChain;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -28,12 +28,15 @@ import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.TextRange;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiManager;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.xdebugger.XDebugSession;
 import com.intellij.xdebugger.XSourcePosition;
 import com.intellij.xdebugger.impl.ui.DebuggerUIUtil;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 import java.util.stream.Stream;
@@ -114,8 +117,22 @@ public final class TraceStreamAction extends AnAction {
     final Project project = session.getProject();
     final TraceExpressionBuilder expressionBuilder = provider.getExpressionBuilder(project);
     final TraceResultInterpreter resultInterpreter = new TraceResultInterpreterImpl(provider.getLibrarySupport().getInterpreterFactory());
-    final BreakpointConfigurator breakpointConfigurator = new BulkBreakpointConfigurator();
-    final StreamTracer tracer = new MethodBreakpointTracer(session, breakpointConfigurator, resultInterpreter);
+
+    final PsiManager psiManager = PsiManager.getInstance(project);
+    final XSourcePosition currentPosition = session.getCurrentPosition();
+    if (currentPosition == null) {
+      LOG.info("Cannot find current debugger location");
+      return; // TODO: notify that stream cannot be traced
+    }
+    final PsiFile currentFile = psiManager.findFile(currentPosition.getFile());
+    if (currentFile == null) {
+      LOG.info("Cannot find current file PSI represenation");
+      return; // TODO: notify that stream cannot be traced
+    }
+    final BreakpointResolver breakpointResolver = new JavaBreakpointResolver(currentFile);
+
+    final StreamTracer tracer = new MethodBreakpointTracer(session, breakpointResolver, resultInterpreter);
+    //final StreamTracer tracer = new EvaluateExpressionTracer(session, expressionBuilder, resultInterpreter);
     tracer.trace(chain, new TracingCallback() {
       @Override
       public void evaluated(@NotNull TracingResult result, @NotNull EvaluationContextImpl context) {
