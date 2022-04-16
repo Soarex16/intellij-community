@@ -1,7 +1,6 @@
 // Copyright 2000-2022 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.debugger.streams.trace.breakpoint
 
-import com.intellij.debugger.streams.trace.breakpoint.ex.MethodNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.ValueInstantiationException
 import com.intellij.psi.CommonClassNames
 import com.sun.jdi.ObjectReference
@@ -26,8 +25,10 @@ class StreamValuesCollectorImpl(private val myValueContainer: ValueContainer) : 
     streamResult = result
   }
 
-  @Throws(ValueInstantiationException::class, MethodNotFoundException::class)
-  override fun getValueCollector(): ObjectReference {
+  override fun getValueCollector(collectorType: String): ObjectReference {
+    // TODO: в зависимости от сигнатуры метода создавать нужные лямбдочки
+    //  Например, для IntStream нужен не просто Consumer<Integer>, а IntConsumer
+    //  Или можно использовать java.util.function.IntConsumer.adapt
     val mapInstance = myValueContainer.createInstance(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
                       ?: throw ValueInstantiationException(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
 

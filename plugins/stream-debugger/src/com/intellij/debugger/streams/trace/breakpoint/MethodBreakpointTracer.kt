@@ -9,11 +9,11 @@ import com.intellij.debugger.streams.trace.StreamTracer
 import com.intellij.debugger.streams.trace.TraceResultInterpreter
 import com.intellij.debugger.streams.trace.TracingCallback
 import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.runInDebuggerThread
+import com.intellij.debugger.streams.trace.breakpoint.ex.ArgumentTypeMismatchException
+import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointPlaceNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.MethodNotFoundException
-import com.intellij.debugger.streams.trace.breakpoint.ex.PlaceForBreakpointNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.ValueInstantiationException
 import com.intellij.debugger.streams.wrapper.StreamChain
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.xdebugger.XDebugSession
 import com.sun.jdi.ArrayReference
@@ -29,6 +29,8 @@ class MethodBreakpointTracer(private val mySession: XDebugSession,
   override fun trace(chain: StreamChain, callback: TracingCallback) {
     val executionCallback = object : StreamExecutionCallback {
       override fun evaluated(collectedValues: StreamValuesCollector, context: EvaluationContextImpl) {
+        // TODO: transform maps to arrays
+
         // create evaluation result from collected values and dispose StreamValuesCollector later
         //val arrayClass = vm.classesByName("java.lang.Object[]").first() as ArrayType
         //val reference = arrayClass.newInstance(2)
@@ -72,9 +74,9 @@ class MethodBreakpointTracer(private val mySession: XDebugSession,
 
   private fun trace(debugProcess: JavaDebugProcess, chain: StreamChain, callback: StreamExecutionCallback) {
     val breakpointPlaces = try {
-      tryFindBreakpointPlaces(myBreakpointResolver, chain)
+      myBreakpointResolver.findBreakpointPlaces(chain)
     }
-    catch (e: PlaceForBreakpointNotFoundException) {
+    catch (e: BreakpointPlaceNotFoundException) {
       callback.breakpointSetupFailed(e)
       return
     }
@@ -85,8 +87,20 @@ class MethodBreakpointTracer(private val mySession: XDebugSession,
     try {
       val valuesCollector: StreamValuesCollector = StreamValuesCollectorImpl(valueContainer)
 
-      val breakpointFactory: MethodExitBreakpointFactory = MethodExitBreakpointFactoryImpl(context, valuesCollector,
-                                                                                           callback) // TODO: do we need abstract by language?
+      // TODO: Abstract by language here?
+      val breakpointFactory: MethodBreakpointFactory = MethodBreakpointFactoryImpl(context, valuesCollector, callback)
+
+      val qualifierExpressionBreakpoint = if (breakpointPlaces.qualifierExpressionMethod == null) {
+        // if qualifier expression is variable we need to replace it in current stack frame
+        val stepSignature = breakpointPlaces.intermediateStepsMethods.firstOrNull()
+                            ?: breakpointPlaces.terminationOperationMethod
+        val qualifierExpressionValue = breakpointFactory.replaceQualifierExpressionValue(stepSignature, chain)
+        null // TODO: восстанавливать значение qualifierExpression после вычисления стрима
+      } else {
+        // set additional breakpoint as for an intermediate operation
+        breakpointFactory
+          .createProducerStepBreakpoint(breakpointPlaces.qualifierExpressionMethod)
+      }
 
       val intermediateStepsBreakpoints = breakpointPlaces.intermediateStepsMethods.map {
         breakpointFactory.createIntermediateStepBreakpoint(it)
@@ -94,23 +108,34 @@ class MethodBreakpointTracer(private val mySession: XDebugSession,
       val terminationOperationBreakpoint = breakpointFactory
         .createTerminationOperationBreakpoint(breakpointPlaces.terminationOperationMethod)
 
+      qualifierExpressionBreakpoint?.enable()
       intermediateStepsBreakpoints.forEach { it.enable() }
       terminationOperationBreakpoint.enable()
+
+      // TODO: после трассировки проверять, что брейкпоинты,
+      //  которые мы расставили были подчищены. Также полезно
+      //  рассмотреть как поведет себя control flow в случае
+      //  завершения дебага, не будет ли течь память
 
       // mySession.stepOver(false) // TODO: тут надо что-то более понятное юзеру придумать, а не сразу шагать
     }
     catch (e: ValueInstantiationException) {
       callback.tracingSetupFailed(e)
       valueContainer.dispose()
-      LOG.info("Cannot create value of type ${e.type}", e)
+      LOG.error("Cannot create value of type ${e.type}", e)
     }
     catch (e: MethodNotFoundException) {
       callback.tracingSetupFailed(e)
       valueContainer.dispose()
-      LOG.info("Cannot find some methods in target VM", e)
+      LOG.error("Cannot find some methods in target VM", e)
+    }
+    catch (e: ArgumentTypeMismatchException) {
+      callback.streamExecutionFailed(e)
+      valueContainer.dispose()
+      LOG.error("Cannot find some methods in target VM", e)
     }
     catch (e: Throwable) {
-      callback.tracingSetupFailed(e)
+      callback.streamExecutionFailed(e)
       valueContainer.dispose()
     }
   }
@@ -135,19 +160,6 @@ class MethodBreakpointTracer(private val mySession: XDebugSession,
     // explicitly setting class loader because we don't want to modify user's class loader
     ctx.classLoader = ClassLoadingUtils.getClassLoader(ctx, process)
     return ctx
-  }
-
-  @Throws(PlaceForBreakpointNotFoundException::class)
-  private fun tryFindBreakpointPlaces(resolver: BreakpointResolver,
-                                      chain: StreamChain): StreamChainBreakpointPlaces = ReadAction.compute<StreamChainBreakpointPlaces, Throwable> {
-    val intermediateCallMethods = chain.intermediateCalls
-      .map { resolver.tryFindBreakpointPlace(it) ?: throw PlaceForBreakpointNotFoundException(it) }
-
-    val terminationCallMethod = resolver.tryFindBreakpointPlace(chain.terminationCall)
-                                ?: throw throw PlaceForBreakpointNotFoundException(chain.terminationCall)
-
-    @Suppress("UNCHECKED_CAST") // because we already checked for nulls
-    return@compute StreamChainBreakpointPlaces(intermediateCallMethods, terminationCallMethod)
   }
 }
 

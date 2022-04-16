@@ -1,20 +1,33 @@
 // Copyright 2000-2022 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.debugger.streams.trace.breakpoint
 
+import com.intellij.compiler.server.BuildManager
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.evaluation.EvaluateException
 import com.intellij.debugger.engine.evaluation.EvaluateExceptionUtil
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.impl.ClassLoadingUtils
+import com.intellij.execution.configurations.JavaParameters
 import com.intellij.openapi.compiler.ClassObject
+import com.intellij.openapi.compiler.CompilationException
 import com.intellij.openapi.compiler.CompilerManager
-import com.intellij.openapi.project.Project
+import com.intellij.openapi.compiler.CompilerMessageCategory
+import com.intellij.openapi.projectRoots.JavaSdkVersion
+import com.intellij.openapi.projectRoots.Sdk
+import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.openapi.util.Pair
+import com.intellij.openapi.util.io.FileUtil
 import com.sun.jdi.ReferenceType
 import com.sun.jdi.event.MethodExitEvent
+import org.jetbrains.jps.model.java.JpsJavaSdkType
+import java.io.File
+import java.io.IOException
 
 /**
  * @author Shumaf Lovpache
  */
+
+// TODO: вынести в отдельную сущность
 fun createHelperClass(suspendContext: SuspendContextImpl, event: MethodExitEvent) {
   val source = """
       class MapCollector<T> implements Consumer<T> {
@@ -36,11 +49,74 @@ fun createHelperClass(suspendContext: SuspendContextImpl, event: MethodExitEvent
   // compileClass
 }
 
-fun compileClass(project: Project, sourceCode: String): ClassObject? {
-  val compilerManager: CompilerManager = CompilerManager.getInstance(project)
-  // TODO: научиться компилировать код
-  //  compilerManager.compileJavaCode()
-  return null
+// TODO: Надо тестить
+//  + почти целиком стырено из com.intellij.debugger.ui.impl.watch.CompilingEvaluatorImpl.compile
+fun compileClass(className: String, sourceCode: String, evaluationContext: EvaluationContextImpl): Collection<ClassObject>? {
+  val project = evaluationContext.project
+  val process = evaluationContext.debugProcess
+  val debuggeeVersion = JavaSdkVersion.fromVersionString(process.virtualMachineProxy.version())
+
+  val options: MutableList<String> = ArrayList()
+  options.add("-encoding")
+  options.add("UTF-8")
+  val platformClasspath: MutableList<File> = ArrayList()
+  val classpath: MutableList<File> = ArrayList()
+  val languageLevel = debuggeeVersion?.maxLanguageLevel
+  val rootManager = ProjectRootManager.getInstance(project)
+  for (s in rootManager.orderEntries().compileOnly().recursively().exportedOnly().withoutSdk().pathsList.pathList) {
+    classpath.add(File(s))
+  }
+  for (s in rootManager.orderEntries().compileOnly().sdkOnly().pathsList.pathList) {
+    platformClasspath.add(File(s))
+  }
+  if (languageLevel != null && languageLevel.isPreview) {
+    options.add(JavaParameters.JAVA_ENABLE_PREVIEW_PROPERTY)
+  }
+  val runtime: Pair<Sdk, JavaSdkVersion> = BuildManager.getJavacRuntimeSdk(project)
+  val buildRuntimeVersion = runtime.getSecond()
+  // if compiler or debuggee version or both are unknown, let source and target be the compiler's defaults
+  if (buildRuntimeVersion != null && debuggeeVersion != null) {
+    val minVersion = if (debuggeeVersion.compareTo(buildRuntimeVersion) < 0) debuggeeVersion else buildRuntimeVersion
+    val sourceOption = JpsJavaSdkType.complianceOption(minVersion.maxLanguageLevel.toJavaVersion())
+    options.add("-source")
+    options.add(sourceOption)
+    options.add("-target")
+    options.add(sourceOption)
+  }
+  val compilerManager = CompilerManager.getInstance(project)
+  var sourceFile: File? = null
+  try {
+    sourceFile = generateTempSourceFile(className, sourceCode, compilerManager.javacCompilerWorkingDir!!)
+    val srcDir = sourceFile.parentFile
+    val sourcePath = emptyList<File>()
+    val sources = setOf<File?>(sourceFile)
+    return compilerManager.compileJavaCode(options, platformClasspath, classpath, emptyList(), emptyList(), sourcePath,
+                                                        sources, srcDir)
+  }
+  catch (e: CompilationException) {
+    val res = StringBuilder("Compilation failed:\n")
+    for (m in e.messages) {
+      if (m.category === CompilerMessageCategory.ERROR) {
+        res.append(m.text).append("\n")
+      }
+    }
+    throw EvaluateException(res.toString())
+  }
+  catch (e: java.lang.Exception) {
+    throw EvaluateException(e.message)
+  }
+  finally {
+    if (sourceFile != null) {
+      FileUtil.delete(sourceFile)
+    }
+  }
+}
+
+@Throws(IOException::class)
+private fun generateTempSourceFile(className: String, sourceCode: String, workingDir: File): File {
+  val file = File(workingDir, "debugger/streams/src/$className")
+  FileUtil.writeToFile(file, sourceCode)
+  return file
 }
 
 fun EvaluationContextImpl.loadClass(className: String): ReferenceType? = debugProcess.loadClass(this, className, classLoader)

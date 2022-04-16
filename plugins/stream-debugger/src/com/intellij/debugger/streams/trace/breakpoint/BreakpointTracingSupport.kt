@@ -1,7 +1,9 @@
 // Copyright 2000-2022 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
-package com.intellij.debugger.streams.trace.breakpoint.ex
+package com.intellij.debugger.streams.trace.breakpoint
 
 /**
  * @author Shumaf Lovpache
  */
-class ValueInstantiationException(val type: String): Exception("Could not instantiate value of type $type")
+interface BreakpointTracingSupport {
+  // TODO: фабрики
+}

@@ -8,7 +8,13 @@ import com.sun.jdi.Value
  * @author Shumaf Lovpache
  */
 interface StreamValuesCollector {
-  fun getValueCollector(): ObjectReference
+  /**
+   * @param collectorType SAM Interface type of requested collector
+   *
+   * @throws ValueInstantiationException
+   * @throws MethodNotFoundException
+   */
+  fun getValueCollector(collectorType: String): ObjectReference
 
   fun collectStreamResult(result: Value)
 

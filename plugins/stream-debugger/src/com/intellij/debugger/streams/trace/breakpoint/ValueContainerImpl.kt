@@ -19,7 +19,6 @@ class ValueContainerImpl(private val myEvalContext: EvaluationContextImpl) : Val
     myRegisteredBytecodeFactories[className] = factory
   }
 
-  @Throws(InvalidTypeException::class, ClassNotLoadedException::class, IncompatibleThreadStateException::class, InvocationException::class)
   override fun createInstance(className: String, constructorSignature: String, args: List<Value>): ObjectReference? {
     val classType = myEvalContext
                       .loadClassIfAbsent(className) { tryLoadClassBytecode(className) } as? ClassType ?: return null

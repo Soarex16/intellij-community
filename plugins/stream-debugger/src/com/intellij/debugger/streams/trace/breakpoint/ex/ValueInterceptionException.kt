@@ -4,4 +4,4 @@ package com.intellij.debugger.streams.trace.breakpoint.ex
 /**
  * @author Shumaf Lovpache
  */
-class ValueInstantiationException(val type: String): Exception("Could not instantiate value of type $type")
+class ValueInterceptionException(message: String): Exception(message)

@@ -11,31 +11,28 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.sun.jdi.Method
 import com.sun.jdi.event.LocatableEvent
+import com.sun.jdi.event.MethodEntryEvent
 import com.sun.jdi.event.MethodExitEvent
 import com.sun.jdi.request.InvalidRequestStateException
 
-private val LOG = logger<MethodExitRequestor>()
+private val LOG = logger<MethodBreakpointRequestor>()
 
+typealias MethodEntryCallback = (requestor: FilteredRequestor, suspendContext: SuspendContextImpl, event: MethodEntryEvent) -> Unit
 typealias MethodExitCallback = (requestor: FilteredRequestor, suspendContext: SuspendContextImpl, event: MethodExitEvent) -> Unit
 
 /**
  * @author Shumaf Lovpache
  */
-class MethodExitRequestor(
-  project: Project,
-  val method: Method,
-  val callback: MethodExitCallback
-) : FilteredRequestorImpl(project) {
+abstract class MethodBreakpointRequestor(project: Project, val method: Method) : FilteredRequestorImpl(project) {
   override fun processLocatableEvent(action: SuspendContextCommandImpl, event: LocatableEvent?): Boolean {
     if (event == null) return false
     val context = action.suspendContext ?: return false
 
     val currentExecutingMethod = event.location().method()
-    if (event !is MethodExitEvent) return false
 
     if (context.thread?.isSuspended == true && currentExecutingMethod.equalBySignature(method)) {
       try {
-        callback(this, context, event)
+        invokeCallback(this, context, event)
       }
       catch (e: Throwable) {
         LOG.info(e)
@@ -53,5 +50,31 @@ class MethodExitRequestor(
     return false
   }
 
+  abstract fun invokeCallback(requestor: MethodBreakpointRequestor, context: SuspendContextImpl, event: LocatableEvent)
+
   override fun getSuspendPolicy(): String = DebuggerSettings.SUSPEND_ALL
+}
+
+class MethodEntryRequestor(
+  project: Project,
+  method: Method,
+  val callback: MethodEntryCallback
+) : MethodBreakpointRequestor(project, method) {
+  override fun invokeCallback(requestor: MethodBreakpointRequestor, context: SuspendContextImpl, event: LocatableEvent) {
+    if (event !is MethodEntryEvent) return
+
+    callback(requestor, context, event)
+  }
+}
+
+class MethodExitRequestor(
+  project: Project,
+  method: Method,
+  val callback: MethodExitCallback
+) : MethodBreakpointRequestor(project, method) {
+  override fun invokeCallback(requestor: MethodBreakpointRequestor, context: SuspendContextImpl, event: LocatableEvent) {
+    if (event !is MethodExitEvent) return
+
+    callback(requestor, context, event)
+  }
 }
