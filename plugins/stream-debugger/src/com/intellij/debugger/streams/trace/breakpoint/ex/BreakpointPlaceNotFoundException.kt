@@ -4,4 +4,4 @@ package com.intellij.debugger.streams.trace.breakpoint.ex
 /**
  * @author Shumaf Lovpache
  */
-class BreakpointPlaceNotFoundException(streamOperation: String) : Exception("Cannot find declarations for ${streamOperation} operation in stream chain")
+class BreakpointPlaceNotFoundException(streamOperation: String) : BreakpointTracingException("Cannot find declarations for ${streamOperation} operation in stream chain")

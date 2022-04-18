@@ -16,32 +16,48 @@ import kotlin.reflect.KClass
 
 private val LOG = logger<MethodBreakpointFactoryImpl>()
 
-const val CONSUMER_INTERFACE_NAME = "java/util/function/Consumer"
+private const val CONSUMER_INTERFACE_NAME = "java/util/function/Consumer"
 
 /**
  * @author Shumaf Lovpache
  */
-class MethodBreakpointFactoryImpl(private val myEvaluationContext: EvaluationContextImpl,
-                                  private val myValuesCollector: StreamValuesCollector,
-                                  private val myCallback: StreamExecutionCallback) : MethodBreakpointFactory {
-  override fun replaceQualifierExpressionValue(signature: MethodSignature, streamChain: StreamChain): Value {
-    val storage = myValuesCollector.getValueCollector(CONSUMER_INTERFACE_NAME)
+class MethodBreakpointFactoryImpl(private val evaluationContext: EvaluationContextImpl,
+                                  private val valuesCollector: StreamValuesCollector,
+                                  private val executionCallback: StreamExecutionCallback,
+                                  private val streamChain: StreamChain) : MethodBreakpointFactory {
+
+  private var originalStreamQualifierValue: ObjectReference? = null
+
+  override fun replaceQualifierExpressionValue(signature: MethodSignature) {
+    val storage = valuesCollector.getValueCollector(CONSUMER_INTERFACE_NAME)
 
     // TODO: !! is bad
-    val frameProxy = myEvaluationContext.suspendContext.frameProxy!!
+    val frameProxy = evaluationContext.suspendContext.frameProxy!!
     val qualifierVariable = frameProxy.visibleVariableByName(streamChain.qualifierExpression.text)
     val qualifierValue = frameProxy.getValue(qualifierVariable) as ObjectReference
     frameProxy.setValue(qualifierVariable, wrapWithPeek(qualifierValue, storage))
-    myEvaluationContext.debugProcess.session.refresh(true)
 
-    return qualifierValue
+    if (originalStreamQualifierValue != null)
+      throw ValueInterceptionException("Qualifier expression value has already been replaced")
+
+    originalStreamQualifierValue = qualifierValue
+  }
+
+  override fun restoreQualifierExpressionValueIfNeeded() {
+    if (originalStreamQualifierValue == null)
+      return
+
+    // TODO: !! is bad
+    val frameProxy = evaluationContext.suspendContext.frameProxy!!
+    val qualifierVariable = frameProxy.visibleVariableByName(streamChain.qualifierExpression.text)
+    frameProxy.setValue(qualifierVariable, originalStreamQualifierValue)
   }
 
   override fun createProducerStepBreakpoint(signature: MethodSignature): MethodExitRequest =
     createIntermediateStepBreakpoint(signature)
 
   override fun createIntermediateStepBreakpoint(signature: MethodSignature): MethodExitRequest {
-    val storage = myValuesCollector.getValueCollector(CONSUMER_INTERFACE_NAME)
+    val storage = valuesCollector.getValueCollector(CONSUMER_INTERFACE_NAME)
 
     return createMethodExitBreakpointRequest(signature) { _, value ->
       if (value !is ObjectReference) createTypeMismatchException(value, ObjectReference::class)
@@ -52,8 +68,8 @@ class MethodBreakpointFactoryImpl(private val myEvaluationContext: EvaluationCon
 
   override fun createTerminationOperationBreakpoint(signature: MethodSignature): MethodExitRequest {
     return createMethodExitBreakpointRequest(signature) { _, value ->
-      myValuesCollector.collectStreamResult(value)
-      myCallback.evaluated(myValuesCollector, myEvaluationContext)
+      valuesCollector.collectStreamResult(value)
+      executionCallback.evaluated(valuesCollector, evaluationContext)
       return@createMethodExitBreakpointRequest null
     }
   }
@@ -72,16 +88,16 @@ class MethodBreakpointFactoryImpl(private val myEvaluationContext: EvaluationCon
 
     if (!checkStreamMethodArguments(peekMethod, peekArgs)) throw ArgumentTypeMismatchException(peekMethod, peekArgs)
 
-    return myEvaluationContext.debugProcess
-      .invokeInstanceMethod(myEvaluationContext, value, peekMethod, peekArgs, 0, true)
+    return evaluationContext.debugProcess
+      .invokeInstanceMethod(evaluationContext, value, peekMethod, peekArgs, 0, true)
   }
 
   /**
    * Returns null when method with specified [signature] cannot be found in target VM
    */
   private fun createMethodExitBreakpointRequest(signature: MethodSignature, transformer: (SuspendContext, Value) -> Value?): MethodExitRequest {
-    val vmMethod = findVmMethod(myEvaluationContext, signature) ?: throw MethodNotFoundException(signature)
-    val requestor = MethodExitRequestor(myEvaluationContext.project, vmMethod) { requestor, suspendContext, event ->
+    val vmMethod = findVmMethod(evaluationContext, signature) ?: throw MethodNotFoundException(signature)
+    val requestor = MethodExitRequestor(evaluationContext.project, vmMethod) { requestor, suspendContext, event ->
       suspendContext.debugProcess.requestsManager.deleteRequest(requestor)
 
       val threadProxy = suspendContext.thread ?: return@MethodExitRequestor
@@ -107,20 +123,20 @@ class MethodBreakpointFactoryImpl(private val myEvaluationContext: EvaluationCon
         threadProxy.forceEarlyReturn(replacedReturnValue)
       }
       catch (e: ClassNotLoadedException) {
-        myCallback.breakpointSetupFailed(e)
+        executionCallback.breakpointSetupFailed(e)
         LOG.info("Class for type ${replacedReturnValue.type().name()} has not been loaded yet", e)
       }
       catch (e: IncompatibleThreadStateException) {
-        myCallback.breakpointSetupFailed(e)
+        executionCallback.breakpointSetupFailed(e)
         LOG.info("Current thread is not suspended", e)
       }
       catch (e: InvalidTypeException) {
-        myCallback.breakpointSetupFailed(e)
+        executionCallback.breakpointSetupFailed(e)
         LOG.info("Could not cast value of type ${replacedReturnValue.type().name()} to ${originalReturnValue.type().name()}", e)
       }
     }
 
-    val request = myEvaluationContext.debugProcess.requestsManager.createMethodExitRequest(requestor)
+    val request = evaluationContext.debugProcess.requestsManager.createMethodExitRequest(requestor)
     request.addClassFilter(vmMethod.declaringType())
 
     return request

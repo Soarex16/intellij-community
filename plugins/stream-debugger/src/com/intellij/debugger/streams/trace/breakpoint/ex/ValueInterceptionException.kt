@@ -4,4 +4,4 @@ package com.intellij.debugger.streams.trace.breakpoint.ex
 /**
  * @author Shumaf Lovpache
  */
-class ValueInterceptionException(message: String): Exception(message)
+class ValueInterceptionException(message: String): BreakpointTracingException(message)

@@ -61,6 +61,6 @@ object DebuggerUtils {
                                                                   && this.argumentTypeNames() == other.argumentTypeNames()
 
   private fun List<Method>.findByPsiMethodSignature(signature: MethodSignature) = this.find {
-    it.methodSignature() == signature
+    MethodSignature.of(it) == signature
   }
 }

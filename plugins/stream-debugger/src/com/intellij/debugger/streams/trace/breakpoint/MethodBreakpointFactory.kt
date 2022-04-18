@@ -3,8 +3,6 @@ package com.intellij.debugger.streams.trace.breakpoint
 
 import com.intellij.debugger.streams.trace.breakpoint.ex.MethodNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.ValueInterceptionException
-import com.intellij.debugger.streams.wrapper.StreamChain
-import com.sun.jdi.Value
 import com.sun.jdi.request.MethodExitRequest
 
 /**
@@ -15,7 +13,9 @@ interface MethodBreakpointFactory {
    * Returns previous value of qualifier expression
    * @throws ValueInterceptionException
    */
-  fun replaceQualifierExpressionValue(signature: MethodSignature, streamChain: StreamChain): Value
+  fun replaceQualifierExpressionValue(signature: MethodSignature)
+
+  fun restoreQualifierExpressionValueIfNeeded()
 
   /**
    * @throws MethodNotFoundException

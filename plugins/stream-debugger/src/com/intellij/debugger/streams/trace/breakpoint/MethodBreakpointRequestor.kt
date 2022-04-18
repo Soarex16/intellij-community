@@ -23,7 +23,7 @@ typealias MethodExitCallback = (requestor: FilteredRequestor, suspendContext: Su
 /**
  * @author Shumaf Lovpache
  */
-abstract class MethodBreakpointRequestor(project: Project, val method: Method) : FilteredRequestorImpl(project) {
+abstract class MethodBreakpointRequestor(project: Project, private val method: Method) : FilteredRequestorImpl(project) {
   override fun processLocatableEvent(action: SuspendContextCommandImpl, event: LocatableEvent?): Boolean {
     if (event == null) return false
     val context = action.suspendContext ?: return false
@@ -52,13 +52,14 @@ abstract class MethodBreakpointRequestor(project: Project, val method: Method) :
 
   abstract fun invokeCallback(requestor: MethodBreakpointRequestor, context: SuspendContextImpl, event: LocatableEvent)
 
+  // TODO: DebuggerSettings.SUSPEND_THREAD
   override fun getSuspendPolicy(): String = DebuggerSettings.SUSPEND_ALL
 }
 
 class MethodEntryRequestor(
   project: Project,
   method: Method,
-  val callback: MethodEntryCallback
+  private val callback: MethodEntryCallback
 ) : MethodBreakpointRequestor(project, method) {
   override fun invokeCallback(requestor: MethodBreakpointRequestor, context: SuspendContextImpl, event: LocatableEvent) {
     if (event !is MethodEntryEvent) return
@@ -70,7 +71,7 @@ class MethodEntryRequestor(
 class MethodExitRequestor(
   project: Project,
   method: Method,
-  val callback: MethodExitCallback
+  private val callback: MethodExitCallback
 ) : MethodBreakpointRequestor(project, method) {
   override fun invokeCallback(requestor: MethodBreakpointRequestor, context: SuspendContextImpl, event: LocatableEvent) {
     if (event !is MethodExitEvent) return

@@ -4,4 +4,4 @@ package com.intellij.debugger.streams.trace.breakpoint.ex
 /**
  * @author Shumaf Lovpache
  */
-class ValueInstantiationException(val type: String): BreakpointTracingException("Could not instantiate value of type $type")
+open class BreakpointTracingException(message: String) : Exception(message)

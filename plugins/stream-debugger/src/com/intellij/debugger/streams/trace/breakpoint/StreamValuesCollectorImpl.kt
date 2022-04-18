@@ -9,14 +9,14 @@ import com.sun.jdi.Value
 val COLLECTOR_CLASS_NAME = "com.intellij.debugger.streams.generated.java.peek.MapCollector"
 val ATOMIC_INTEGER_CLASS_NAME = "java.util.concurrent.atomic.AtomicInteger"
 
-class StreamValuesCollectorImpl(private val myValueContainer: ValueContainer) : StreamValuesCollector {
-  private val counterObject = myValueContainer.createInstance(ATOMIC_INTEGER_CLASS_NAME)
+class StreamValuesCollectorImpl(private val container: ValueContainer) : StreamValuesCollector {
+  private val counterObject = container.createInstance(ATOMIC_INTEGER_CLASS_NAME)
                               ?: throw ValueInstantiationException(ATOMIC_INTEGER_CLASS_NAME)
 
-  private val valueContainers: MutableList<ObjectReference> = mutableListOf()
+  private val valueStorages: MutableList<ObjectReference> = mutableListOf()
 
   override val collectedValues: List<ObjectReference>
-    get() = valueContainers
+    get() = valueStorages
 
   override var streamResult: Value? = null
     private set
@@ -29,11 +29,11 @@ class StreamValuesCollectorImpl(private val myValueContainer: ValueContainer) : 
     // TODO: в зависимости от сигнатуры метода создавать нужные лямбдочки
     //  Например, для IntStream нужен не просто Consumer<Integer>, а IntConsumer
     //  Или можно использовать java.util.function.IntConsumer.adapt
-    val mapInstance = myValueContainer.createInstance(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
+    val mapInstance = container.createInstance(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
                       ?: throw ValueInstantiationException(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
 
-    valueContainers.add(mapInstance)
-    val collectorInstance = myValueContainer
+    valueStorages.add(mapInstance)
+    val collectorInstance = container
                               .createInstance(COLLECTOR_CLASS_NAME, "(Ljava/util/Map;Ljava/util/concurrent/atomic/AtomicInteger;)V",
                                               listOf(mapInstance, counterObject))
                             ?: throw ValueInstantiationException(COLLECTOR_CLASS_NAME)

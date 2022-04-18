@@ -26,7 +26,11 @@ class JavaBreakpointResolver(private val psiFile: PsiFile) : BreakpointResolver 
   }
 
   private fun findPsiMethodAt(stepPosition: TextRange): MethodSignature? {
-    val methodCallExpression = psiFile.findElementAt(stepPosition.endOffset)?.prevSibling  as? PsiMethodCallExpression ?: return null
-    return (methodCallExpression.methodExpression.reference?.resolve() as? PsiMethod)?.methodSignature()
+    val methodCallExpression = psiFile.findElementAt(stepPosition.endOffset)?.prevSibling
+                                 as? PsiMethodCallExpression ?: return null
+    val psiMethod = methodCallExpression.methodExpression.reference?.resolve()
+                      as? PsiMethod ?: return null
+
+    return MethodSignature.of(psiMethod)
   }
 }

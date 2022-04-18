@@ -10,18 +10,20 @@ data class MethodSignature(val containingClass: String, val name: String, val ar
     get() = argumentTypes.joinToString(", ")
 
   override fun toString() = "$returnType $containingClass.$name($arguments)"
+
+  companion object {
+    fun of(method: Method) = MethodSignature(
+      method.declaringType().name(),
+      method.name(),
+      method.argumentTypeNames(),
+      method.returnTypeName()
+    )
+
+    fun of(psiMethod: PsiMethod) = MethodSignature(
+      psiMethod.containingClass?.qualifiedName ?: "",
+      psiMethod.name,
+      psiMethod.parameterList.parameters.map { param -> TypeConversionUtil.erasure(param.type)?.canonicalText!! },
+      TypeConversionUtil.erasure(psiMethod.returnType)?.canonicalText ?: ""
+    )
+  }
 }
-
-internal fun Method.methodSignature() = MethodSignature(
-  this.declaringType().name(),
-  name(),
-  argumentTypeNames(),
-  returnTypeName()
-)
-
-internal fun PsiMethod.methodSignature() = MethodSignature(
-  containingClass?.qualifiedName ?: "",
-  name,
-  parameterList.parameters.map { param -> TypeConversionUtil.erasure(param.type)?.canonicalText!! },
-  TypeConversionUtil.erasure(returnType)?.canonicalText ?: ""
-)

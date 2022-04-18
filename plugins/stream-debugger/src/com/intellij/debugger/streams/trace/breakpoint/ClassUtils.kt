@@ -121,6 +121,12 @@ private fun generateTempSourceFile(className: String, sourceCode: String, workin
 
 fun EvaluationContextImpl.loadClass(className: String): ReferenceType? = debugProcess.loadClass(this, className, classLoader)
 
+fun EvaluationContextImpl.findClass(className: String): ReferenceType? = try {
+  debugProcess.findClass(this, className, classLoader)
+} catch (e: EvaluateException) {
+  null
+}
+
 fun EvaluationContextImpl.loadClassIfAbsent(className: String, bytesLoader: () -> ByteArray?): ReferenceType? {
   try {
     return try {

@@ -11,21 +11,21 @@ const val EMPTY_CONSTRUCTOR_SIGNATURE = "()V"
 
 typealias BytecodeFactory = () -> ByteArray?
 
-class ValueContainerImpl(private val myEvalContext: EvaluationContextImpl) : ValueContainer {
-  private val myInstantiatedObjects: MutableMap<String, MutableList<ObjectReference>> = mutableMapOf()
-  private val myRegisteredBytecodeFactories: MutableMap<String, BytecodeFactory> = mutableMapOf()
+class ValueContainerImpl(private val evalContext: EvaluationContextImpl) : ValueContainer {
+  private val instantiatedObjects: MutableMap<String, MutableList<ObjectReference>> = mutableMapOf()
+  private val registeredBytecodeFactories: MutableMap<String, BytecodeFactory> = mutableMapOf()
 
   fun registerBytecodeFactory(className: String, factory: BytecodeFactory) {
-    myRegisteredBytecodeFactories[className] = factory
+    registeredBytecodeFactories[className] = factory
   }
 
   override fun createInstance(className: String, constructorSignature: String, args: List<Value>): ObjectReference? {
-    val classType = myEvalContext
+    val classType = evalContext
                       .loadClassIfAbsent(className) { tryLoadClassBytecode(className) } as? ClassType ?: return null
     val constructorMethod = classType.methodsByName(JVMNameUtil.CONSTRUCTOR_NAME, constructorSignature).first() ?: return null
-    constructorMethod.argumentTypeNames().forEach { myEvalContext.loadClass(it) }
+    constructorMethod.argumentTypeNames().forEach { evalContext.loadClass(it) }
 
-    val threadRef = myEvalContext.suspendContext.thread?.threadReference ?: return null
+    val threadRef = evalContext.suspendContext.thread?.threadReference ?: return null
     val instance = classType.newInstance(threadRef, constructorMethod, args, ClassType.INVOKE_SINGLE_THREADED)
     keepValue(className, instance)
 
@@ -33,7 +33,7 @@ class ValueContainerImpl(private val myEvalContext: EvaluationContextImpl) : Val
   }
 
   private fun tryLoadClassBytecode(className: String): ByteArray? {
-    val factory = myRegisteredBytecodeFactories[className] ?: return null
+    val factory = registeredBytecodeFactories[className] ?: return null
     return factory()
   }
 
@@ -41,13 +41,13 @@ class ValueContainerImpl(private val myEvalContext: EvaluationContextImpl) : Val
     if (value is ObjectReference) {
       if (!Patches.IBM_JDK_DISABLE_COLLECTION_BUG) {
         value.disableCollection()
-        myInstantiatedObjects.add(className, value)
+        instantiatedObjects.add(className, value)
       }
     }
   }
 
   override fun dispose() {
-    myInstantiatedObjects.forEach { (_, objects) ->
+    instantiatedObjects.forEach { (_, objects) ->
       objects.forEach {
         it.enableCollection()
       }
