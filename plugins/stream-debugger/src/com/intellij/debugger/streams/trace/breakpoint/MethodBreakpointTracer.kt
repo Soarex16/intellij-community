@@ -9,11 +9,15 @@ import com.intellij.debugger.streams.trace.StreamTracer
 import com.intellij.debugger.streams.trace.TraceResultInterpreter
 import com.intellij.debugger.streams.trace.TracingCallback
 import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.runInDebuggerThread
-import com.intellij.debugger.streams.trace.breakpoint.ex.*
+import com.intellij.debugger.streams.trace.breakpoint.HelperClassUtils.getCompiledHelperClass
+import com.intellij.debugger.streams.trace.breakpoint.collector.*
+import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointPlaceNotFoundException
+import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
+import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatter
+import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatterImpl
 import com.intellij.debugger.streams.wrapper.StreamChain
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.xdebugger.XDebugSession
-import com.sun.jdi.ArrayReference
 
 private val LOG = logger<MethodBreakpointTracer>()
 
@@ -24,28 +28,28 @@ class MethodBreakpointTracer(private val session: XDebugSession,
                              private val breakpointResolver: BreakpointResolver,
                              private val resultInterpreter: TraceResultInterpreter) : StreamTracer {
   override fun trace(chain: StreamChain, callback: TracingCallback) {
-    val executionCallback = TracingCallbackWrapper(chain, callback, resultInterpreter)
-
     val xDebugProcess = session.debugProcess as? JavaDebugProcess ?: return
     runInDebuggerThread(xDebugProcess.debuggerSession.process) {
-      trace(xDebugProcess, chain, executionCallback)
+      trace(xDebugProcess, chain, callback)
     }
   }
 
-  private fun trace(debugProcess: JavaDebugProcess, chain: StreamChain, callback: StreamExecutionCallback) {
+  private fun trace(debugProcess: JavaDebugProcess, chain: StreamChain, callback: TracingCallback) {
+    val context = createEvaluationContext(debugProcess)
+    val valueManager: ValueManager = createValueManager(context)
+    val valuesCollector: StreamValuesCollectorFactory = StreamValuesCollectorFactoryImpl(valueManager)
+    val traceFormatter: StreamTraceFormatter = StreamTraceFormatterImpl(valueManager)
+
+    val executionCallback = TracingCallbackWrapper(chain, callback, resultInterpreter, traceFormatter)
     val locations = try {
       breakpointResolver.findBreakpointPlaces(chain)
     } catch (e: BreakpointPlaceNotFoundException) {
-      callback.breakpointSetupFailed(e)
+      executionCallback.breakpointSetupFailed(e)
       return
     }
 
-    val context = createEvaluationContext(debugProcess)
-    val valueContainer: ValueContainer = createValueContainer(context)
-    val valuesCollector: StreamValuesCollector = StreamValuesCollectorImpl(valueContainer)
-
     // TODO: Abstract by language here?
-    val breakpointFactory: MethodBreakpointFactory = MethodBreakpointFactoryImpl(context, valuesCollector, callback, chain)
+    val breakpointFactory: MethodBreakpointFactory = JavaMethodBreakpointFactory(context, valuesCollector, executionCallback, chain)
 
     try {
       setStreamBreakpoints(breakpointFactory, locations)
@@ -60,12 +64,11 @@ class MethodBreakpointTracer(private val session: XDebugSession,
       // TODO: посмотреть куда будут вываливаться исключения, созданные в коллбеках брейкпоинтов
 
       // TODO: execute
-
-      // TODO: format result
+      return
     }
     catch (e: BreakpointTracingException) {
-      callback.tracingSetupFailed(e)
-      valueContainer.dispose()
+      executionCallback.tracingSetupFailed(e)
+      valueManager.dispose()
       LOG.error(e)
     }
   }
@@ -73,9 +76,7 @@ class MethodBreakpointTracer(private val session: XDebugSession,
   private fun setStreamBreakpoints(breakpointFactory: MethodBreakpointFactory, locations: StreamChainBreakpointPlaces) {
     val qualifierExpressionBreakpoint = if (locations.qualifierExpressionMethod == null) {
       // if qualifier expression is variable we need to replace it in current stack frame
-      val stepSignature = locations.intermediateStepsMethods.firstOrNull()
-                          ?: locations.terminationOperationMethod
-      val qualifierExpressionValue = breakpointFactory.replaceQualifierExpressionValue(stepSignature)
+      val qualifierExpressionValue = breakpointFactory.replaceQualifierExpressionValue()
       null // TODO: восстанавливать значение qualifierExpression после вычисления стрима
     } else {
       // set additional breakpoint as for an intermediate operation
@@ -94,13 +95,19 @@ class MethodBreakpointTracer(private val session: XDebugSession,
     terminationOperationBreakpoint.enable()
   }
 
-  private fun createValueContainer(context: EvaluationContextImpl): ValueContainer {
-    val container = ValueContainerImpl(context)
-    container.registerBytecodeFactory(COLLECTOR_CLASS_NAME) {
-      javaClass
-        .getResourceAsStream("/classes/MapCollector.clazz").use {
-          it?.readBytes()
-        }
+  private fun createValueManager(context: EvaluationContextImpl): ValueManager {
+    val container = ValueManagerImpl(context)
+    container.registerBytecodeFactory(OBJECT_COLLECTOR_CLASS_NAME) {
+      getCompiledHelperClass(context, OBJECT_COLLECTOR_SOURCE, OBJECT_COLLECTOR_CLASS_NAME)!!.content
+    }
+    container.registerBytecodeFactory(INT_COLLECTOR_CLASS_NAME) {
+      getCompiledHelperClass(context, INT_COLLECTOR_SOURCE, INT_COLLECTOR_CLASS_NAME)!!.content
+    }
+    container.registerBytecodeFactory(LONG_COLLECTOR_CLASS_NAME) {
+      getCompiledHelperClass(context, LONG_COLLECTOR_SOURCE, LONG_COLLECTOR_CLASS_NAME)!!.content
+    }
+    container.registerBytecodeFactory(DOUBLE_COLLECTOR_CLASS_NAME) {
+      getCompiledHelperClass(context, DOUBLE_COLLECTOR_SOURCE, DOUBLE_COLLECTOR_CLASS_NAME)!!.content
     }
     return container
   }
@@ -119,27 +126,20 @@ class MethodBreakpointTracer(private val session: XDebugSession,
   private class TracingCallbackWrapper(
     private val chain: StreamChain,
     private val tracingCallback: TracingCallback,
-    private val resultInterpreter: TraceResultInterpreter
+    private val resultInterpreter: TraceResultInterpreter,
+    private val traceFormatter: StreamTraceFormatter
   ) : StreamExecutionCallback {
-    override fun evaluated(collectedValues: StreamValuesCollector, context: EvaluationContextImpl) {
-      // TODO: transform maps to arrays
-
-      // create evaluation result from collected values and dispose StreamValuesCollector later
-      //val arrayClass = vm.classesByName("java.lang.Object[]").first() as ArrayType
-      //val reference = arrayClass.newInstance(2)
-      //val storage = storages.first()
-      //reference.setValue(0, storage)
-      //reference.setValue(1, storage)
-      val evaluationResult: ArrayReference = null as ArrayReference // TODO: implement
-      LOG.info("stream chain evaluated")
+    override fun evaluated(collectedValues: StreamTraceValues, context: EvaluationContextImpl) {
+      val formattedResult = traceFormatter.formatTraceResult(chain, collectedValues)
       val interpretedResult = try {
-        resultInterpreter.interpret(chain, evaluationResult)
+        resultInterpreter.interpret(chain, formattedResult)
       }
       catch (t: Throwable) {
         // TODO: change trace expression field
         tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
         throw t
       }
+      // TODO: clear value manager when window closed
       tracingCallback.evaluated(interpretedResult, context)
     }
 

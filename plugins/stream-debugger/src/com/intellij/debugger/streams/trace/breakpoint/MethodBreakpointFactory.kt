@@ -13,7 +13,7 @@ interface MethodBreakpointFactory {
    * Returns previous value of qualifier expression
    * @throws ValueInterceptionException
    */
-  fun replaceQualifierExpressionValue(signature: MethodSignature)
+  fun replaceQualifierExpressionValue()
 
   fun restoreQualifierExpressionValueIfNeeded()
 

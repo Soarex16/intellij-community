@@ -5,37 +5,37 @@ import com.intellij.debugger.engine.DebuggerUtils
 import com.intellij.debugger.engine.SuspendContext
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.findVmMethod
+import com.intellij.debugger.streams.trace.breakpoint.collector.StreamValuesCollectorFactory
 import com.intellij.debugger.streams.trace.breakpoint.ex.ArgumentTypeMismatchException
 import com.intellij.debugger.streams.trace.breakpoint.ex.MethodNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.ValueInterceptionException
 import com.intellij.debugger.streams.wrapper.StreamChain
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.psi.CommonClassNames.JAVA_UTIL_FUNCTION_CONSUMER
 import com.sun.jdi.*
 import com.sun.jdi.request.MethodExitRequest
 import kotlin.reflect.KClass
 
-private val LOG = logger<MethodBreakpointFactoryImpl>()
-
-private const val CONSUMER_INTERFACE_NAME = "java/util/function/Consumer"
+private val LOG = logger<JavaMethodBreakpointFactory>()
 
 /**
  * @author Shumaf Lovpache
  */
-class MethodBreakpointFactoryImpl(private val evaluationContext: EvaluationContextImpl,
-                                  private val valuesCollector: StreamValuesCollector,
+class JavaMethodBreakpointFactory(private val evaluationContext: EvaluationContextImpl,
+                                  private val collectorFactory: StreamValuesCollectorFactory,
                                   private val executionCallback: StreamExecutionCallback,
                                   private val streamChain: StreamChain) : MethodBreakpointFactory {
 
   private var originalStreamQualifierValue: ObjectReference? = null
 
-  override fun replaceQualifierExpressionValue(signature: MethodSignature) {
-    val storage = valuesCollector.getValueCollector(CONSUMER_INTERFACE_NAME)
+  override fun replaceQualifierExpressionValue() {
+    val collector = collectorFactory.getValueCollector(JAVA_UTIL_FUNCTION_CONSUMER)
 
     // TODO: !! is bad
     val frameProxy = evaluationContext.suspendContext.frameProxy!!
     val qualifierVariable = frameProxy.visibleVariableByName(streamChain.qualifierExpression.text)
     val qualifierValue = frameProxy.getValue(qualifierVariable) as ObjectReference
-    frameProxy.setValue(qualifierVariable, wrapWithPeek(qualifierValue, storage))
+    frameProxy.setValue(qualifierVariable, wrapWithPeek(qualifierValue, collector))
 
     if (originalStreamQualifierValue != null)
       throw ValueInterceptionException("Qualifier expression value has already been replaced")
@@ -57,19 +57,20 @@ class MethodBreakpointFactoryImpl(private val evaluationContext: EvaluationConte
     createIntermediateStepBreakpoint(signature)
 
   override fun createIntermediateStepBreakpoint(signature: MethodSignature): MethodExitRequest {
-    val storage = valuesCollector.getValueCollector(CONSUMER_INTERFACE_NAME)
+    val collector = collectorFactory.getValueCollector(JAVA_UTIL_FUNCTION_CONSUMER)
 
-    return createMethodExitBreakpointRequest(signature) { _, value ->
+    return createMethodExitBreakpointRequest(signature) { _, _, value ->
       if (value !is ObjectReference) createTypeMismatchException(value, ObjectReference::class)
 
-      return@createMethodExitBreakpointRequest wrapWithPeek(value, storage)
+      return@createMethodExitBreakpointRequest wrapWithPeek(value, collector)
     }
   }
 
   override fun createTerminationOperationBreakpoint(signature: MethodSignature): MethodExitRequest {
-    return createMethodExitBreakpointRequest(signature) { _, value ->
-      valuesCollector.collectStreamResult(value)
-      executionCallback.evaluated(valuesCollector, evaluationContext)
+    return createMethodExitBreakpointRequest(signature) { _, _, value ->
+      // TODO: не учтен случай, когда результат стрима void
+      collectorFactory.collectStreamResult(value)
+      executionCallback.evaluated(collectorFactory.collectedValues, evaluationContext)
       return@createMethodExitBreakpointRequest null
     }
   }
@@ -95,7 +96,8 @@ class MethodBreakpointFactoryImpl(private val evaluationContext: EvaluationConte
   /**
    * Returns null when method with specified [signature] cannot be found in target VM
    */
-  private fun createMethodExitBreakpointRequest(signature: MethodSignature, transformer: (SuspendContext, Value) -> Value?): MethodExitRequest {
+  private fun createMethodExitBreakpointRequest(signature: MethodSignature,
+                                                transformer: (SuspendContext, Method, Value) -> Value?): MethodExitRequest {
     val vmMethod = findVmMethod(evaluationContext, signature) ?: throw MethodNotFoundException(signature)
     val requestor = MethodExitRequestor(evaluationContext.project, vmMethod) { requestor, suspendContext, event ->
       suspendContext.debugProcess.requestsManager.deleteRequest(requestor)
@@ -112,7 +114,7 @@ class MethodBreakpointFactoryImpl(private val evaluationContext: EvaluationConte
       }
 
       val replacedReturnValue = try {
-        transformer(suspendContext, originalReturnValue)
+        transformer(suspendContext, event.method(), originalReturnValue)
       }
       catch (e: Throwable) {
         LOG.info("Error occurred during ${signature} method return value modification", e)

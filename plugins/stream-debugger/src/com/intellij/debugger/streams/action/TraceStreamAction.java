@@ -84,6 +84,7 @@ public final class TraceStreamAction extends AnAction {
     XSourcePosition position = session == null ? null : session.getCurrentPosition();
     PsiElement element = session == null ? null : myPositionResolver.getNearestElementToBreakpoint(session);
 
+    // TODO: breakpoint based debugger needs the breakpoint to be on the first method of the stream chain
     if (element == null || position == null) {
       LOG.info("element at cursor not found");
       return;

@@ -2,7 +2,6 @@
 package com.intellij.debugger.streams.trace.breakpoint
 
 import com.intellij.compiler.server.BuildManager
-import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.evaluation.EvaluateException
 import com.intellij.debugger.engine.evaluation.EvaluateExceptionUtil
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
@@ -17,41 +16,23 @@ import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.Pair
 import com.intellij.openapi.util.io.FileUtil
+import com.sun.jdi.Method
 import com.sun.jdi.ReferenceType
-import com.sun.jdi.event.MethodExitEvent
 import org.jetbrains.jps.model.java.JpsJavaSdkType
 import java.io.File
 import java.io.IOException
+
+private val PRIMITIVE_TYPE_NAMES = listOf("boolean", "char", "short", "int", "long", "float", "double")
 
 /**
  * @author Shumaf Lovpache
  */
 
-// TODO: вынести в отдельную сущность
-fun createHelperClass(suspendContext: SuspendContextImpl, event: MethodExitEvent) {
-  val source = """
-      class MapCollector<T> implements Consumer<T> {
-        private final java.util.Map<java.lang.Integer, T> storage;
-        private final java.util.concurrent.atomic.AtomicInteger time;
-
-        MapCollector(Map<Integer, T> storage, AtomicInteger time) {
-            this.storage = storage;
-            this.time = time;
-        }
-
-        @Override
-        public void accept(T t) {
-            storage.put(time.incrementAndGet(), t);
-        }
-      }
-    """.trimIndent()
-
-  // compileClass
-}
-
-// TODO: Надо тестить
-//  + почти целиком стырено из com.intellij.debugger.ui.impl.watch.CompilingEvaluatorImpl.compile
-fun compileClass(className: String, sourceCode: String, evaluationContext: EvaluationContextImpl): Collection<ClassObject>? {
+/**
+ * Almost completely copied from [com.intellij.debugger.ui.impl.watch.CompilingEvaluatorImpl.compile]
+ */
+@Throws(EvaluateException::class)
+fun compileJavaCode(className: String, sourceCode: String, evaluationContext: EvaluationContextImpl): ClassObject? {
   val project = evaluationContext.project
   val process = evaluationContext.debugProcess
   val debuggeeVersion = JavaSdkVersion.fromVersionString(process.virtualMachineProxy.version())
@@ -76,7 +57,7 @@ fun compileClass(className: String, sourceCode: String, evaluationContext: Evalu
   val buildRuntimeVersion = runtime.getSecond()
   // if compiler or debuggee version or both are unknown, let source and target be the compiler's defaults
   if (buildRuntimeVersion != null && debuggeeVersion != null) {
-    val minVersion = if (debuggeeVersion.compareTo(buildRuntimeVersion) < 0) debuggeeVersion else buildRuntimeVersion
+    val minVersion = if (debuggeeVersion < buildRuntimeVersion) debuggeeVersion else buildRuntimeVersion
     val sourceOption = JpsJavaSdkType.complianceOption(minVersion.maxLanguageLevel.toJavaVersion())
     options.add("-source")
     options.add(sourceOption)
@@ -91,7 +72,7 @@ fun compileClass(className: String, sourceCode: String, evaluationContext: Evalu
     val sourcePath = emptyList<File>()
     val sources = setOf<File?>(sourceFile)
     return compilerManager.compileJavaCode(options, platformClasspath, classpath, emptyList(), emptyList(), sourcePath,
-                                                        sources, srcDir)
+                                           sources, srcDir).firstOrNull()
   }
   catch (e: CompilationException) {
     val res = StringBuilder("Compilation failed:\n")
@@ -114,23 +95,25 @@ fun compileClass(className: String, sourceCode: String, evaluationContext: Evalu
 
 @Throws(IOException::class)
 private fun generateTempSourceFile(className: String, sourceCode: String, workingDir: File): File {
-  val file = File(workingDir, "debugger/streams/src/$className")
+  val file = File(workingDir, "debugger/streams/src/$className.java")
   FileUtil.writeToFile(file, sourceCode)
   return file
 }
 
-fun EvaluationContextImpl.loadClass(className: String): ReferenceType? = debugProcess.loadClass(this, className, classLoader)
-
-fun EvaluationContextImpl.findClass(className: String): ReferenceType? = try {
-  debugProcess.findClass(this, className, classLoader)
-} catch (e: EvaluateException) {
-  null
+/**
+ * Performs loading of argument types into the class loader in [EvaluationContextImpl]
+ */
+fun Method.prepareArguments(ctx: EvaluationContextImpl) {
+  this.argumentTypeNames()
+    .minus(PRIMITIVE_TYPE_NAMES)
+    .forEach { ctx.loadClass(it) }
 }
+
+fun EvaluationContextImpl.loadClass(className: String): ReferenceType? = debugProcess.loadClass(this, className, classLoader)
 
 fun EvaluationContextImpl.loadClassIfAbsent(className: String, bytesLoader: () -> ByteArray?): ReferenceType? {
   try {
     return try {
-      val classLoader = this.classLoader
       this.debugProcess.findClass(this, className, classLoader)
     } catch (e: EvaluateException) {
       if (e.exceptionFromTargetVM!!.type().name() == "java.lang.ClassNotFoundException") {

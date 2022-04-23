@@ -2,12 +2,13 @@
 package com.intellij.debugger.streams.trace.breakpoint
 
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
+import com.intellij.debugger.streams.trace.breakpoint.collector.StreamTraceValues
 
 /**
  * @author Shumaf Lovpache
  */
 interface StreamExecutionCallback {
-  fun evaluated(collectedValues: StreamValuesCollector, context: EvaluationContextImpl)
+  fun evaluated(collectedValues: StreamTraceValues, context: EvaluationContextImpl)
 
   fun breakpointSetupFailed(e: Throwable)
 
