@@ -22,10 +22,10 @@ const val INT_COLLECTOR_CLASS_NAME = "com.intellij.debugger.streams.generated.ja
 const val LONG_COLLECTOR_CLASS_NAME = "com.intellij.debugger.streams.generated.java.collector.LongCollector"
 const val DOUBLE_COLLECTOR_CLASS_NAME = "com.intellij.debugger.streams.generated.java.collector.DoubleCollector"
 
-const val OBJECT_COLLECTOR_SOURCE = "/classes/ObjectCollector.java.txt"
-const val INT_COLLECTOR_SOURCE = "/classes/IntCollector.java.txt"
-const val LONG_COLLECTOR_SOURCE = "/classes/LongCollector.java.txt"
-const val DOUBLE_COLLECTOR_SOURCE = "/classes/DoubleCollector.java.txt"
+const val OBJECT_COLLECTOR_CLASS_FILE = "/classes/compiled/ObjectCollector.class"
+const val INT_COLLECTOR_CLASS_FILE = "/classes/compiled/IntCollector.class"
+const val LONG_COLLECTOR_CLASS_FILE = "/classes/compiled/LongCollector.class"
+const val DOUBLE_COLLECTOR_CLASS_FILE = "/classes/compiled/DoubleCollector.class"
 
 const val COLLECTOR_SIGNATURE = "(Ljava/util/Map;Ljava/util/concurrent/atomic/AtomicInteger;)V"
 

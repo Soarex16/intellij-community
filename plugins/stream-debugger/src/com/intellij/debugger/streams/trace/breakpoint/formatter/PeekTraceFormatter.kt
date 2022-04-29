@@ -14,7 +14,7 @@ import com.sun.jdi.Value
 open class PeekTraceFormatter(private val valueManager: ValueManager) : TraceFormatter {
   private val helperClass = valueManager.watch {
     defineClass(STREAM_DEBUGGER_UTILS_CLASS_NAME) {
-      getStreamDebuggerUtilsClass(evaluationContext)?.content
+      getStreamDebuggerUtilsClass()
     }
   }
 

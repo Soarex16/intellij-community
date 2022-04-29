@@ -3,19 +3,21 @@ package com.intellij.debugger.streams.trace.breakpoint
 
 import com.intellij.debugger.engine.JavaDebugProcess
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
+import com.intellij.debugger.engine.events.DebuggerCommandImpl
 import com.intellij.debugger.impl.ClassLoadingUtils
+import com.intellij.debugger.impl.PrioritizedTask
 import com.intellij.debugger.streams.StreamDebuggerBundle
 import com.intellij.debugger.streams.trace.StreamTracer
 import com.intellij.debugger.streams.trace.TraceResultInterpreter
 import com.intellij.debugger.streams.trace.TracingCallback
-import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.runInDebuggerThread
-import com.intellij.debugger.streams.trace.breakpoint.HelperClassUtils.getCompiledHelperClass
+import com.intellij.debugger.streams.trace.breakpoint.HelperClassUtils.getCompiledClass
 import com.intellij.debugger.streams.trace.breakpoint.collector.*
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointPlaceNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
 import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatter
 import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatterImpl
 import com.intellij.debugger.streams.wrapper.StreamChain
+import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.xdebugger.XDebugSession
 
@@ -29,9 +31,13 @@ class MethodBreakpointTracer(private val session: XDebugSession,
                              private val resultInterpreter: TraceResultInterpreter) : StreamTracer {
   override fun trace(chain: StreamChain, callback: TracingCallback) {
     val xDebugProcess = session.debugProcess as? JavaDebugProcess ?: return
-    runInDebuggerThread(xDebugProcess.debuggerSession.process) {
-      trace(xDebugProcess, chain, callback)
+    val runTraceCommand = object : DebuggerCommandImpl(PrioritizedTask.Priority.NORMAL) {
+      override fun action() {
+        trace(xDebugProcess, chain, callback)
+      }
     }
+    val debuggerManagerThread = xDebugProcess.debuggerSession.process.managerThread
+    debuggerManagerThread.schedule(runTraceCommand)
   }
 
   private fun trace(debugProcess: JavaDebugProcess, chain: StreamChain, callback: TracingCallback) {
@@ -43,7 +49,8 @@ class MethodBreakpointTracer(private val session: XDebugSession,
     val executionCallback = TracingCallbackWrapper(chain, callback, resultInterpreter, traceFormatter)
     val locations = try {
       breakpointResolver.findBreakpointPlaces(chain)
-    } catch (e: BreakpointPlaceNotFoundException) {
+    }
+    catch (e: BreakpointPlaceNotFoundException) {
       executionCallback.breakpointSetupFailed(e)
       return
     }
@@ -78,7 +85,8 @@ class MethodBreakpointTracer(private val session: XDebugSession,
       // if qualifier expression is variable we need to replace it in current stack frame
       val qualifierExpressionValue = breakpointFactory.replaceQualifierExpressionValue()
       null // TODO: восстанавливать значение qualifierExpression после вычисления стрима
-    } else {
+    }
+    else {
       // set additional breakpoint as for an intermediate operation
       breakpointFactory
         .createProducerStepBreakpoint(locations.qualifierExpressionMethod)
@@ -98,16 +106,16 @@ class MethodBreakpointTracer(private val session: XDebugSession,
   private fun createValueManager(context: EvaluationContextImpl): ValueManager {
     val container = ValueManagerImpl(context)
     container.registerBytecodeFactory(OBJECT_COLLECTOR_CLASS_NAME) {
-      getCompiledHelperClass(context, OBJECT_COLLECTOR_SOURCE, OBJECT_COLLECTOR_CLASS_NAME)!!.content
+      getCompiledClass(OBJECT_COLLECTOR_CLASS_FILE)
     }
     container.registerBytecodeFactory(INT_COLLECTOR_CLASS_NAME) {
-      getCompiledHelperClass(context, INT_COLLECTOR_SOURCE, INT_COLLECTOR_CLASS_NAME)!!.content
+      getCompiledClass(INT_COLLECTOR_CLASS_FILE)
     }
     container.registerBytecodeFactory(LONG_COLLECTOR_CLASS_NAME) {
-      getCompiledHelperClass(context, LONG_COLLECTOR_SOURCE, LONG_COLLECTOR_CLASS_NAME)!!.content
+      getCompiledClass(LONG_COLLECTOR_CLASS_FILE)
     }
     container.registerBytecodeFactory(DOUBLE_COLLECTOR_CLASS_NAME) {
-      getCompiledHelperClass(context, DOUBLE_COLLECTOR_SOURCE, DOUBLE_COLLECTOR_CLASS_NAME)!!.content
+      getCompiledClass(DOUBLE_COLLECTOR_CLASS_FILE)
     }
     return container
   }
@@ -136,24 +144,26 @@ class MethodBreakpointTracer(private val session: XDebugSession,
       }
       catch (t: Throwable) {
         // TODO: change trace expression field
-        tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
+        runInEdt {
+          tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
+        }
         throw t
       }
       // TODO: clear value manager when window closed
-      tracingCallback.evaluated(interpretedResult, context)
+      runInEdt { tracingCallback.evaluated(interpretedResult, context) }
     }
 
-    override fun breakpointSetupFailed(e: Throwable) {
+    override fun breakpointSetupFailed(e: Throwable) = runInEdt {
       tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.find.places.for.breakpoints"))
       LOG.error(e)
     }
 
-    override fun tracingSetupFailed(e: Throwable) {
+    override fun tracingSetupFailed(e: Throwable) = runInEdt {
       tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.initialize.breakpoints"))
       LOG.error(e)
     }
 
-    override fun streamExecutionFailed(e: Throwable) {
+    override fun streamExecutionFailed(e: Throwable) = runInEdt {
       tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.exception.occurred.during.stream.execution"))
       LOG.error(e)
     }

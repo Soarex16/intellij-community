@@ -11,9 +11,9 @@ import com.intellij.openapi.compiler.ClassObject
 
 object HelperClassUtils {
   const val STREAM_DEBUGGER_UTILS_CLASS_NAME = "com.intellij.debugger.streams.generated.java.StreamDebuggerUtils"
-  const val STREAM_DEBUGGER_UTILS_SOURCE = "/classes/StreamDebuggerUtils.java.txt"
+  const val STREAM_DEBUGGER_UTILS_CLASS_FILE = "/classes/compiled/StreamDebuggerUtils.class"
 
-  fun getCompiledHelperClass(context: EvaluationContextImpl, resourceName: String, className: String): ClassObject? = javaClass
+  fun compileClass(context: EvaluationContextImpl, resourceName: String, className: String): ClassObject? = javaClass
     .getResourceAsStream(resourceName).use {
       if (it == null) throw CodeCompilationException("Could not load $resourceName")
 
@@ -21,9 +21,11 @@ object HelperClassUtils {
       return compileJavaCode(className, source, context)
     }
 
-  fun getStreamDebuggerUtilsClass(context: EvaluationContextImpl) = getCompiledHelperClass(
-    context,
-    STREAM_DEBUGGER_UTILS_SOURCE,
-    STREAM_DEBUGGER_UTILS_CLASS_NAME
+  fun getCompiledClass(resourceName: String): ByteArray? = javaClass
+    .getResourceAsStream(resourceName)
+    ?.readAllBytes()
+
+  fun getStreamDebuggerUtilsClass() = getCompiledClass(
+    STREAM_DEBUGGER_UTILS_CLASS_FILE
   )
 }
