@@ -17,7 +17,6 @@ import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingExcept
 import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatter
 import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatterImpl
 import com.intellij.debugger.streams.wrapper.StreamChain
-import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.xdebugger.XDebugSession
 
@@ -144,26 +143,24 @@ class MethodBreakpointTracer(private val session: XDebugSession,
       }
       catch (t: Throwable) {
         // TODO: change trace expression field
-        runInEdt {
-          tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
-        }
+        tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
         throw t
       }
       // TODO: clear value manager when window closed
-      runInEdt { tracingCallback.evaluated(interpretedResult, context) }
+      tracingCallback.evaluated(interpretedResult, context)
     }
 
-    override fun breakpointSetupFailed(e: Throwable) = runInEdt {
+    override fun breakpointSetupFailed(e: Throwable) {
       tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.find.places.for.breakpoints"))
       LOG.error(e)
     }
 
-    override fun tracingSetupFailed(e: Throwable) = runInEdt {
+    override fun tracingSetupFailed(e: Throwable) {
       tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.initialize.breakpoints"))
       LOG.error(e)
     }
 
-    override fun streamExecutionFailed(e: Throwable) = runInEdt {
+    override fun streamExecutionFailed(e: Throwable) {
       tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.exception.occurred.during.stream.execution"))
       LOG.error(e)
     }
