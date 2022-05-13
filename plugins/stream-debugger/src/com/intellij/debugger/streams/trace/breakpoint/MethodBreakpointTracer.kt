@@ -2,6 +2,8 @@
 package com.intellij.debugger.streams.trace.breakpoint
 
 import com.intellij.debugger.engine.JavaDebugProcess
+import com.intellij.debugger.engine.JavaStackFrame
+import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
 import com.intellij.debugger.impl.ClassLoadingUtils
@@ -17,8 +19,10 @@ import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingExcept
 import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatter
 import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatterImpl
 import com.intellij.debugger.streams.wrapper.StreamChain
+import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.xdebugger.XDebugSession
+import com.intellij.xdebugger.XDebugSessionListener
 
 private val LOG = logger<MethodBreakpointTracer>()
 
@@ -30,6 +34,7 @@ class MethodBreakpointTracer(private val session: XDebugSession,
                              private val resultInterpreter: TraceResultInterpreter) : StreamTracer {
   override fun trace(chain: StreamChain, callback: TracingCallback) {
     val xDebugProcess = session.debugProcess as? JavaDebugProcess ?: return
+
     val runTraceCommand = object : DebuggerCommandImpl(PrioritizedTask.Priority.NORMAL) {
       override fun action() {
         trace(xDebugProcess, chain, callback)
@@ -41,8 +46,10 @@ class MethodBreakpointTracer(private val session: XDebugSession,
 
   private fun trace(debugProcess: JavaDebugProcess, chain: StreamChain, callback: TracingCallback) {
     val context = createEvaluationContext(debugProcess)
-    val valueManager: ValueManager = createValueManager(context)
-    val valuesCollector: StreamValuesCollectorFactory = StreamValuesCollectorFactoryImpl(valueManager)
+    val evalContextFactory: EvaluationContextFactory = DefaultEvaluationContextFactory(context.classLoader!!)
+    val objectStorage: ObjectStorage = DisableCollectionObjectStorage()
+    val valueManager: ValueManager = createValueManager(objectStorage)
+    val valuesCollector: StreamValuesCollectorFactory = StreamValuesCollectorFactoryImpl(valueManager, context)
     val traceFormatter: StreamTraceFormatter = StreamTraceFormatterImpl(valueManager)
 
     val executionCallback = TracingCallbackWrapper(chain, callback, resultInterpreter, traceFormatter)
@@ -55,10 +62,29 @@ class MethodBreakpointTracer(private val session: XDebugSession,
     }
 
     // TODO: Abstract by language here?
-    val breakpointFactory: MethodBreakpointFactory = JavaMethodBreakpointFactory(context, valuesCollector, executionCallback, chain)
+    val breakpointFactory: MethodBreakpointFactory = JavaMethodBreakpointFactory(evalContextFactory, valuesCollector, executionCallback,
+                                                                                 chain)
 
     try {
-      setStreamBreakpoints(breakpointFactory, locations)
+      setStreamBreakpoints(context, breakpointFactory, locations)
+
+      val currentStackFrame = session.currentStackFrame as? JavaStackFrame
+                              ?: throw BreakpointTracingException("Cannot determine current location")
+      val outerMethod = currentStackFrame.descriptor.method
+      val sessionListener = object : XDebugSessionListener {
+        override fun sessionPaused() {
+          super.sessionPaused()
+          val frame = session.currentStackFrame
+          if (frame is JavaStackFrame && frame.descriptor.method == outerMethod) {
+            // TODO: восстанавливать значение qualifierExpression после вычисления стрима
+            val suspendContext = debugProcess.session.suspendContext as SuspendContextImpl
+            val evaluationContext = evalContextFactory.createContext(suspendContext)
+            executionCallback.evaluated(valuesCollector.collectedValues, evaluationContext)
+          }
+          //debugProcess.session.removeSessionListener(this)
+        }
+      }
+      debugProcess.session.addSessionListener(sessionListener)
 
       // TODO: после трассировки проверять, что брейкпоинты,
       //  которые мы расставили были подчищены. Также полезно
@@ -70,50 +96,54 @@ class MethodBreakpointTracer(private val session: XDebugSession,
       // TODO: посмотреть куда будут вываливаться исключения, созданные в коллбеках брейкпоинтов
 
       // TODO: execute
-      return
+      runInEdt { session.resume() }
     }
     catch (e: BreakpointTracingException) {
       executionCallback.tracingSetupFailed(e)
-      valueManager.dispose()
+      objectStorage.dispose()
       LOG.error(e)
     }
   }
 
-  private fun setStreamBreakpoints(breakpointFactory: MethodBreakpointFactory, locations: StreamChainBreakpointPlaces) {
-    val qualifierExpressionBreakpoint = if (locations.qualifierExpressionMethod == null) {
+  private fun setStreamBreakpoints(evaluationContext: EvaluationContextImpl,
+                                   breakpointFactory: MethodBreakpointFactory,
+                                   locations: StreamChainBreakpointPlaces) {
+    val terminationOperationBreakpoint = breakpointFactory
+      .createTerminationOperationBreakpoint(evaluationContext, locations.terminationOperationMethod)
+
+    var nextBreakpoint = terminationOperationBreakpoint
+    for (step in locations.intermediateStepsMethods.reversed()) {
+      nextBreakpoint = breakpointFactory.createIntermediateStepBreakpoint(evaluationContext, step, nextBreakpoint)
+    }
+
+    val firstBreakpoint = if (locations.qualifierExpressionMethod == null) {
       // if qualifier expression is variable we need to replace it in current stack frame
-      val qualifierExpressionValue = breakpointFactory.replaceQualifierExpressionValue()
-      null // TODO: восстанавливать значение qualifierExpression после вычисления стрима
+      val qualifierExpressionValue = breakpointFactory.replaceQualifierExpressionValue(evaluationContext)
+      nextBreakpoint // TODO: восстанавливать значение qualifierExpression после вычисления стрима
     }
     else {
       // set additional breakpoint as for an intermediate operation
       breakpointFactory
-        .createProducerStepBreakpoint(locations.qualifierExpressionMethod)
+        .createProducerStepBreakpoint(evaluationContext, locations.qualifierExpressionMethod, nextBreakpoint)
     }
 
-    val intermediateStepsBreakpoints = locations.intermediateStepsMethods.map {
-      breakpointFactory.createIntermediateStepBreakpoint(it)
-    }
-    val terminationOperationBreakpoint = breakpointFactory
-      .createTerminationOperationBreakpoint(locations.terminationOperationMethod)
-
-    qualifierExpressionBreakpoint?.enable()
-    intermediateStepsBreakpoints.forEach { it.enable() }
-    terminationOperationBreakpoint.enable()
+    firstBreakpoint.enable()
+    //intermediateStepsBreakpoints.forEach { it.enable() }
+    //terminationOperationBreakpoint.enable()
   }
 
-  private fun createValueManager(context: EvaluationContextImpl): ValueManager {
-    val container = ValueManagerImpl(context)
-    container.registerBytecodeFactory(OBJECT_COLLECTOR_CLASS_NAME) {
+  private fun createValueManager(objectStorage: ObjectStorage): ValueManager {
+    val container = ValueManagerImpl(objectStorage)
+    container.defineClass(OBJECT_COLLECTOR_CLASS_NAME) {
       getCompiledClass(OBJECT_COLLECTOR_CLASS_FILE)
     }
-    container.registerBytecodeFactory(INT_COLLECTOR_CLASS_NAME) {
+    container.defineClass(INT_COLLECTOR_CLASS_NAME) {
       getCompiledClass(INT_COLLECTOR_CLASS_FILE)
     }
-    container.registerBytecodeFactory(LONG_COLLECTOR_CLASS_NAME) {
+    container.defineClass(LONG_COLLECTOR_CLASS_NAME) {
       getCompiledClass(LONG_COLLECTOR_CLASS_FILE)
     }
-    container.registerBytecodeFactory(DOUBLE_COLLECTOR_CLASS_NAME) {
+    container.defineClass(DOUBLE_COLLECTOR_CLASS_NAME) {
       getCompiledClass(DOUBLE_COLLECTOR_CLASS_FILE)
     }
     return container
@@ -137,7 +167,7 @@ class MethodBreakpointTracer(private val session: XDebugSession,
     private val traceFormatter: StreamTraceFormatter
   ) : StreamExecutionCallback {
     override fun evaluated(collectedValues: StreamTraceValues, context: EvaluationContextImpl) {
-      val formattedResult = traceFormatter.formatTraceResult(chain, collectedValues)
+      val formattedResult = traceFormatter.formatTraceResult(chain, collectedValues, context)
       val interpretedResult = try {
         resultInterpreter.interpret(chain, formattedResult)
       }

@@ -4,6 +4,8 @@ package com.intellij.debugger.streams.trace.breakpoint
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.sun.jdi.*
 
+const val EMPTY_CONSTRUCTOR_SIGNATURE = "()V"
+
 /**
  * @author Shumaf Lovpache
  */
@@ -20,19 +22,18 @@ interface ValueContext {
 
   fun instance(className: String): ObjectReference = instance(className, EMPTY_CONSTRUCTOR_SIGNATURE, emptyList())
 
-  fun mirror(value: Int): IntegerValue
-  fun mirror(value: Byte): ByteValue
-  fun mirror(value: Char): CharValue
-  fun mirror(value: Float): FloatValue
-  fun mirror(value: Long): LongValue
-  fun mirror(value: Short): ShortValue
-  fun mirror(value: Double): DoubleValue
-  fun mirror(value: Boolean): BooleanValue
-  fun mirror(value: String): StringReference
-  fun mirror(): VoidValue
+  val Int.mirror: IntegerValue
+  val Byte.mirror: ByteValue
+  val Char.mirror: CharValue
+  val Float.mirror: FloatValue
+  val Long.mirror: LongValue
+  val Short.mirror: ShortValue
+  val Double.mirror: DoubleValue
+  val Boolean.mirror: BooleanValue
+  val String.mirror: StringReference
+  val Unit.mirror: VoidValue
 
   fun getType(className: String): ReferenceType
-  fun defineClass(className: String, bytesLoader: BytecodeFactory): ClassType
 
   fun array(componentType: String, size: Int): ArrayReference
   fun array(vararg values: Value): ArrayReference
