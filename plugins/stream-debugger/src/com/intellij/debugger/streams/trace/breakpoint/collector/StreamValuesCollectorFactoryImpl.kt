@@ -1,10 +1,10 @@
 // Copyright 2000-2022 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.debugger.streams.trace.breakpoint.collector
 
+import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.ValueManager
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
 import com.intellij.debugger.streams.trace.breakpoint.ex.ValueInstantiationException
-import com.intellij.debugger.streams.trace.breakpoint.instance
 import com.intellij.psi.CommonClassNames
 import com.sun.jdi.ArrayReference
 import com.sun.jdi.ObjectReference
@@ -29,15 +29,21 @@ const val DOUBLE_COLLECTOR_CLASS_FILE = "/classes/compiled/DoubleCollector.class
 
 const val COLLECTOR_SIGNATURE = "(Ljava/util/Map;Ljava/util/concurrent/atomic/AtomicInteger;)V"
 
-class StreamValuesCollectorFactoryImpl(private val valueManager: ValueManager) : StreamValuesCollectorFactory {
-  private val counterObject = valueManager.instance(ATOMIC_INTEGER_CLASS_NAME)
+class StreamValuesCollectorFactoryImpl(private val valueManager: ValueManager,
+                                       evaluationContext: EvaluationContextImpl) : StreamValuesCollectorFactory {
+  private lateinit var counterObject: ObjectReference
+  private lateinit var elapsedTime: ArrayReference
+
+  init {
+    valueManager.watch(evaluationContext) {
+      counterObject = instance(ATOMIC_INTEGER_CLASS_NAME)
+      elapsedTime = array("long", 1)
+        .apply { setValue(0, 0L.mirror) }
+    }
+  }
 
   private val valueStorages: MutableList<ObjectReference> = mutableListOf()
   private var streamResult: Value? = null
-  private val elapsedTime: ArrayReference = valueManager.watch {
-    array("long", 1)
-      .apply { setValue(0, mirror(0L)) }
-  }
 
   override val collectedValues: StreamTraceValues
     get() = if (streamResult == null)
@@ -49,7 +55,8 @@ class StreamValuesCollectorFactoryImpl(private val valueManager: ValueManager) :
       elapsedTime
     )
 
-  override fun getValueCollector(collectorType: String): ObjectReference = valueManager.watch {
+  override fun getValueCollector(evaluationContext: EvaluationContextImpl, collectorType: String): ObjectReference = valueManager.watch(
+    evaluationContext) {
     val mapInstance = instance(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
     valueStorages.add(mapInstance)
 

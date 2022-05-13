@@ -2,18 +2,21 @@
 package com.intellij.debugger.streams.trace.breakpoint.formatter
 
 import com.intellij.debugger.engine.DebuggerUtils
+import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.HelperClassUtils.STREAM_DEBUGGER_UTILS_CLASS_NAME
 import com.intellij.debugger.streams.trace.breakpoint.HelperClassUtils.getStreamDebuggerUtilsClass
 import com.intellij.debugger.streams.trace.breakpoint.ValueManager
 import com.intellij.debugger.streams.trace.breakpoint.ex.IncorrectValueTypeException
 import com.intellij.psi.CommonClassNames.JAVA_UTIL_MAP
 import com.sun.jdi.ArrayReference
+import com.sun.jdi.ClassType
 import com.sun.jdi.ObjectReference
 import com.sun.jdi.Value
 
-open class PeekTraceFormatter(private val valueManager: ValueManager) : TraceFormatter {
-  private val helperClass = valueManager.watch {
-    defineClass(STREAM_DEBUGGER_UTILS_CLASS_NAME) {
+open class PeekTraceFormatter(private val valueManager: ValueManager,
+                              private val evaluationContext: EvaluationContextImpl) : TraceFormatter {
+  init {
+    valueManager.defineClass(STREAM_DEBUGGER_UTILS_CLASS_NAME) {
       getStreamDebuggerUtilsClass()
     }
   }
@@ -26,13 +29,13 @@ open class PeekTraceFormatter(private val valueManager: ValueManager) : TraceFor
    * new java.lang.Object[] { beforeArray, afterArray };
    * ```
    */
-  override fun format(beforeValues: Value?, afterValues: Value?): Value = valueManager.watch {
+  override fun format(beforeValues: Value?, afterValues: Value?): Value = valueManager.watch(evaluationContext) {
     val before = formatMap(beforeValues)
     val after = formatMap(afterValues)
     array(before, after)
   }
 
-  protected fun formatMap(values: Value?) = valueManager.watch {
+  protected fun formatMap(values: Value?) = valueManager.watch(evaluationContext) {
     if (values == null) {
       emptyResult()
     }
@@ -42,7 +45,7 @@ open class PeekTraceFormatter(private val valueManager: ValueManager) : TraceFor
     }
   }
 
-  private fun emptyResult(): ArrayReference = valueManager.watch {
+  private fun emptyResult(): ArrayReference = valueManager.watch(evaluationContext) {
     array(
       array("int", 0),
       array()
@@ -55,7 +58,8 @@ open class PeekTraceFormatter(private val valueManager: ValueManager) : TraceFor
     }
   }
 
-  private fun getMapKeysAndValues(valueMap: ObjectReference): ArrayReference = valueManager.watch {
+  private fun getMapKeysAndValues(valueMap: ObjectReference): ArrayReference = valueManager.watch(evaluationContext) {
+    val helperClass = getType(STREAM_DEBUGGER_UTILS_CLASS_NAME) as ClassType
     val formatMap = helperClass.method("formatMap", "(Ljava/util/Map;)[Ljava/lang/Object;")
     invoke(helperClass, formatMap, listOf(valueMap)) as ArrayReference
   }
