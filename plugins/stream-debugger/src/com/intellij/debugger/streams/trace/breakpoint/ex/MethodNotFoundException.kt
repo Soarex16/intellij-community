@@ -7,6 +7,6 @@ import com.intellij.debugger.streams.trace.breakpoint.MethodSignature
  * @author Shumaf Lovpache
  */
 class MethodNotFoundException(val methodName: String, val signature: String, val type: String) : BreakpointTracingException(
-  "Could not find method $type$signature in type $type") {
+  "Could not find method $type.$methodName($signature)") {
   constructor(signature: MethodSignature) : this(signature.name, signature.arguments, signature.containingClass)
 }

@@ -9,15 +9,9 @@ import com.sun.jdi.Value
  * @author Shumaf Lovpache
  */
 interface StreamValuesCollectorFactory {
-  /**
-   * @param collectorType Interface type of requested collector
-   *
-   * @throws ValueInstantiationException
-   * @throws MethodNotFoundException
-   */
-  fun getValueCollector(evaluationContext: EvaluationContextImpl, collectorType: String): ObjectReference
+  fun getForIntermediate(evaluationContext: EvaluationContextImpl, collectorType: String): ValueCollector
 
-  fun collectStreamResult(result: Value)
+  fun getForTermination(evaluationContext: EvaluationContextImpl): ValueCollector
 
   val collectedValues: StreamTraceValues
 }
