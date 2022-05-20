@@ -1,23 +1,26 @@
 // Copyright 2000-2022 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.debugger.streams.trace.breakpoint
 
-import com.intellij.debugger.engine.DebuggerUtils
+import com.intellij.debugger.engine.DebuggerManagerThreadImpl
 import com.intellij.debugger.engine.SuspendContext
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.findVmMethod
+import com.intellij.debugger.streams.trace.breakpoint.collector.JAVA_UTIL_FUNCTION_DOUBLE_CONSUMER
+import com.intellij.debugger.streams.trace.breakpoint.collector.JAVA_UTIL_FUNCTION_INT_CONSUMER
+import com.intellij.debugger.streams.trace.breakpoint.collector.JAVA_UTIL_FUNCTION_LONG_CONSUMER
 import com.intellij.debugger.streams.trace.breakpoint.collector.StreamValuesCollectorFactory
-import com.intellij.debugger.streams.trace.breakpoint.ex.ArgumentTypeMismatchException
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
 import com.intellij.debugger.streams.trace.breakpoint.ex.MethodNotFoundException
+import com.intellij.debugger.streams.trace.breakpoint.ex.ValueInstantiationException
 import com.intellij.debugger.streams.trace.breakpoint.ex.ValueInterceptionException
 import com.intellij.debugger.streams.wrapper.StreamChain
-import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.diagnostic.logger
-import com.intellij.psi.CommonClassNames.JAVA_UTIL_FUNCTION_CONSUMER
+import com.intellij.psi.CommonClassNames.*
 import com.sun.jdi.*
+import com.sun.jdi.request.EventRequest
 import com.sun.jdi.request.MethodExitRequest
-import kotlin.reflect.KClass
+import com.sun.jdi.request.StepRequest
 
 private val LOG = logger<JavaMethodBreakpointFactory>()
 
@@ -36,7 +39,12 @@ class JavaMethodBreakpointFactory(private val evaluationContextFactory: Evaluati
     val frameProxy = evaluationContext.frameProxy!!
     val qualifierVariable = frameProxy.visibleVariableByName(streamChain.qualifierExpression.text)
     val qualifierValue = frameProxy.getValue(qualifierVariable) as ObjectReference
-    frameProxy.setValue(qualifierVariable, wrapWithPeek(evaluationContext, qualifierValue))
+
+    // TODO: тут не всегда JAVA_UTIL_FUNCTION_CONSUMER
+    val collector = collectorFactory.getForIntermediate(evaluationContext, getCollectorType(qualifierValue.referenceType().name()))
+    val wrappedResult = collector.intercept(evaluationContext, qualifierValue)
+
+    frameProxy.setValue(qualifierVariable, wrappedResult)
 
     if (originalStreamQualifierValue != null)
       throw ValueInterceptionException("Qualifier expression value has already been replaced")
@@ -63,11 +71,11 @@ class JavaMethodBreakpointFactory(private val evaluationContextFactory: Evaluati
                                                 signature: MethodSignature,
                                                 nextBreakpoint: MethodExitRequest): MethodExitRequest {
     return createMethodExitBreakpointRequest(evaluationContext, signature) { suspendContext, _, value ->
-      if (value !is ObjectReference) createTypeMismatchException(value, ObjectReference::class)
+      nextBreakpoint.enable()
 
       val context = evaluationContextFactory.createContext(checkSuspendContext(suspendContext))
-      val wrappedResult = wrapWithPeek(context, value)
-      nextBreakpoint.enable()
+      val collector = collectorFactory.getForIntermediate(context, getCollectorType(signature.returnType))
+      val wrappedResult = collector.intercept(context, value)
 
       return@createMethodExitBreakpointRequest wrappedResult
     }
@@ -77,7 +85,9 @@ class JavaMethodBreakpointFactory(private val evaluationContextFactory: Evaluati
                                                     signature: MethodSignature): MethodExitRequest {
     return createMethodExitBreakpointRequest(evaluationContext, signature) { suspendContext, _, value ->
       // TODO: не учтен случай, когда результат стрима void
-      collectorFactory.collectStreamResult(value)
+      collectorFactory
+        .getForTermination(evaluationContext)
+        .intercept(evaluationContext, value)
 
       if (suspendContext !is SuspendContextImpl)
         throw BreakpointTracingException("Cannot trace stream chain because suspend context has unsupported type")
@@ -87,29 +97,14 @@ class JavaMethodBreakpointFactory(private val evaluationContextFactory: Evaluati
     }
   }
 
-  private fun returnToStreamDeclaringMethod(suspendContext: SuspendContextImpl) = runInEdt {
+  private fun returnToStreamDeclaringMethod(suspendContext: SuspendContextImpl) {
+    DebuggerManagerThreadImpl.assertIsManagerThread()
     val debugProcess = suspendContext.debugProcess
-    val session = debugProcess.session
-    session.stepOut()
-  }
-
-  private fun checkStreamMethodArguments(vmMethod: Method, actualArgs: List<Value>): Boolean =
-    vmMethod.argumentTypes().size == actualArgs.size && vmMethod.argumentTypes()
-      .zip(actualArgs).all { (expectedArgType, actualArg) -> DebuggerUtils.instanceOf(actualArg.type(), expectedArgType.name()) }
-
-  private fun wrapWithPeek(evaluationContext: EvaluationContextImpl, value: ObjectReference): Value {
-    val collector = collectorFactory.getValueCollector(evaluationContext, JAVA_UTIL_FUNCTION_CONSUMER)
-    val peekArgs = listOf(collector)
-
-    val peekSignature = "(Ljava/util/function/Consumer;)Ljava/util/stream/Stream;"
-    val valueType = value.referenceType() as ClassType
-    val peekMethod = DebuggerUtils.findMethod(valueType, "peek", peekSignature)
-                     ?: throw MethodNotFoundException("peek", peekSignature, valueType.name())
-
-    if (!checkStreamMethodArguments(peekMethod, peekArgs)) throw ArgumentTypeMismatchException(peekMethod, peekArgs)
-
-    return evaluationContext.debugProcess
-      .invokeInstanceMethod(evaluationContext, value, peekMethod, peekArgs, 0, true)
+    val threadRef = suspendContext.thread!!.threadReference
+    val req: StepRequest = debugProcess.requestsManager.vmRequestManager.createStepRequest(threadRef, StepRequest.STEP_LINE,
+                                                                                           StepRequest.STEP_OUT)
+    req.setSuspendPolicy(EventRequest.SUSPEND_EVENT_THREAD)
+    req.enable()
   }
 
   /**
@@ -171,8 +166,11 @@ class JavaMethodBreakpointFactory(private val evaluationContextFactory: Evaluati
     return suspendContext
   }
 
-  private fun createTypeMismatchException(value: Value, expectedType: KClass<ObjectReference>): Nothing = throw ValueInterceptionException(
-    "Cannot modify value because it is of type ${value.type().name()} " +
-    "(expected value of type ${expectedType.simpleName}) "
-  )
+  private fun getCollectorType(streamType: String) = when(streamType) {
+    JAVA_UTIL_STREAM_STREAM -> JAVA_UTIL_FUNCTION_CONSUMER
+    JAVA_UTIL_STREAM_INT_STREAM -> JAVA_UTIL_FUNCTION_INT_CONSUMER
+    JAVA_UTIL_STREAM_LONG_STREAM -> JAVA_UTIL_FUNCTION_LONG_CONSUMER
+    JAVA_UTIL_STREAM_DOUBLE_STREAM -> JAVA_UTIL_FUNCTION_DOUBLE_CONSUMER
+    else -> throw ValueInstantiationException("Could not get collector for stream of type $streamType")
+  }
 }

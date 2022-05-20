@@ -6,6 +6,7 @@ import com.intellij.debugger.engine.JavaStackFrame
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
+import com.intellij.debugger.engine.events.SuspendContextCommandImpl
 import com.intellij.debugger.impl.ClassLoadingUtils
 import com.intellij.debugger.impl.PrioritizedTask
 import com.intellij.debugger.streams.StreamDebuggerBundle
@@ -45,64 +46,70 @@ class MethodBreakpointTracer(private val session: XDebugSession,
   }
 
   private fun trace(debugProcess: JavaDebugProcess, chain: StreamChain, callback: TracingCallback) {
-    val context = createEvaluationContext(debugProcess)
-    val evalContextFactory: EvaluationContextFactory = DefaultEvaluationContextFactory(context.classLoader!!)
-    val objectStorage: ObjectStorage = DisableCollectionObjectStorage()
-    val valueManager: ValueManager = createValueManager(objectStorage)
-    val valuesCollector: StreamValuesCollectorFactory = StreamValuesCollectorFactoryImpl(valueManager, context)
-    val traceFormatter: StreamTraceFormatter = StreamTraceFormatterImpl(valueManager)
+    val process = debugProcess.debuggerSession.process
+    process.managerThread.schedule(object: SuspendContextCommandImpl(process.suspendManager.pausedContext) {
+      override fun contextAction(suspendContext: SuspendContextImpl) {
+        val context = createEvaluationContext(debugProcess, suspendContext)
+        val evalContextFactory: EvaluationContextFactory = DefaultEvaluationContextFactory(context.classLoader!!)
+        val objectStorage: ObjectStorage = DisableCollectionObjectStorage()
+        val valueManager: ValueManager = createValueManager(objectStorage)
+        val valuesCollector: StreamValuesCollectorFactory = StreamValuesCollectorFactoryImpl(valueManager, context)
+        val traceFormatter: StreamTraceFormatter = StreamTraceFormatterImpl(valueManager)
 
-    val executionCallback = TracingCallbackWrapper(chain, callback, resultInterpreter, traceFormatter)
-    val locations = try {
-      breakpointResolver.findBreakpointPlaces(chain)
-    }
-    catch (e: BreakpointPlaceNotFoundException) {
-      executionCallback.breakpointSetupFailed(e)
-      return
-    }
+        val executionCallback = TracingCallbackWrapper(chain, callback, resultInterpreter, traceFormatter)
+        val locations = try {
+          breakpointResolver.findBreakpointPlaces(chain)
+        }
+        catch (e: BreakpointPlaceNotFoundException) {
+          executionCallback.breakpointSetupFailed(e)
+          return
+        }
 
-    // TODO: Abstract by language here?
-    val breakpointFactory: MethodBreakpointFactory = JavaMethodBreakpointFactory(evalContextFactory, valuesCollector, executionCallback,
-                                                                                 chain)
+        // TODO: Abstract by language here?
+        val breakpointFactory: MethodBreakpointFactory = JavaMethodBreakpointFactory(evalContextFactory, valuesCollector, executionCallback,
+                                                                                     chain)
 
-    try {
-      setStreamBreakpoints(context, breakpointFactory, locations)
+        try {
+          setStreamBreakpoints(context, breakpointFactory, locations)
 
-      val currentStackFrame = session.currentStackFrame as? JavaStackFrame
-                              ?: throw BreakpointTracingException("Cannot determine current location")
-      val outerMethod = currentStackFrame.descriptor.method
-      val sessionListener = object : XDebugSessionListener {
-        override fun sessionPaused() {
-          super.sessionPaused()
-          val frame = session.currentStackFrame
-          if (frame is JavaStackFrame && frame.descriptor.method == outerMethod) {
-            // TODO: восстанавливать значение qualifierExpression после вычисления стрима
-            val suspendContext = debugProcess.session.suspendContext as SuspendContextImpl
-            val evaluationContext = evalContextFactory.createContext(suspendContext)
-            executionCallback.evaluated(valuesCollector.collectedValues, evaluationContext)
+          val currentStackFrame = session.currentStackFrame as? JavaStackFrame
+                                  ?: throw BreakpointTracingException("Cannot determine current location")
+          val outerMethod = currentStackFrame.descriptor.method
+          val sessionListener = object : XDebugSessionListener {
+            override fun sessionPaused() {
+              super.sessionPaused()
+              val frame = session.currentStackFrame
+              if (frame is JavaStackFrame && frame.descriptor.method == outerMethod) {
+                // TODO: восстанавливать значение qualifierExpression после вычисления стрима
+                val ctx = debugProcess.session.suspendContext as SuspendContextImpl
+                val evaluationContext = evalContextFactory.createContext(ctx)
+                executionCallback.evaluated(valuesCollector.collectedValues, evaluationContext)
+
+                debugProcess.session.removeSessionListener(this)
+              }
+            }
           }
-          //debugProcess.session.removeSessionListener(this)
+          debugProcess.session.addSessionListener(sessionListener)
+
+          // TODO: после трассировки проверять, что брейкпоинты,
+          //  которые мы расставили были подчищены. Также полезно
+          //  рассмотреть как поведет себя control flow в случае
+          //  завершения дебага, не будет ли течь память
+
+          // session.stepOver(false) // TODO: тут надо что-то более понятное юзеру придумать, а не сразу шагать
+
+          // TODO: посмотреть куда будут вываливаться исключения, созданные в коллбеках брейкпоинтов
+
+          // TODO: execute
+          runInEdt { session.resume() }
+        }
+        catch (e: BreakpointTracingException) {
+          executionCallback.tracingSetupFailed(e)
+          objectStorage.dispose()
+          LOG.error(e)
         }
       }
-      debugProcess.session.addSessionListener(sessionListener)
-
-      // TODO: после трассировки проверять, что брейкпоинты,
-      //  которые мы расставили были подчищены. Также полезно
-      //  рассмотреть как поведет себя control flow в случае
-      //  завершения дебага, не будет ли течь память
-
-      // session.stepOver(false) // TODO: тут надо что-то более понятное юзеру придумать, а не сразу шагать
-
-      // TODO: посмотреть куда будут вываливаться исключения, созданные в коллбеках брейкпоинтов
-
-      // TODO: execute
-      runInEdt { session.resume() }
-    }
-    catch (e: BreakpointTracingException) {
-      executionCallback.tracingSetupFailed(e)
-      objectStorage.dispose()
-      LOG.error(e)
-    }
+    })
   }
 
   private fun setStreamBreakpoints(evaluationContext: EvaluationContextImpl,
@@ -149,9 +156,8 @@ class MethodBreakpointTracer(private val session: XDebugSession,
     return container
   }
 
-  private fun createEvaluationContext(debugProcess: JavaDebugProcess): EvaluationContextImpl {
+  private fun createEvaluationContext(debugProcess: JavaDebugProcess, suspendContext: SuspendContextImpl): EvaluationContextImpl {
     val process = debugProcess.debuggerSession.process
-    val suspendContext = process.suspendManager.pausedContext
     val currentStackFrameProxy = suspendContext.frameProxy
     val ctx = EvaluationContextImpl(suspendContext, currentStackFrameProxy)
       .withAutoLoadClasses(true)

@@ -2,6 +2,7 @@
 package com.intellij.debugger.streams.trace.breakpoint
 
 import com.intellij.psi.PsiMethod
+import com.intellij.psi.PsiParameter
 import com.intellij.psi.util.TypeConversionUtil
 import com.sun.jdi.Method
 
@@ -22,8 +23,17 @@ data class MethodSignature(val containingClass: String, val name: String, val ar
     fun of(psiMethod: PsiMethod) = MethodSignature(
       psiMethod.containingClass?.qualifiedName ?: "",
       psiMethod.name,
-      psiMethod.parameterList.parameters.map { param -> TypeConversionUtil.erasure(param.type)?.canonicalText!! },
+      psiMethod.parameterList.parameters.map { it.signature() },
       TypeConversionUtil.erasure(psiMethod.returnType)?.canonicalText ?: ""
     )
+
+    private fun PsiParameter.signature(): String {
+      val paramType = TypeConversionUtil.erasure(this.type)
+      if (this.isVarArgs) {
+        return "${paramType.deepComponentType.canonicalText}[]"
+      }
+
+      return paramType.canonicalText
+    }
   }
 }

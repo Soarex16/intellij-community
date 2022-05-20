@@ -12,10 +12,10 @@ import com.sun.jdi.Value
 
 const val ATOMIC_INTEGER_CLASS_NAME = "java.util.concurrent.atomic.AtomicInteger"
 
-private const val JAVA_UTIL_FUNCTION_CONSUMER = "java.util.function.Consumer"
-private const val JAVA_UTIL_FUNCTION_INT_CONSUMER = "java.util.function.IntConsumer"
-private const val JAVA_UTIL_FUNCTION_LONG_CONSUMER = "java.util.function.LongConsumer"
-private const val JAVA_UTIL_FUNCTION_DOUBLE_CONSUMER = "java.util.function.DoubleConsumer"
+const val JAVA_UTIL_FUNCTION_CONSUMER = "java.util.function.Consumer"
+const val JAVA_UTIL_FUNCTION_INT_CONSUMER = "java.util.function.IntConsumer"
+const val JAVA_UTIL_FUNCTION_LONG_CONSUMER = "java.util.function.LongConsumer"
+const val JAVA_UTIL_FUNCTION_DOUBLE_CONSUMER = "java.util.function.DoubleConsumer"
 
 const val OBJECT_COLLECTOR_CLASS_NAME = "com.intellij.debugger.streams.generated.java.collector.ObjectCollector"
 const val INT_COLLECTOR_CLASS_NAME = "com.intellij.debugger.streams.generated.java.collector.IntCollector"
@@ -55,17 +55,19 @@ class StreamValuesCollectorFactoryImpl(private val valueManager: ValueManager,
       elapsedTime
     )
 
-  override fun getValueCollector(evaluationContext: EvaluationContextImpl, collectorType: String): ObjectReference = valueManager.watch(
+  override fun getForIntermediate(evaluationContext: EvaluationContextImpl, collectorType: String): ValueCollector = valueManager.watch(
     evaluationContext) {
     val mapInstance = instance(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
     valueStorages.add(mapInstance)
 
     val collectorClassName = getCollectorClass(collectorType)
-    instance(collectorClassName, COLLECTOR_SIGNATURE, listOf(mapInstance, counterObject))
+    val collectorMirror = instance(collectorClassName, COLLECTOR_SIGNATURE, listOf(mapInstance, counterObject))
+    PeekValueCollector(collectorMirror, collectorType)
   }
 
-  override fun collectStreamResult(result: Value) {
-    streamResult = result
+  override fun getForTermination(evaluationContext: EvaluationContextImpl): ValueCollector = ValueCollector { _, value ->
+    streamResult = value
+    return@ValueCollector value
   }
 
   private fun getCollectorClass(requestedType: String) = when (requestedType) {
