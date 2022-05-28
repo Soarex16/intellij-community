@@ -1,5 +1,5 @@
 // Copyright 2000-2022 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
-package com.intellij.debugger.streams.trace.breakpoint.collector
+package com.intellij.debugger.streams.trace.breakpoint.interceptor
 
 import com.intellij.debugger.engine.DebuggerUtils
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
@@ -20,7 +20,7 @@ const val DOUBLE_CONSUMER_SIGNATURE = "(Ljava/util/function/DoubleConsumer;)Ljav
 /**
  * @author Shumaf Lovpache
  */
-class PeekValueCollector(private val collectorMirror: ObjectReference, private val collectorType: String): ValueCollector {
+class PeekValueInterceptor(private val collectorMirror: ObjectReference, private val collectorType: String): ValueInterceptor {
   override fun intercept(evaluationContext: EvaluationContextImpl, value: Value): Value {
     if (value !is ObjectReference) createTypeMismatchException(value, ObjectReference::class)
 

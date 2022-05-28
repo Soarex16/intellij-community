@@ -1,5 +1,5 @@
 // Copyright 2000-2022 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
-package com.intellij.debugger.streams.trace.breakpoint.collector
+package com.intellij.debugger.streams.trace.breakpoint.interceptor
 
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.ValueManager
@@ -29,8 +29,8 @@ const val DOUBLE_COLLECTOR_CLASS_FILE = "/classes/compiled/DoubleCollector.class
 
 const val COLLECTOR_SIGNATURE = "(Ljava/util/Map;Ljava/util/concurrent/atomic/AtomicInteger;)V"
 
-class StreamValuesCollectorFactoryImpl(private val valueManager: ValueManager,
-                                       evaluationContext: EvaluationContextImpl) : StreamValuesCollectorFactory {
+class ValueInterceptorFactoryImpl(private val valueManager: ValueManager,
+                                  evaluationContext: EvaluationContextImpl) : ValueInterceptorFactory {
   private lateinit var counterObject: ObjectReference
   private lateinit var elapsedTime: ArrayReference
 
@@ -55,19 +55,19 @@ class StreamValuesCollectorFactoryImpl(private val valueManager: ValueManager,
       elapsedTime
     )
 
-  override fun getForIntermediate(evaluationContext: EvaluationContextImpl, collectorType: String): ValueCollector = valueManager.watch(
+  override fun getForIntermediate(evaluationContext: EvaluationContextImpl, collectorType: String): ValueInterceptor = valueManager.watch(
     evaluationContext) {
     val mapInstance = instance(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
     valueStorages.add(mapInstance)
 
     val collectorClassName = getCollectorClass(collectorType)
     val collectorMirror = instance(collectorClassName, COLLECTOR_SIGNATURE, listOf(mapInstance, counterObject))
-    PeekValueCollector(collectorMirror, collectorType)
+    PeekValueInterceptor(collectorMirror, collectorType)
   }
 
-  override fun getForTermination(evaluationContext: EvaluationContextImpl): ValueCollector = ValueCollector { _, value ->
+  override fun getForTermination(evaluationContext: EvaluationContextImpl): ValueInterceptor = ValueInterceptor { _, value ->
     streamResult = value
-    return@ValueCollector value
+    return@ValueInterceptor value
   }
 
   private fun getCollectorClass(requestedType: String) = when (requestedType) {

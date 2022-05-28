@@ -37,16 +37,6 @@ abstract class MethodBreakpointRequestor(project: Project, private val method: M
       catch (e: Throwable) {
         LOG.info(e)
       }
-      finally {
-        try {
-          if (event.request().isEnabled) {
-            event.request().disable()
-          }
-        }
-        catch (e: InvalidRequestStateException) {
-          LOG.warn(e)
-        }
-      }
     }
 
     return false

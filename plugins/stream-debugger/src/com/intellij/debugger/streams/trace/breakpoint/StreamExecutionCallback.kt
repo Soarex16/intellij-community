@@ -2,7 +2,7 @@
 package com.intellij.debugger.streams.trace.breakpoint
 
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
-import com.intellij.debugger.streams.trace.breakpoint.collector.StreamTraceValues
+import com.intellij.debugger.streams.trace.breakpoint.interceptor.StreamTraceValues
 
 /**
  * @author Shumaf Lovpache
