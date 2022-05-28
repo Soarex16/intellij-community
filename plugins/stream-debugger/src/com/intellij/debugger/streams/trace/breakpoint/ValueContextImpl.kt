@@ -36,35 +36,41 @@ class ValueContextImpl(private val bytecodeFactories: Map<String, BytecodeFactor
     return instance
   }
 
+  private val virtualMachine
+    get() = evaluationContext.debugProcess.virtualMachineProxy
+
   override val Int.mirror: IntegerValue
-    get() = evaluationContext.debugProcess.virtualMachineProxy.mirrorOf(this)
+    get() = virtualMachine.mirrorOf(this)
 
   override val Byte.mirror: ByteValue
-    get() = evaluationContext.debugProcess.virtualMachineProxy.mirrorOf(this)
+    get() = virtualMachine.mirrorOf(this)
 
   override val Char.mirror: CharValue
-    get() = evaluationContext.debugProcess.virtualMachineProxy.mirrorOf(this)
+    get() = virtualMachine.mirrorOf(this)
 
   override val Float.mirror: FloatValue
-    get() = evaluationContext.debugProcess.virtualMachineProxy.mirrorOf(this)
+    get() = virtualMachine.mirrorOf(this)
 
   override val Long.mirror: LongValue
-    get() = evaluationContext.debugProcess.virtualMachineProxy.mirrorOf(this)
+    get() = virtualMachine.mirrorOf(this)
 
   override val Short.mirror: ShortValue
-    get() = evaluationContext.debugProcess.virtualMachineProxy.mirrorOf(this)
+    get() = virtualMachine.mirrorOf(this)
 
   override val Double.mirror: DoubleValue
-    get() = evaluationContext.debugProcess.virtualMachineProxy.mirrorOf(this)
+    get() = virtualMachine.mirrorOf(this)
 
   override val Boolean.mirror: BooleanValue
-    get() = evaluationContext.debugProcess.virtualMachineProxy.mirrorOf(this)
+    get() = virtualMachine.mirrorOf(this)
 
   override val String.mirror: StringReference
-    get() = evaluationContext.debugProcess.virtualMachineProxy.mirrorOf(this).also { keep(it) }
+    get() = virtualMachine.mirrorOf(this).also { keep(it) }
 
   override val Unit.mirror: VoidValue
-    get() = evaluationContext.debugProcess.virtualMachineProxy.mirrorOfVoid()
+    get() = virtualMachine.mirrorOfVoid()
+
+  // Hack for getting proper type
+  override fun Type.defaultValue(): Value? = array(this.name(), 1).getValue(0)
 
   override fun getType(className: String): ReferenceType = evaluationContext.loadClassIfAbsent(className) {
     tryLoadClassBytecode(className)
@@ -72,20 +78,21 @@ class ValueContextImpl(private val bytecodeFactories: Map<String, BytecodeFactor
 
   override fun array(componentType: String, size: Int): ArrayReference {
     val arrayClassName = "$componentType[]"
-    val vm = evaluationContext.debugProcess.virtualMachineProxy.virtualMachine
+    val vm = virtualMachine.virtualMachine
     val arraySize = vm.mirrorOf(size)
     return instance(arrayClassName, "(I)V", listOf(arraySize)) as ArrayReference
   }
 
-  override fun array(vararg values: Value): ArrayReference = array(values.toList())
+  override fun array(vararg values: Value?): ArrayReference = array(values.toList())
 
-  override fun array(values: List<Value>): ArrayReference {
-    val valueTypes = values.map { it.type() }.distinct()
+  override fun array(values: List<Value?>): ArrayReference {
+    val valueTypes = values.map { it?.type() }.distinct()
     val componentType = when {
-      values.all { it is ObjectReference } -> CommonClassNames.JAVA_LANG_OBJECT
+      values.isEmpty() -> throw BreakpointTracingException("Could not infer type for empty array.")
+      valueTypes.all { it is ReferenceType || it == null } -> CommonClassNames.JAVA_LANG_OBJECT
       valueTypes.size > 1 -> throw BreakpointTracingException(
         "Could not create array of non-reference types from a list of values with different types")
-      values.first() is PrimitiveType -> valueTypes.first().name()
+      valueTypes.first() is PrimitiveType -> valueTypes.first()!!.name()
       // All values of the same (but not primitive or reference) type. For ex. void value
       else -> throw BreakpointTracingException("All values in an array must be of a reference type or of the same primitive type.")
     }
@@ -102,10 +109,10 @@ class ValueContextImpl(private val bytecodeFactories: Map<String, BytecodeFactor
       it?.prepareArguments(evaluationContext)
     } ?: throw MethodNotFoundException(name, signature, this.name())
 
-  override fun invoke(cls: ClassType, method: Method, arguments: List<Value>): Value = evaluationContext.debugProcess
+  override fun invoke(cls: ClassType, method: Method, arguments: List<Value?>): Value? = evaluationContext.debugProcess
     .invokeMethod(evaluationContext, cls, method, arguments, 0, true)
 
-  override fun invoke(obj: ObjectReference, method: Method, arguments: List<Value>): Value = evaluationContext.debugProcess
+  override fun invoke(obj: ObjectReference, method: Method, arguments: List<Value?>): Value? = evaluationContext.debugProcess
     .invokeInstanceMethod(evaluationContext, obj, method, arguments, 0, true)
 
   override fun keep(value: Value) {

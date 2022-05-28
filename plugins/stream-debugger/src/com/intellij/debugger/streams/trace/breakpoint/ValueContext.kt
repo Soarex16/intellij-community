@@ -33,17 +33,19 @@ interface ValueContext {
   val String.mirror: StringReference
   val Unit.mirror: VoidValue
 
+  fun Type.defaultValue(): Value?
+
   fun getType(className: String): ReferenceType
 
   fun array(componentType: String, size: Int): ArrayReference
-  fun array(vararg values: Value): ArrayReference
-  fun array(values: List<Value>): ArrayReference
+  fun array(vararg values: Value?): ArrayReference
+  fun array(values: List<Value?>): ArrayReference
 
   fun ObjectReference.method(name: String, signature: String): Method
   fun ReferenceType.method(name: String, signature: String): Method
 
-  fun invoke(cls: ClassType, method: Method, arguments: List<Value>): Value
-  fun invoke(obj: ObjectReference, method: Method, arguments: List<Value>): Value
+  fun invoke(cls: ClassType, method: Method, arguments: List<Value?>): Value?
+  fun invoke(obj: ObjectReference, method: Method, arguments: List<Value?>): Value?
 
   fun keep(value: Value)
 }

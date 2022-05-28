@@ -2,14 +2,11 @@
 package com.intellij.debugger.streams.trace.breakpoint.formatter
 
 import com.intellij.debugger.streams.wrapper.IntermediateStreamCall
-import com.intellij.debugger.streams.wrapper.TerminatorStreamCall
 import com.sun.jdi.Value
 
 /**
  * @author Shumaf Lovpache
  */
-interface TraceFormatterFactory {
-  fun getForIntermediate(call: IntermediateStreamCall, result: Value): TraceFormatter
-
-  fun getForTermination(call: TerminatorStreamCall, result: Value): TraceFormatter
+interface IntermediateOperationTraceFormatter : TraceFormatter {
+  fun format(streamCall: IntermediateStreamCall, beforeValues: Value?, afterValues: Value?): Value
 }

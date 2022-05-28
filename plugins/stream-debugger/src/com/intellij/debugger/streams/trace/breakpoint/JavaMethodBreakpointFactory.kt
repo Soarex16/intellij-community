@@ -6,10 +6,10 @@ import com.intellij.debugger.engine.SuspendContext
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.findVmMethod
-import com.intellij.debugger.streams.trace.breakpoint.collector.JAVA_UTIL_FUNCTION_DOUBLE_CONSUMER
-import com.intellij.debugger.streams.trace.breakpoint.collector.JAVA_UTIL_FUNCTION_INT_CONSUMER
-import com.intellij.debugger.streams.trace.breakpoint.collector.JAVA_UTIL_FUNCTION_LONG_CONSUMER
-import com.intellij.debugger.streams.trace.breakpoint.collector.StreamValuesCollectorFactory
+import com.intellij.debugger.streams.trace.breakpoint.interceptor.JAVA_UTIL_FUNCTION_DOUBLE_CONSUMER
+import com.intellij.debugger.streams.trace.breakpoint.interceptor.JAVA_UTIL_FUNCTION_INT_CONSUMER
+import com.intellij.debugger.streams.trace.breakpoint.interceptor.JAVA_UTIL_FUNCTION_LONG_CONSUMER
+import com.intellij.debugger.streams.trace.breakpoint.interceptor.ValueInterceptorFactory
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
 import com.intellij.debugger.streams.trace.breakpoint.ex.MethodNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.ValueInstantiationException
@@ -28,7 +28,7 @@ private val LOG = logger<JavaMethodBreakpointFactory>()
  * @author Shumaf Lovpache
  */
 class JavaMethodBreakpointFactory(private val evaluationContextFactory: EvaluationContextFactory,
-                                  private val collectorFactory: StreamValuesCollectorFactory,
+                                  private val collectorFactory: ValueInterceptorFactory,
                                   private val executionCallback: StreamExecutionCallback,
                                   private val streamChain: StreamChain) : MethodBreakpointFactory {
 
@@ -84,7 +84,6 @@ class JavaMethodBreakpointFactory(private val evaluationContextFactory: Evaluati
   override fun createTerminationOperationBreakpoint(evaluationContext: EvaluationContextImpl,
                                                     signature: MethodSignature): MethodExitRequest {
     return createMethodExitBreakpointRequest(evaluationContext, signature) { suspendContext, _, value ->
-      // TODO: не учтен случай, когда результат стрима void
       collectorFactory
         .getForTermination(evaluationContext)
         .intercept(evaluationContext, value)
@@ -115,6 +114,7 @@ class JavaMethodBreakpointFactory(private val evaluationContextFactory: Evaluati
                                                 transformer: (SuspendContext, Method, Value) -> Value?): MethodExitRequest {
     val vmMethod = findVmMethod(evaluationContext, signature) ?: throw MethodNotFoundException(signature)
     val requestor = MethodExitRequestor(evaluationContext.project, vmMethod) { requestor, suspendContext, event ->
+      event.request().disable()
       suspendContext.debugProcess.requestsManager.deleteRequest(requestor)
 
       val threadProxy = suspendContext.thread ?: return@MethodExitRequestor

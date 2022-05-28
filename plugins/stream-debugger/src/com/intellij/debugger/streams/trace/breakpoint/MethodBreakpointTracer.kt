@@ -14,7 +14,7 @@ import com.intellij.debugger.streams.trace.StreamTracer
 import com.intellij.debugger.streams.trace.TraceResultInterpreter
 import com.intellij.debugger.streams.trace.TracingCallback
 import com.intellij.debugger.streams.trace.breakpoint.HelperClassUtils.getCompiledClass
-import com.intellij.debugger.streams.trace.breakpoint.collector.*
+import com.intellij.debugger.streams.trace.breakpoint.interceptor.*
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointPlaceNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
 import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatter
@@ -53,7 +53,7 @@ class MethodBreakpointTracer(private val session: XDebugSession,
         val evalContextFactory: EvaluationContextFactory = DefaultEvaluationContextFactory(context.classLoader!!)
         val objectStorage: ObjectStorage = DisableCollectionObjectStorage()
         val valueManager: ValueManager = createValueManager(objectStorage)
-        val valuesCollector: StreamValuesCollectorFactory = StreamValuesCollectorFactoryImpl(valueManager, context)
+        val valuesCollector: ValueInterceptorFactory = ValueInterceptorFactoryImpl(valueManager, context)
         val traceFormatter: StreamTraceFormatter = StreamTraceFormatterImpl(valueManager)
 
         val executionCallback = TracingCallbackWrapper(chain, callback, resultInterpreter, traceFormatter)
@@ -95,8 +95,6 @@ class MethodBreakpointTracer(private val session: XDebugSession,
           //  которые мы расставили были подчищены. Также полезно
           //  рассмотреть как поведет себя control flow в случае
           //  завершения дебага, не будет ли течь память
-
-          // session.stepOver(false) // TODO: тут надо что-то более понятное юзеру придумать, а не сразу шагать
 
           // TODO: посмотреть куда будут вываливаться исключения, созданные в коллбеках брейкпоинтов
 

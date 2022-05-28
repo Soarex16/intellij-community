@@ -3,13 +3,16 @@ package com.intellij.debugger.streams.trace.breakpoint.formatter
 
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.ValueManager
-import com.intellij.debugger.streams.trace.breakpoint.collector.StreamTraceValues
+import com.intellij.debugger.streams.trace.breakpoint.interceptor.StreamTraceValues
+import com.intellij.debugger.streams.wrapper.TerminatorStreamCall
 import com.sun.jdi.ObjectReference
 import com.sun.jdi.Value
 
-class TerminatorTraceFormatter(private val valueManager: ValueManager,
-                               private val evaluationContext: EvaluationContextImpl,
-                               private val collectedValues: StreamTraceValues) : PeekTraceFormatter(valueManager, evaluationContext) {
+class ToCollectionTraceFormatter(
+  private val valueManager: ValueManager,
+  private val evaluationContext: EvaluationContextImpl
+  ) : TraceFormatterBase(valueManager, evaluationContext), TerminationOperationTraceFormatter {
+
   /**
    * Converts the result of the intermediate operation to the following format:
    * ```
@@ -18,9 +21,12 @@ class TerminatorTraceFormatter(private val valueManager: ValueManager,
    * new java.lang.Object[] { beforeArray, afterArray, time };
    * ```
    */
-  override fun format(beforeValues: Value?, afterValues: Value?): Value = valueManager.watch(evaluationContext) {
-    val before = super.formatMap(beforeValues)
-    val after = super.formatMap(afterValues)
+  override fun format(streamCall: TerminatorStreamCall,
+                      collectedValues: StreamTraceValues,
+                      beforeValues: Value?,
+                      afterValues: Value?): Value = valueManager.watch(evaluationContext) {
+    val before = super.formatMap(beforeValues, streamCall.typeBefore.variableTypeName)
+    val after = super.formatMap(afterValues, streamCall.resultType.variableTypeName)
 
     val formattedTime = formatTime(collectedValues.time)
     array(
