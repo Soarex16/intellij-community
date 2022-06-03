@@ -6,8 +6,6 @@ import com.sun.jdi.Value
 
 /**
  * @author Shumaf Lovpache
- *
- * // TODO: переименовать в interceptor, а распиливаемая beakpoint factory распилится в interceptor-ы
  */
 fun interface ValueInterceptor {
   /**
