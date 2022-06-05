@@ -4,8 +4,8 @@ package com.intellij.debugger.streams.trace.breakpoint.ex
 import com.sun.jdi.Method
 import com.sun.jdi.Value
 
-class ArgumentTypeMismatchException(method: Method, actualArgs: List<Value>) : TypeException(
-  "Arguments mismatch when calling method ${method.signature()}, actual argument types: ${
-    actualArgs.joinToString(", ") { it.type().name() }
+class ArgumentTypeMismatchException(method: Method, actualArgs: List<Value?>) : TypeException(
+  "Arguments mismatch when calling method ${method.name()}${method.signature()}, actual argument types: ${
+    actualArgs.joinToString(", ") { it?.type()?.name().orEmpty() }
   }"
 )

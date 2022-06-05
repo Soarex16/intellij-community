@@ -2,7 +2,6 @@
 package com.intellij.debugger.streams.trace.breakpoint
 
 import com.intellij.debugger.engine.JavaDebugProcess
-import com.intellij.debugger.engine.JavaStackFrame
 import com.intellij.debugger.engine.SuspendContextImpl
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.engine.events.DebuggerCommandImpl
@@ -13,17 +12,29 @@ import com.intellij.debugger.streams.StreamDebuggerBundle
 import com.intellij.debugger.streams.trace.StreamTracer
 import com.intellij.debugger.streams.trace.TraceResultInterpreter
 import com.intellij.debugger.streams.trace.TracingCallback
+import com.intellij.debugger.streams.trace.TracingResult
 import com.intellij.debugger.streams.trace.breakpoint.HelperClassUtils.getCompiledClass
-import com.intellij.debugger.streams.trace.breakpoint.interceptor.*
+import com.intellij.debugger.streams.trace.breakpoint.TracerUtils.tryExtractExceptionMessage
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointPlaceNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
-import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatter
-import com.intellij.debugger.streams.trace.breakpoint.formatter.StreamTraceFormatterImpl
+import com.intellij.debugger.streams.trace.breakpoint.interceptor.*
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.JDIMethodBreakpointFactory
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.StreamTracingManager
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.StreamTracingManagerImpl
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.IntermediateCallRuntimeHandler
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeHandlerFactory
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.SourceOperationRuntimeHandler
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.TerminalOperationRuntimeHandler
+import com.intellij.debugger.streams.wrapper.IntermediateStreamCall
 import com.intellij.debugger.streams.wrapper.StreamChain
-import com.intellij.openapi.application.runInEdt
+import com.intellij.debugger.streams.wrapper.TerminatorStreamCall
 import com.intellij.openapi.diagnostic.logger
+import com.intellij.psi.CommonClassNames
 import com.intellij.xdebugger.XDebugSession
-import com.intellij.xdebugger.XDebugSessionListener
+import com.sun.jdi.ArrayReference
+import com.sun.jdi.ClassType
+import com.sun.jdi.ObjectReference
+import com.sun.jdi.Value
 
 private val LOG = logger<MethodBreakpointTracer>()
 
@@ -47,94 +58,109 @@ class MethodBreakpointTracer(private val session: XDebugSession,
 
   private fun trace(debugProcess: JavaDebugProcess, chain: StreamChain, callback: TracingCallback) {
     val process = debugProcess.debuggerSession.process
-    process.managerThread.schedule(object: SuspendContextCommandImpl(process.suspendManager.pausedContext) {
+    process.managerThread.schedule(object : SuspendContextCommandImpl(process.suspendManager.pausedContext) {
       override fun contextAction(suspendContext: SuspendContextImpl) {
-        val context = createEvaluationContext(debugProcess, suspendContext)
-        val evalContextFactory: EvaluationContextFactory = DefaultEvaluationContextFactory(context.classLoader!!)
+        val evalContext = createEvaluationContext(debugProcess, suspendContext)
+        val evalContextFactory: EvaluationContextFactory = DefaultEvaluationContextFactory(evalContext.classLoader!!)
         val objectStorage: ObjectStorage = DisableCollectionObjectStorage()
         val valueManager: ValueManager = createValueManager(objectStorage)
-        val valuesCollector: ValueInterceptorFactory = ValueInterceptorFactoryImpl(valueManager, context)
-        val traceFormatter: StreamTraceFormatter = StreamTraceFormatterImpl(valueManager)
 
-        val executionCallback = TracingCallbackWrapper(chain, callback, resultInterpreter, traceFormatter)
-        val locations = try {
-          breakpointResolver.findBreakpointPlaces(chain)
-        }
-        catch (e: BreakpointPlaceNotFoundException) {
-          executionCallback.breakpointSetupFailed(e)
-          return
-        }
-
-        // TODO: Abstract by language here?
-        val breakpointFactory: MethodBreakpointFactory = JavaMethodBreakpointFactory(evalContextFactory, valuesCollector, executionCallback,
-                                                                                     chain)
-
-        try {
-          setStreamBreakpoints(context, breakpointFactory, locations)
-
-          val currentStackFrame = session.currentStackFrame as? JavaStackFrame
-                                  ?: throw BreakpointTracingException("Cannot determine current location")
-          val outerMethod = currentStackFrame.descriptor.method
-          val sessionListener = object : XDebugSessionListener {
-            override fun sessionPaused() {
-              super.sessionPaused()
-              val frame = session.currentStackFrame
-              if (frame is JavaStackFrame && frame.descriptor.method == outerMethod) {
-                // TODO: восстанавливать значение qualifierExpression после вычисления стрима
-                val ctx = debugProcess.session.suspendContext as SuspendContextImpl
-                val evaluationContext = evalContextFactory.createContext(ctx)
-                executionCallback.evaluated(valuesCollector.collectedValues, evaluationContext)
-
-                debugProcess.session.removeSessionListener(this)
-              }
+        val handlerFactory: RuntimeHandlerFactory = object: RuntimeHandlerFactory {
+          override fun getForSource(): SourceOperationRuntimeHandler = object: SourceOperationRuntimeHandler {
+            override fun afterCall(evaluationContextImpl: EvaluationContextImpl, chainInstance: ObjectReference): ObjectReference {
+              return chainInstance
             }
           }
-          debugProcess.session.addSessionListener(sessionListener)
 
+          override fun getForIntermediate(call: IntermediateStreamCall) = object: IntermediateCallRuntimeHandler {
+            override val result: Value?
+              get() = null
+
+            override fun beforeCall(evaluationContextImpl: EvaluationContextImpl, chainInstance: ObjectReference): ObjectReference {
+              return chainInstance
+            }
+
+            override fun transformArguments(evaluationContextImpl: EvaluationContextImpl, arguments: List<Value?>): List<Value?> {
+              return arguments
+            }
+
+            override fun afterCall(evaluationContextImpl: EvaluationContextImpl, chainInstance: ObjectReference): ObjectReference {
+              return chainInstance
+            }
+          }
+
+          override fun getForTermination(call: TerminatorStreamCall) = object: TerminalOperationRuntimeHandler {
+            override val result: Value?
+              get() = null
+
+            override fun beforeCall(evaluationContextImpl: EvaluationContextImpl, chainInstance: ObjectReference): ObjectReference {
+              return chainInstance
+            }
+
+            override fun transformArguments(evaluationContextImpl: EvaluationContextImpl, arguments: List<Value?>): List<Value?> {
+              return arguments
+            }
+
+            override fun afterCall(evaluationContextImpl: EvaluationContextImpl, chainInstance: ObjectReference): ObjectReference {
+              return chainInstance
+            }
+          }
+        }
+
+        val breakpointFactory: com.intellij.debugger.streams.trace.breakpoint.new_arch.MethodBreakpointFactory = JDIMethodBreakpointFactory()
+        val tracingManager: StreamTracingManager = StreamTracingManagerImpl(breakpointFactory, breakpointResolver, evalContextFactory,
+                                                                            handlerFactory, valueManager, debugProcess)
+        try {
           // TODO: после трассировки проверять, что брейкпоинты,
           //  которые мы расставили были подчищены. Также полезно
           //  рассмотреть как поведет себя control flow в случае
           //  завершения дебага, не будет ли течь память
 
           // TODO: посмотреть куда будут вываливаться исключения, созданные в коллбеках брейкпоинтов
+          tracingManager.evaluateChain(evalContext, chain) { context, reference ->
+            if (reference is ArrayReference) {
+              val interpretedResult: TracingResult = try {
+                resultInterpreter.interpret(chain, reference)
+              }
+              catch (t: Throwable) {
+                callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
+                throw t
+              }
+              callback.evaluated(interpretedResult, context)
+              return@evaluateChain
+            }
 
-          // TODO: execute
-          runInEdt { session.resume() }
+            if (reference is ObjectReference) {
+              val type = reference.referenceType()
+              if (type is ClassType) {
+                var classType: ClassType? = type
+                while (classType != null && CommonClassNames.JAVA_LANG_THROWABLE != classType.name()) {
+                  classType = classType.superclass()
+                }
+                if (classType != null) {
+                  val exceptionMessage = tryExtractExceptionMessage(reference)
+                  val description = "Evaluation failed: " + type.name() + " exception thrown"
+                  val descriptionWithReason = if (exceptionMessage == null) description else "$description: $exceptionMessage"
+                  callback.evaluationFailed("", descriptionWithReason)
+                  return@evaluateChain
+                }
+              }
+            }
+
+            callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.unknown.result.type"))
+          }
+        }
+        catch (e: BreakpointPlaceNotFoundException) {
+          callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.find.places.for.breakpoints"))
+          LOG.error(e)
         }
         catch (e: BreakpointTracingException) {
-          executionCallback.tracingSetupFailed(e)
+          callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.initialize.breakpoints"))
           objectStorage.dispose()
           LOG.error(e)
         }
       }
     })
-  }
-
-  private fun setStreamBreakpoints(evaluationContext: EvaluationContextImpl,
-                                   breakpointFactory: MethodBreakpointFactory,
-                                   locations: StreamChainBreakpointPlaces) {
-    val terminationOperationBreakpoint = breakpointFactory
-      .createTerminationOperationBreakpoint(evaluationContext, locations.terminationOperationMethod)
-
-    var nextBreakpoint = terminationOperationBreakpoint
-    for (step in locations.intermediateStepsMethods.reversed()) {
-      nextBreakpoint = breakpointFactory.createIntermediateStepBreakpoint(evaluationContext, step, nextBreakpoint)
-    }
-
-    val firstBreakpoint = if (locations.qualifierExpressionMethod == null) {
-      // if qualifier expression is variable we need to replace it in current stack frame
-      val qualifierExpressionValue = breakpointFactory.replaceQualifierExpressionValue(evaluationContext)
-      nextBreakpoint // TODO: восстанавливать значение qualifierExpression после вычисления стрима
-    }
-    else {
-      // set additional breakpoint as for an intermediate operation
-      breakpointFactory
-        .createProducerStepBreakpoint(evaluationContext, locations.qualifierExpressionMethod, nextBreakpoint)
-    }
-
-    firstBreakpoint.enable()
-    //intermediateStepsBreakpoints.forEach { it.enable() }
-    //terminationOperationBreakpoint.enable()
   }
 
   private fun createValueManager(objectStorage: ObjectStorage): ValueManager {
@@ -163,41 +189,4 @@ class MethodBreakpointTracer(private val session: XDebugSession,
     ctx.classLoader = ClassLoadingUtils.getClassLoader(ctx, process)
     return ctx
   }
-
-  private class TracingCallbackWrapper(
-    private val chain: StreamChain,
-    private val tracingCallback: TracingCallback,
-    private val resultInterpreter: TraceResultInterpreter,
-    private val traceFormatter: StreamTraceFormatter
-  ) : StreamExecutionCallback {
-    override fun evaluated(collectedValues: StreamTraceValues, context: EvaluationContextImpl) {
-      val formattedResult = traceFormatter.formatTraceResult(chain, collectedValues, context)
-      val interpretedResult = try {
-        resultInterpreter.interpret(chain, formattedResult)
-      }
-      catch (t: Throwable) {
-        // TODO: change trace expression field
-        tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
-        throw t
-      }
-      // TODO: clear value manager when window closed
-      tracingCallback.evaluated(interpretedResult, context)
-    }
-
-    override fun breakpointSetupFailed(e: Throwable) {
-      tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.find.places.for.breakpoints"))
-      LOG.error(e)
-    }
-
-    override fun tracingSetupFailed(e: Throwable) {
-      tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.initialize.breakpoints"))
-      LOG.error(e)
-    }
-
-    override fun streamExecutionFailed(e: Throwable) {
-      tracingCallback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.exception.occurred.during.stream.execution"))
-      LOG.error(e)
-    }
-  }
 }
-

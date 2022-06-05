@@ -2,7 +2,7 @@
 package com.intellij.debugger.streams.lib;
 
 import com.intellij.debugger.streams.trace.TraceExpressionBuilder;
-import com.intellij.debugger.streams.trace.breakpoint.BreakpointTracingSupport;
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointTracingSupport;
 import com.intellij.debugger.streams.wrapper.StreamChainBuilder;
 import com.intellij.openapi.extensions.ExtensionPointName;
 import com.intellij.openapi.project.Project;
