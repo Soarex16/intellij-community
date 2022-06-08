@@ -109,17 +109,17 @@ class ValueContextImpl(private val bytecodeFactories: Map<String, BytecodeFactor
       it?.prepareArguments(evaluationContext)
     } ?: throw MethodNotFoundException(name, signature, this.name())
 
-  override fun invoke(cls: ClassType, method: Method, arguments: List<Value?>): Value? {
+  override fun Method.invoke(cls: ClassType, arguments: List<Value?>): Value? {
     val returnValue = evaluationContext.debugProcess
-      .invokeMethod(evaluationContext, cls, method, arguments, 0, true)
+      .invokeMethod(evaluationContext, cls, this, arguments, 0, true)
 
     keep(returnValue)
     return returnValue
   }
 
-  override fun invoke(obj: ObjectReference, method: Method, arguments: List<Value?>): Value? {
+  override fun Method.invoke(obj: ObjectReference, arguments: List<Value?>): Value? {
     val returnValue = evaluationContext.debugProcess
-      .invokeInstanceMethod(evaluationContext, obj, method, arguments, 0, true)
+      .invokeInstanceMethod(evaluationContext, obj, this, arguments, 0, true)
 
     keep(returnValue)
     return returnValue

@@ -67,7 +67,7 @@ open class TraceFormatterBase(private val valueManager: ValueManager,
   private fun getMapKeysAndValues(valueMap: ObjectReference, valuesType: String): ArrayReference = valueManager.watch(evaluationContext) {
     val helperClass = getType(STREAM_DEBUGGER_UTILS_CLASS_NAME) as ClassType
     val formatMap = helperClass.method(getMapFormattingMethod(valuesType), "(Ljava/util/Map;)[Ljava/lang/Object;")
-    invoke(helperClass, formatMap, listOf(valueMap)) as ArrayReference
+    formatMap.invoke(helperClass, listOf(valueMap)) as ArrayReference
   }
 
   private fun getMapFormattingMethod(valuesType: String) = when(valuesType) {

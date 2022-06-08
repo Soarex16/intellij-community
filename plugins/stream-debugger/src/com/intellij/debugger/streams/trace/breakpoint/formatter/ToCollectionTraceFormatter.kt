@@ -37,7 +37,7 @@ class ToCollectionTraceFormatter(
 
   private fun formatTime(time: ObjectReference): Value = valueManager.watch(evaluationContext) {
     val getTime = time.method("get", "()I")
-    val timeValue = invoke(time, getTime, emptyList())
+    val timeValue = getTime.invoke(time, emptyList())
     val timeArr = array("int", 1)
     timeArr.setValue(0, timeValue)
     timeArr

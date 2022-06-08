@@ -27,7 +27,7 @@ class OptionalTraceFormatter(
       val streamResult = collectedValues.streamResult as ObjectReference
       val optionalType = streamResult.type() as ReferenceType
       val isPresentMethod = optionalType.method("isPresent", "()Z")
-      val isPresent = invoke(streamResult, isPresentMethod, emptyList())
+      val isPresent = isPresentMethod.invoke(streamResult, emptyList())
 
       val optionalContent = getOptionalContent(streamResult)
 
@@ -45,7 +45,7 @@ class OptionalTraceFormatter(
     val optionalType = streamResult.referenceType()
     val orElseMethod = streamResult.method("orElse", orElseSignature(optionalType))
     val orElseArg = orElseMethod.argumentTypes().first().defaultValue()
-    return invoke(streamResult, orElseMethod, listOf(orElseArg))
+    return orElseMethod.invoke(streamResult, listOf(orElseArg))
   }
 
   private fun orElseSignature(optionalType: ReferenceType) = when(optionalType.name()) {
