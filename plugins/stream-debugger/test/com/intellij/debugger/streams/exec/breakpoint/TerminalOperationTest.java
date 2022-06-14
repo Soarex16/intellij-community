@@ -2,14 +2,14 @@
 package com.intellij.debugger.streams.exec.breakpoint;
 
 /**
- * @author Vitaliy.Bibaev
+ * @author Shumaf Lovpache
  */
 public class TerminalOperationTest extends BreakpointBasedTraceExecutionTestCase {
-  public void testForEach() {
+  public void testForEachBreakpointBased() {
     doTest(true);
   }
 
-  public void testForEachOrdered() {
+  public void testForEachOrderedBreakpointBased() {
     doTest(true);
   }
 }
