@@ -125,8 +125,8 @@ class ValueContextImpl(private val bytecodeFactories: Map<String, BytecodeFactor
     return returnValue
   }
 
-  override fun keep(value: Value) {
-    if (value is ObjectReference) {
+  override fun keep(value: Value?) {
+    if (value != null && value is ObjectReference) {
       objectStorage.keep(evaluationContext, value)
     }
   }

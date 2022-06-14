@@ -47,5 +47,5 @@ interface ValueContext {
   fun invoke(cls: ClassType, method: Method, arguments: List<Value?>): Value?
   fun invoke(obj: ObjectReference, method: Method, arguments: List<Value?>): Value?
 
-  fun keep(value: Value)
+  fun keep(value: Value?)
 }
