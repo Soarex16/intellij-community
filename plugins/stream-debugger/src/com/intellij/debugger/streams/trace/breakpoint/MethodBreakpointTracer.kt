@@ -21,10 +21,10 @@ import com.intellij.debugger.streams.trace.breakpoint.interceptor.*
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.JDIMethodBreakpointFactory
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.StreamTracingManager
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.StreamTracingManagerImpl
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.IntermediateCallRuntimeHandler
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeIntermediateCallHandler
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeHandlerFactory
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.SourceOperationRuntimeHandler
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.TerminalOperationRuntimeHandler
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeSourceCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeTerminalCallHandler
 import com.intellij.debugger.streams.wrapper.IntermediateStreamCall
 import com.intellij.debugger.streams.wrapper.StreamChain
 import com.intellij.debugger.streams.wrapper.TerminatorStreamCall
@@ -66,13 +66,13 @@ class MethodBreakpointTracer(private val session: XDebugSession,
         val valueManager: ValueManager = createValueManager(objectStorage)
 
         val handlerFactory: RuntimeHandlerFactory = object: RuntimeHandlerFactory {
-          override fun getForSource(): SourceOperationRuntimeHandler = object: SourceOperationRuntimeHandler {
+          override fun getForSource(): RuntimeSourceCallHandler = object: RuntimeSourceCallHandler {
             override fun afterCall(evaluationContextImpl: EvaluationContextImpl, chainInstance: ObjectReference): ObjectReference {
               return chainInstance
             }
           }
 
-          override fun getForIntermediate(call: IntermediateStreamCall) = object: IntermediateCallRuntimeHandler {
+          override fun getForIntermediate(call: IntermediateStreamCall) = object: RuntimeIntermediateCallHandler {
             override val result: Value?
               get() = null
 
@@ -89,7 +89,7 @@ class MethodBreakpointTracer(private val session: XDebugSession,
             }
           }
 
-          override fun getForTermination(call: TerminatorStreamCall) = object: TerminalOperationRuntimeHandler {
+          override fun getForTermination(call: TerminatorStreamCall) = object: RuntimeTerminalCallHandler {
             override val result: Value?
               get() = null
 

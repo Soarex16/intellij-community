@@ -6,4 +6,4 @@ import com.intellij.debugger.streams.trace.breakpoint.new_arch.StreamOperationHa
 /**
  * @author Shumaf Lovpache
  */
-interface TerminalOperationRuntimeHandler : StreamOperationHandler
+interface RuntimeTerminalCallHandler : StreamOperationHandler

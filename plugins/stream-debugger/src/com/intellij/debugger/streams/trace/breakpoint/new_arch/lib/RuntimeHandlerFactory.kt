@@ -8,7 +8,7 @@ import com.intellij.debugger.streams.wrapper.TerminatorStreamCall
  * @author Shumaf Lovpache
  */
 interface RuntimeHandlerFactory {
-  fun getForSource(): SourceOperationRuntimeHandler
-  fun getForIntermediate(call: IntermediateStreamCall): IntermediateCallRuntimeHandler
-  fun getForTermination(call: TerminatorStreamCall): TerminalOperationRuntimeHandler
+  fun getForSource(): RuntimeSourceCallHandler
+  fun getForIntermediate(call: IntermediateStreamCall): RuntimeIntermediateCallHandler
+  fun getForTermination(call: TerminatorStreamCall): RuntimeTerminalCallHandler
 }

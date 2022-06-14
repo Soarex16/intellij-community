@@ -6,4 +6,4 @@ import com.intellij.debugger.streams.trace.breakpoint.new_arch.AfterCallTransfor
 /**
  * @author Shumaf Lovpache
  */
-interface SourceOperationRuntimeHandler: AfterCallTransformer
+interface RuntimeSourceCallHandler: AfterCallTransformer
