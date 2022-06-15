@@ -229,7 +229,7 @@ class StreamTracingManagerImpl(private val breakpointFactory: MethodBreakpointFa
       array(
         infoArray,
         streamResult,
-        0L.mirror
+        array(0L.mirror)
       )
     }
   }
