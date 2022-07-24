@@ -42,8 +42,7 @@ import java.util.concurrent.locks.Lock;
 public final class ProgressIndicatorUtils {
   private static final Logger LOG = Logger.getInstance(ProgressIndicatorUtils.class);
 
-  @NotNull
-  public static ProgressIndicator forceWriteActionPriority(@NotNull ProgressIndicator progress, @NotNull Disposable parentDisposable) {
+  public static @NotNull ProgressIndicator forceWriteActionPriority(@NotNull ProgressIndicator progress, @NotNull Disposable parentDisposable) {
     ApplicationManager.getApplication().addApplicationListener(new ApplicationListener() {
         @Override
         public void beforeWriteActionStart(@NotNull Object action) {
@@ -59,8 +58,7 @@ public final class ProgressIndicatorUtils {
     scheduleWithWriteActionPriority(new ProgressIndicatorBase(false, false), task);
   }
 
-  @NotNull
-  public static CompletableFuture<?> scheduleWithWriteActionPriority(@NotNull ProgressIndicator progressIndicator, @NotNull ReadTask readTask) {
+  public static @NotNull CompletableFuture<?> scheduleWithWriteActionPriority(@NotNull ProgressIndicator progressIndicator, @NotNull ReadTask readTask) {
     return scheduleWithWriteActionPriority(progressIndicator, AppExecutorUtil.getAppExecutorService(), readTask);
   }
 
@@ -69,8 +67,7 @@ public final class ProgressIndicatorUtils {
    * instance, which can be used to cancel action externally.
    * @return true if action executed successfully, false if it was canceled by write action before or during execution
    */
-  public static boolean runInReadActionWithWriteActionPriority(@NotNull final Runnable action,
-                                                               @Nullable ProgressIndicator progressIndicator) {
+  public static boolean runInReadActionWithWriteActionPriority(@NotNull Runnable action, @Nullable ProgressIndicator progressIndicator) {
     AtomicBoolean readActionAcquired = new AtomicBoolean();
     boolean executed = runWithWriteActionPriority(() -> readActionAcquired.set(ApplicationManagerEx.getApplicationEx().tryRunReadAction(action)),
                                            progressIndicator == null ? new ProgressIndicatorBase(false, false) : progressIndicator);
@@ -89,10 +86,10 @@ public final class ProgressIndicatorUtils {
    * <li>action started to execute, but was aborted using {@link ProcessCanceledException} when some other thread initiated
    * write action</li>
    * </ul>
-   * If caller needs to retry the invocation of this method in a loop, it should consider pausing between attempts, to avoid potential
+   * If a caller needs to retry the invocation of this method in a loop, it should consider pausing between attempts, to avoid potential
    * 100% CPU usage. There is also alternative that implements the re-trying logic {@link com.intellij.openapi.application.NonBlockingReadAction}
    */
-  public static boolean runInReadActionWithWriteActionPriority(@NotNull final Runnable action) {
+  public static boolean runInReadActionWithWriteActionPriority(@NotNull Runnable action) {
     return runInReadActionWithWriteActionPriority(action, null);
   }
 
@@ -140,9 +137,7 @@ public final class ProgressIndicatorUtils {
   }
 
   @ApiStatus.Internal
-  public static boolean runActionAndCancelBeforeWrite(@NotNull ApplicationEx application,
-                                                      @NotNull Runnable cancellation,
-                                                      @NotNull Runnable action) {
+  public static boolean runActionAndCancelBeforeWrite(@NotNull ApplicationEx application, @NotNull Runnable cancellation, @NotNull Runnable action) {
     if (isWriteActionRunningOrPending(application)) {
       cancellation.run();
       return false;
@@ -151,7 +146,7 @@ public final class ProgressIndicatorUtils {
     ourWACancellations.add(cancellation);
     try {
       if (isWriteActionRunningOrPending(application)) {
-        // the listener might not be notified if write action was requested concurrently with listener addition
+        // the listener might not be notified if write action was requested concurrently with the listener addition
         cancellation.run();
         return false;
       }
@@ -176,13 +171,12 @@ public final class ProgressIndicatorUtils {
     return application.isWriteActionPending() || application.isWriteActionInProgress();
   }
 
-  @NotNull
-  public static CompletableFuture<?> scheduleWithWriteActionPriority(@NotNull final ProgressIndicator progressIndicator,
-                                                                     @NotNull final Executor executor,
-                                                                     @NotNull final ReadTask readTask) {
+  public static @NotNull CompletableFuture<?> scheduleWithWriteActionPriority(@NotNull ProgressIndicator progressIndicator,
+                                                                              @NotNull Executor executor,
+                                                                              @NotNull ReadTask readTask) {
     // invoke later even if on EDT
     // to avoid tasks eagerly restarting immediately, allocating many pooled threads
-    // which get cancelled too soon when a next write action arrives in the same EDT batch
+    // which get cancelled too soon when the next write action arrives in the same EDT batch
     // (can happen when processing multiple VFS events or writing multiple files on save)
 
     CompletableFuture<?> future = new CompletableFuture<>();
@@ -193,7 +187,7 @@ public final class ProgressIndicatorUtils {
         return;
       }
       Disposable listenerDisposable = Disposer.newDisposable();
-      final ApplicationListener listener = new ApplicationListener() {
+      ApplicationListener listener = new ApplicationListener() {
         @Override
         public void beforeWriteActionStart(@NotNull Object action) {
           if (!progressIndicator.isCanceled()) {
@@ -208,7 +202,7 @@ public final class ProgressIndicatorUtils {
         executor.execute(ClientId.decorateRunnable(new Runnable() {
           @Override
           public void run() {
-            final ReadTask.Continuation continuation;
+            ReadTask.Continuation continuation;
             try {
               continuation = runUnderProgress(progressIndicator, readTask);
             }
@@ -259,7 +253,7 @@ public final class ProgressIndicatorUtils {
     return future;
   }
 
-  private static ReadTask.Continuation runUnderProgress(@NotNull final ProgressIndicator progressIndicator, @NotNull final ReadTask task) {
+  private static ReadTask.Continuation runUnderProgress(@NotNull ProgressIndicator progressIndicator, @NotNull ReadTask task) {
     return ProgressManager.getInstance().runProcess(() -> {
       try {
         return task.runBackgroundProcess(progressIndicator);
@@ -303,8 +297,7 @@ public final class ProgressIndicatorUtils {
    * it'll be thrown out of this method.
    * @return the computation result or {@code null} if timeout has been exceeded.
    */
-  @Nullable
-  public static <T> T withTimeout(long timeoutMs, @NotNull Computable<T> computation) {
+  public static @Nullable <T> T withTimeout(long timeoutMs, @NotNull Computable<T> computation) {
     ProgressManager.checkCanceled();
     ProgressIndicator outer = ProgressIndicatorProvider.getGlobalProgressIndicator();
     ProgressIndicator inner = outer != null ? new SensitiveProgressWrapper(outer) : new ProgressIndicatorBase(false, false);
@@ -400,12 +393,14 @@ public final class ProgressIndicatorUtils {
     }
   }
 
-  /** Use when otherwise a deadlock is possible. */
+  /** Use when a deadlock is possible otherwise. */
   public static void checkCancelledEvenWithPCEDisabled(@Nullable ProgressIndicator indicator) {
     Cancellation.checkCancelled();
-    if (indicator != null && indicator.isCanceled()) {
-      indicator.checkCanceled(); // maybe it'll throw with some useful additional information
-      throw new ProcessCanceledException();
+    if (indicator == null) return;
+    indicator.checkCanceled();              // check for cancellation as usual and run the hooks
+    if (indicator.isCanceled()) {           // if a just-canceled indicator or PCE is disabled
+      indicator.checkCanceled();            // ... let the just-canceled indicator provide a customized PCE
+      throw new ProcessCanceledException(); // ... otherwise PCE is disabled so throw it manually
     }
   }
 

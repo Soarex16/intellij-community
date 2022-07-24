@@ -5,29 +5,29 @@ package org.jetbrains.kotlin.idea.completion.weighers
 import com.intellij.codeInsight.completion.CompletionSorter
 import com.intellij.codeInsight.lookup.LookupElement
 import org.jetbrains.kotlin.analysis.api.KtAnalysisSession
-import org.jetbrains.kotlin.analysis.api.ValidityTokenOwner
 import org.jetbrains.kotlin.analysis.api.components.KtImplicitReceiver
+import org.jetbrains.kotlin.analysis.api.lifetime.KtLifetimeOwner
 import org.jetbrains.kotlin.analysis.api.symbols.KtSymbol
-import org.jetbrains.kotlin.analysis.api.tokens.ValidityToken
+import org.jetbrains.kotlin.analysis.api.lifetime.KtLifetimeToken
+import org.jetbrains.kotlin.analysis.api.lifetime.withValidityAssertion
 import org.jetbrains.kotlin.analysis.api.types.KtSubstitutor
 import org.jetbrains.kotlin.analysis.api.types.KtType
-import org.jetbrains.kotlin.analysis.api.withValidityAssertion
+import org.jetbrains.kotlin.idea.base.facet.platform.platform
+import org.jetbrains.kotlin.idea.base.projectStructure.compositeAnalysis.findAnalyzerServices
+import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
 import org.jetbrains.kotlin.idea.completion.ImportableFqNameClassifier
-import org.jetbrains.kotlin.idea.project.TargetPlatformDetector
-import org.jetbrains.kotlin.idea.project.findAnalyzerServices
-import org.jetbrains.kotlin.idea.project.languageVersionSettings
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtExpression
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.resolve.ImportPath
 
 internal class WeighingContext private constructor(
-    override val token: ValidityToken,
+    override val token: KtLifetimeToken,
     val explicitReceiver: KtExpression?,
     private val myExpectedType: KtType?,
     private val myImplicitReceivers: List<KtImplicitReceiver>,
     val importableFqNameClassifier: ImportableFqNameClassifier,
-) : ValidityTokenOwner {
+) : KtLifetimeOwner {
     val expectedType: KtType?
         get() = withValidityAssertion {
             myExpectedType
@@ -64,7 +64,7 @@ internal class WeighingContext private constructor(
         ): WeighingContext = createWeighingContext(null, null, emptyList(), fakeCompletionFile)
 
         private fun KtFile.getDefaultImportPaths(): Set<ImportPath> {
-            return TargetPlatformDetector.getPlatform(this).findAnalyzerServices(project)
+            return this.platform.findAnalyzerServices(project)
                 .getDefaultImports(languageVersionSettings, true).toSet()
         }
 

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 @file:Suppress("ReplaceGetOrSet", "ReplacePutWithAssignment")
 
 package com.intellij.execution.impl
@@ -46,8 +46,8 @@ import com.intellij.util.text.UniqueNameGenerator
 import com.intellij.workspaceModel.ide.WorkspaceModelChangeListener
 import com.intellij.workspaceModel.ide.WorkspaceModelTopics
 import com.intellij.workspaceModel.storage.VersionedStorageChange
-import com.intellij.workspaceModel.storage.bridgeEntities.ContentRootEntity
-import com.intellij.workspaceModel.storage.bridgeEntities.SourceRootEntity
+import com.intellij.workspaceModel.storage.bridgeEntities.api.ContentRootEntity
+import com.intellij.workspaceModel.storage.bridgeEntities.api.SourceRootEntity
 import org.jdom.Element
 import org.jetbrains.annotations.TestOnly
 import java.util.concurrent.Callable
@@ -57,7 +57,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import javax.swing.Icon
-import kotlin.collections.HashMap
 import kotlin.collections.component1
 import kotlin.collections.component2
 import kotlin.concurrent.read
@@ -446,6 +445,8 @@ open class RunManagerImpl @JvmOverloads constructor(val project: Project, shared
           if (selectedConfigurationId == it) {
             selectedConfigurationId = newId
           }
+
+          listManager.updateConfigurationId(it, newId)
         }
       }
 
@@ -712,22 +713,31 @@ open class RunManagerImpl @JvmOverloads constructor(val project: Project, shared
     return methodElement
   }
 
-  @Suppress("unused")
   /**
    * used by MPS. Do not use if not approved.
    */
   fun reloadSchemes() {
+    var arbitraryFilePaths: Collection<String>
     lock.write {
       // not really required, but hot swap friendly - 1) factory is used a key, 2) developer can change some defaults.
       templateDifferenceHelper.clearCache()
       templateIdToConfiguration.clear()
       listManager.idToSettings.clear()
+      arbitraryFilePaths = rcInArbitraryFileManager.clearAllAndReturnFilePaths()
       recentlyUsedTemporaries.clear()
 
       stringIdToBeforeRunProvider.drop()
     }
+
     workspaceSchemeManager.reload()
     projectSchemeManager.reload()
+    reloadRunConfigsFromArbitraryFiles(arbitraryFilePaths)
+  }
+
+  private fun reloadRunConfigsFromArbitraryFiles(filePaths: Collection<String>) {
+    for (filePath in filePaths) {
+      updateRunConfigsFromArbitraryFiles(emptyList(), filePaths)
+    }
   }
 
   protected open fun addExtensionPointListeners() {

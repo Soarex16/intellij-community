@@ -93,7 +93,7 @@ public final class GenerateMembersUtil {
           //     }
           whiteSpace += "\n";
         }
-        final PsiParserFacade parserFacade = PsiParserFacade.SERVICE.getInstance(file.getProject());
+        final PsiParserFacade parserFacade = PsiParserFacade.getInstance(file.getProject());
         final ASTNode singleNewLineWhitespace = parserFacade.createWhiteSpaceFromText(whiteSpace).getNode();
         if (singleNewLineWhitespace != null) {
           spaceNode.getTreeParent().replaceChild(spaceNode, singleNewLineWhitespace); // See http://jetbrains.net/jira/browse/IDEADEV-12837
@@ -390,7 +390,7 @@ public final class GenerateMembersUtil {
     final Map<PsiElement, PsiElement> replacementMap = new HashMap<>();
     copy.accept(new JavaRecursiveElementVisitor() {
       @Override
-      public void visitReferenceElement(PsiJavaCodeReferenceElement reference) {
+      public void visitReferenceElement(@NotNull PsiJavaCodeReferenceElement reference) {
         super.visitReferenceElement(reference);
         final PsiElement resolve = reference.resolve();
         if (resolve instanceof PsiTypeParameter) {
@@ -766,13 +766,13 @@ public final class GenerateMembersUtil {
     String visibility = javaSettings.VISIBILITY;
 
     @PsiModifier.ModifierConstant String newVisibility;
+    final PsiClass containingClass = member.getContainingClass();
     if (VisibilityUtil.ESCALATE_VISIBILITY.equals(visibility)) {
-      PsiClass aClass = member instanceof PsiClass ? (PsiClass)member : member.getContainingClass();
-      newVisibility = PsiUtil.getMaximumModifierForMember(aClass, false);
+      PsiClass aClass = member instanceof PsiClass ? (PsiClass)member : containingClass;
+      newVisibility = PsiUtil.getSuitableModifierForMember(aClass, prototype.isConstructor());
     }
     else {
-      //noinspection MagicConstant
-      newVisibility = visibility;
+      newVisibility = (containingClass != null && containingClass.isRecord()) ? PsiModifier.PUBLIC : visibility;
     }
     VisibilityUtil.setVisibility(prototype.getModifierList(), newVisibility);
 

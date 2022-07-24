@@ -1059,9 +1059,6 @@
   <action id="Vcs.ShowMessageHistory">
     <keyboard-shortcut first-keystroke="control M"/>
   </action>
-  <action id="AddToFavoritesPopup">
-    <keyboard-shortcut first-keystroke="alt shift F"/>
-  </action>
   <action id="CodeInspection.OnEditor">
     <keyboard-shortcut first-keystroke="alt shift I"/>
   </action>
@@ -1277,5 +1274,16 @@
   </action>
   <action id="ActivateNuGetToolWindow">
     <keyboard-shortcut first-keystroke="alt shift 7"/>
+  </action>
+
+  <action id="MainMenuButton.ShowMenu">
+    <keyboard-shortcut first-keystroke="alt BACK_SLASH"/>
+  </action>
+
+  <action id="EditorDecreaseFontSizeGlobal">
+    <keyboard-shortcut first-keystroke="alt shift COMMA"/>
+  </action>
+  <action id="EditorIncreaseFontSizeGlobal">
+    <keyboard-shortcut first-keystroke="alt shift PERIOD"/>
   </action>
 </keymap>

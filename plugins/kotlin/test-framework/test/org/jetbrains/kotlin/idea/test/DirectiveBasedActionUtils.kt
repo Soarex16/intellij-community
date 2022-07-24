@@ -14,10 +14,11 @@ import com.intellij.testFramework.assertEqualsToFile
 import org.jetbrains.kotlin.diagnostics.Severity
 import org.jetbrains.kotlin.diagnostics.rendering.DefaultErrorMessages
 import org.jetbrains.kotlin.idea.caches.resolve.analyzeWithContent
-import org.jetbrains.kotlin.idea.inspections.AbstractKotlinInspection
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.resolve.diagnostics.Diagnostics
 import java.io.File
+import kotlin.test.assertTrue
 
 
 object DirectiveBasedActionUtils {
@@ -97,17 +98,23 @@ object DirectiveBasedActionUtils {
             /* progress = */ DaemonProgressIndicator(),
         )
 
-        val directive = "// INSPECTION:"
-        val expected = InTextDirectivesUtils.findLinesWithPrefixesRemoved(file.text, directive)
+        val directive = "INSPECTION"
+        val expected = InTextDirectivesUtils.findLinesWithPrefixesRemoved(file.text, "// $directive:")
             .sorted()
             .map { "$directive $it" }
+
+        val noInspectionOutputDirective = "NO-INSPECTION-OUTPUT"
+        val noInspectionOutput = InTextDirectivesUtils.isDirectiveDefined(file.text, "// $noInspectionOutputDirective")
 
         val actual = problems
             // lineNumber is 0-based
             .map { "$directive [${it.highlightType.name}:${it.lineNumber + 1}] $it" }
             .sorted()
 
-        if (actual.isEmpty() && expected.isEmpty()) return
+        if (actual.isEmpty() && expected.isEmpty()) {
+            assertTrue(noInspectionOutput, "`$noInspectionOutputDirective` directive has to be defined if there is nothing to report")
+            return
+        }
 
         KotlinLightCodeInsightFixtureTestCaseBase.assertOrderedEquals(
             "All actual $name should be mentioned in test data with '$directive' directive. " +
@@ -147,7 +154,7 @@ object DirectiveBasedActionUtils {
             availableActions,
         ) { expectedDirectives, actualActionsDirectives ->
             UsefulTestCase.assertOrderedEquals(
-                "Some unexpected actions available at current position. Use '$ACTION_DIRECTIVE' directive",
+                "Some unexpected actions available at current position. Use '$ACTION_DIRECTIVE' directive\n",
                 actualActionsDirectives,
                 expectedDirectives
             )

@@ -20,11 +20,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.TestOnly;
 import org.jetbrains.concurrency.AsyncPromise;
 import org.jetbrains.concurrency.Promise;
-import org.jetbrains.concurrency.Promises;
 import org.jetbrains.idea.maven.buildtool.MavenImportSpec;
 import org.jetbrains.idea.maven.buildtool.MavenSyncConsole;
 import org.jetbrains.idea.maven.importing.MavenProjectImporter;
 import org.jetbrains.idea.maven.model.MavenExplicitProfiles;
+import org.jetbrains.idea.maven.project.importing.MavenImportingManager;
 import org.jetbrains.idea.maven.utils.MavenLog;
 import org.jetbrains.idea.maven.utils.MavenUtil;
 
@@ -40,7 +40,7 @@ public class MavenProjectsManagerWatcher {
   private static final Logger LOG = Logger.getInstance(MavenProjectsManagerWatcher.class);
 
   private final Project myProject;
-  private final MavenProjectsTree myProjectsTree;
+  private MavenProjectsTree myProjectsTree;
   private final MavenGeneralSettings myGeneralSettings;
   private final MavenProjectsProcessor myReadingProcessor;
   private final MavenProjectsAware myProjectsAware;
@@ -57,7 +57,7 @@ public class MavenProjectsManagerWatcher {
     myGeneralSettings = generalSettings;
     myReadingProcessor = readingProcessor;
     MavenProjectsManager projectsManager = MavenProjectsManager.getInstance(myProject);
-    myProjectsAware = new MavenProjectsAware(project, projectsTree, projectsManager, this, myBackgroundExecutor);
+    myProjectsAware = new MavenProjectsAware(project, projectsManager, this, myBackgroundExecutor);
     myDisposable = Disposer.newDisposable(projectsManager, MavenProjectsManagerWatcher.class.toString());
   }
 
@@ -86,6 +86,11 @@ public class MavenProjectsManagerWatcher {
     scheduleUpdateAll(new MavenImportSpec(false, true, true));
   }
 
+
+  public void setProjectsTree(MavenProjectsTree tree) {
+    myProjectsTree = tree;
+  }
+
   @TestOnly
   public synchronized void resetManagedFilesAndProfilesInTests(List<VirtualFile> files, MavenExplicitProfiles explicitProfiles) {
     myProjectsTree.resetManagedFilesAndProfiles(files, explicitProfiles);
@@ -108,7 +113,7 @@ public class MavenProjectsManagerWatcher {
    */
   public Promise<Void> scheduleUpdateAll(MavenImportSpec spec) {
     if (MavenUtil.isLinearImportEnabled()) {
-      return Promises.resolvedPromise();
+      return MavenImportingManager.getInstance(myProject).scheduleImportAll(spec).getFinishPromise().then(it -> null);
     }
 
     final AsyncPromise<Void> promise = new AsyncPromise<>();
@@ -131,7 +136,7 @@ public class MavenProjectsManagerWatcher {
                                       MavenImportSpec spec) {
 
     if (MavenUtil.isLinearImportEnabled()) {
-      return Promises.resolvedPromise();
+      return MavenImportingManager.getInstance(myProject).scheduleUpdate(filesToUpdate, filesToDelete, spec).getFinishPromise().then(it -> null);
     }
     final AsyncPromise<Void> promise = new AsyncPromise<>();
     // display all import activities using the same build progress
@@ -210,7 +215,9 @@ public class MavenProjectsManagerWatcher {
     @Override
     public void moduleRemoved(@NotNull Project project, @NotNull Module module) {
       if (Registry.is("maven.modules.do.not.ignore.on.delete")) return;
-      if (MavenProjectImporter.isImportToTreeStructureEnabled(project)) return;
+      if (MavenProjectImporter.isLegacyImportToTreeStructureEnabled(project)) {
+        return;
+      }
 
       MavenProjectsManager projectsManager = MavenProjectsManager.getInstance(myProject);
       MavenProject mavenProject = projectsManager.findProject(module);

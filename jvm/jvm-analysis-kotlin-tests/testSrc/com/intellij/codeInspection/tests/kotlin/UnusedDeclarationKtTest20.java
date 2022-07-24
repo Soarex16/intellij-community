@@ -46,9 +46,33 @@ public class UnusedDeclarationKtTest20 extends AbstractUnusedDeclarationTest {
   public void testPrimaryConstructor() {
     doTest();
   }
+
+  public void testPrimaryConstructor2() {
+    myTool.getSharedLocalInspectionTool().PARAMETER = true;
+    myTool.getSharedLocalInspectionTool().LOCAL_VARIABLE = false;
+    doTest("deadCode/" + getTestName(true), myToolWrapper);
+  }
   
   public void testReceiverParameter() {
-    doTest();
+    myTool.getSharedLocalInspectionTool().PARAMETER = true;
+    myTool.getSharedLocalInspectionTool().LOCAL_VARIABLE = false;
+    doTest("deadCode/" + getTestName(true), myToolWrapper);
+  }
+
+  public void testOperatorInWhen() {
+    doTest("deadCode/" + getTestName(true), myToolWrapper);
+  }
+
+  public void testCallableParameter() {
+    myTool.getSharedLocalInspectionTool().PARAMETER = true;
+    myTool.getSharedLocalInspectionTool().LOCAL_VARIABLE = false;
+    doTest("deadCode/" + getTestName(true), myToolWrapper);
+  }
+
+  public void testMainParameter() {
+    myTool.getSharedLocalInspectionTool().PARAMETER = true;
+    myTool.getSharedLocalInspectionTool().LOCAL_VARIABLE = false;
+    doTest("deadCode/" + getTestName(true), myToolWrapper);
   }
 
   public void testStaticMethods() {
@@ -72,6 +96,14 @@ public class UnusedDeclarationKtTest20 extends AbstractUnusedDeclarationTest {
   }
 
   public void testConstructorCalls() {
+    doTest();
+  }
+
+  public void testPropertyReference() {
+    doTest();
+  }
+
+  public void testReferenceInLambda() {
     doTest();
   }
 

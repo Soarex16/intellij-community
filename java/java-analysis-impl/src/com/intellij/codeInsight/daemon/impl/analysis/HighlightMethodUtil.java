@@ -333,8 +333,8 @@ public final class HighlightMethodUtil {
           textRange = TextRange.EMPTY_RANGE;
         }
         HighlightInfo errorResult = HighlightInfo.newHighlightInfo(HighlightInfoType.ERROR).range(textRange).descriptionAndTooltip(description).create();
-        QuickFixAction.registerQuickFixAction(errorResult, new LocalQuickFixOnPsiElementAsIntentionAdapter(QUICK_FIX_FACTORY.createMethodThrowsFix(method, exception, false, false)));
-        QuickFixAction.registerQuickFixAction(errorResult, new LocalQuickFixOnPsiElementAsIntentionAdapter(QUICK_FIX_FACTORY.createMethodThrowsFix(superMethod, exception, true, true)));
+        QuickFixAction.registerQuickFixAction(errorResult, QUICK_FIX_FACTORY.createMethodThrowsFix(method, exception, false, false));
+        QuickFixAction.registerQuickFixAction(errorResult, QUICK_FIX_FACTORY.createMethodThrowsFix(superMethod, exception, true, true));
         return errorResult;
       }
     }
@@ -414,6 +414,11 @@ public final class HighlightMethodUtil {
       if (highlightInfo == null) {
         highlightInfo = createIncompatibleTypeHighlightInfo(methodCall, resolveHelper, (MethodCandidateInfo)resolveResult, methodCall);
       }
+      
+      if (highlightInfo == null) {
+        highlightInfo = checkInferredReturnTypeAccessible((MethodCandidateInfo)resolveResult, methodCall);
+      }
+      
     }
     else {
       MethodCandidateInfo candidateInfo = resolveResult instanceof MethodCandidateInfo ? (MethodCandidateInfo)resolveResult : null;
@@ -499,11 +504,17 @@ public final class HighlightMethodUtil {
       PsiExpression[] expressions = list.getExpressions();
       PsiParameter[] parameters = resolvedMethod.getParameterList().getParameters();
       mismatchedExpressions = mismatchedArgs(expressions, substitutor, parameters, candidateInfo.isVarargs());
-      if (mismatchedExpressions.size() == 1) {
+      if (mismatchedExpressions.size() == 1 && parameters.length > 0) {
         toolTip = createOneArgMismatchTooltip(candidateInfo, mismatchedExpressions, expressions, parameters);
       }
       if (toolTip == null) {
-        toolTip = mismatchedExpressions.isEmpty() ? description : createMismatchedArgumentsHtmlTooltip(candidateInfo, list);
+        if ((parameters.length == 0 || !parameters[parameters.length - 1].isVarArgs()) &&
+            parameters.length != expressions.length) {
+          toolTip = createMismatchedArgumentCountTooltip(parameters.length, expressions.length);
+        }
+        else {
+          toolTip = mismatchedExpressions.isEmpty() ? description : createMismatchedArgumentsHtmlTooltip(candidateInfo, list);
+        }
       }
     }
     else {
@@ -542,11 +553,8 @@ public final class HighlightMethodUtil {
                                                                          PsiExpression[] expressions,
                                                                          PsiParameter[] parameters) {
     PsiExpression wrongArg = mismatchedExpressions.get(0);
-    PsiType argType = wrongArg.getType();
+    PsiType argType = wrongArg != null ? wrongArg.getType() : null;
     if (argType != null) {
-      if ((parameters.length == 0 || !parameters[parameters.length - 1].isVarArgs()) && parameters.length != expressions.length) {
-        return createMismatchedArgumentCountTooltip(parameters, expressions);
-      }
       int idx = ArrayUtil.find(expressions, wrongArg);
       PsiType paramType = candidateInfo.getSubstitutor().substitute(PsiTypesUtil.getParameterType(parameters, idx, candidateInfo.isVarargs()));
       String errorMessage = candidateInfo.getInferenceErrorMessage();
@@ -718,13 +726,10 @@ public final class HighlightMethodUtil {
                                                     PsiSubstitutor substitutor,
                                                     PsiParameter @NotNull [] parameters,
                                                     boolean varargs) {
-    if ((parameters.length == 0 || !parameters[parameters.length - 1].isVarArgs()) && parameters.length > expressions.length) {
-      return Collections.emptyList();
-    }
-
     List<PsiExpression> result = new ArrayList<>();
     for (int i = 0; i < Math.max(parameters.length, expressions.length); i++) {
-      if (parameters.length == 0 || !assignmentCompatible(i, parameters, expressions, substitutor, varargs)) {
+      if (parameters.length == 0 ||
+          !assignmentCompatible(i, parameters, expressions, substitutor, varargs)) {
         result.add(i < expressions.length ? expressions[i] : null);
       }
     }
@@ -810,6 +815,9 @@ public final class HighlightMethodUtil {
     WrapObjectWithOptionalOfNullableFix.REGISTAR.registerCastActions(candidates, methodCall, info, fixRange);
     WrapExpressionFix.registerWrapAction(candidates, list.getExpressions(), info, fixRange);
     PermuteArgumentsFix.registerFix(info, methodCall, candidates, fixRange);
+    if (info != null) {
+      QuickFixAction.registerQuickFixAction(info, fixRange, RemoveRepeatingCallFix.createFix(methodCall));
+    }
     registerChangeParameterClassFix(methodCall, list, info, fixRange);
     if (candidates.length == 0 && info != null) {
       UnresolvedReferenceQuickFixProvider.registerReferenceFixes(methodCall.getMethodExpression(), new QuickFixActionRegistrarImpl(info));
@@ -952,7 +960,6 @@ public final class HighlightMethodUtil {
     QuickFixAction.registerQuickFixAction(highlightInfo, fixRange, QUICK_FIX_FACTORY.createSurroundWithArrayFix(methodCall, null));
 
     CastMethodArgumentFix.REGISTRAR.registerCastActions(methodCandidates, methodCall, highlightInfo, fixRange);
-    ConvertDoubleToFloatFix.registerIntentions(methodCandidates, list, highlightInfo, fixRange);
     AddTypeArgumentsFix.REGISTRAR.registerCastActions(methodCandidates, methodCall, highlightInfo, fixRange);
 
     CandidateInfo[] candidates = resolveHelper.getReferencedMethodCandidates(methodCall, true);
@@ -1053,7 +1060,7 @@ public final class HighlightMethodUtil {
     PsiExpression[] expressions = list.getExpressions();
     if ((parameters.length == 0 || !parameters[parameters.length - 1].isVarArgs()) &&
         parameters.length != expressions.length) {
-      return createMismatchedArgumentCountTooltip(parameters, expressions);
+      return createMismatchedArgumentCountTooltip(parameters.length, expressions.length);
     }
 
     HtmlBuilder message = new HtmlBuilder();
@@ -1065,8 +1072,8 @@ public final class HighlightMethodUtil {
   }
 
   @NotNull
-  private static @NlsContexts.Tooltip String createMismatchedArgumentCountTooltip(PsiParameter @NotNull [] parameters, PsiExpression[] expressions) {
-    return HtmlChunk.text(JavaAnalysisBundle.message("arguments.count.mismatch", parameters.length, expressions.length))
+  public static @NlsContexts.Tooltip String createMismatchedArgumentCountTooltip(int expected, int actual) {
+    return HtmlChunk.text(JavaAnalysisBundle.message("arguments.count.mismatch", expected, actual))
       .wrapWith("html").toString();
   }
 
@@ -1724,9 +1731,11 @@ public final class HighlightMethodUtil {
         if (classReference != null && info != null) {
           ConstructorParametersFixer.registerFixActions(classReference, constructorCall, info, getFixRange(list));
         }
+        TextRange textRange = constructorCall.getTextRange();
         QuickFixAction.registerQuickFixActions(
-          info, constructorCall.getTextRange(), QUICK_FIX_FACTORY.createCreateConstructorFromUsageFixes(constructorCall)
+          info, textRange, QUICK_FIX_FACTORY.createCreateConstructorFromUsageFixes(constructorCall)
         );
+        RemoveRedundantArgumentsFix.registerIntentions(list, info, getFixRange(list));
         holder.add(info);
         return;
       }
@@ -1846,6 +1855,22 @@ public final class HighlightMethodUtil {
     return null;
   }
 
+  private static HighlightInfo checkInferredReturnTypeAccessible(@NotNull MethodCandidateInfo info, @NotNull PsiMethodCallExpression methodCall) {
+    PsiMethod method = info.getElement();
+    PsiClass targetClass = PsiUtil.resolveClassInClassTypeOnly(method.getReturnType());
+    if (targetClass instanceof PsiTypeParameter && ((PsiTypeParameter)targetClass).getOwner() == method) {
+      PsiClass inferred = PsiUtil.resolveClassInClassTypeOnly(info.getSubstitutor().substitute((PsiTypeParameter)targetClass));
+      if (inferred != null && !PsiUtil.isAccessible(inferred, methodCall, null)) {
+        return HighlightInfo.newHighlightInfo(HighlightInfoType.ERROR)
+          .descriptionAndTooltip(JavaErrorBundle.message("inaccessible.type",
+                                                         PsiFormatUtil.formatClass(inferred, PsiFormatUtilBase.SHOW_FQ_NAME | PsiFormatUtilBase.SHOW_NAME)))
+          .range(methodCall.getArgumentList())
+          .create();
+      }
+    }
+    return null;
+  }
+
   private static void registerFixesOnInvalidConstructorCall(@NotNull PsiConstructorCall constructorCall,
                                                             @Nullable PsiJavaCodeReferenceElement classReference,
                                                             @NotNull PsiExpressionList list,
@@ -1857,7 +1882,6 @@ public final class HighlightMethodUtil {
     if (classReference != null) {
       ConstructorParametersFixer.registerFixActions(classReference, constructorCall, info, fixRange);
       ChangeTypeArgumentsFix.registerIntentions(results, list, info, aClass, fixRange);
-      ConvertDoubleToFloatFix.registerIntentions(results, list, info, fixRange);
     }
     ChangeStringLiteralToCharInMethodCallFix.registerFixes(constructors, constructorCall, info, fixRange);
     QuickFixAction.registerQuickFixAction(info, fixRange, QUICK_FIX_FACTORY.createSurroundWithArrayFix(constructorCall, null));
@@ -1868,6 +1892,7 @@ public final class HighlightMethodUtil {
       info, constructorCall.getTextRange(), QUICK_FIX_FACTORY.createCreateConstructorFromUsageFixes(constructorCall)
     );
     registerChangeParameterClassFix(constructorCall, list, info, fixRange);
+    RemoveRedundantArgumentsFix.registerIntentions(results, list, info, fixRange);
   }
 
   private static HighlightInfo buildAccessProblem(@NotNull PsiJavaCodeReferenceElement ref,

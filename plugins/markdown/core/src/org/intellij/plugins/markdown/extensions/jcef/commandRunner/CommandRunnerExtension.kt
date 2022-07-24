@@ -174,7 +174,9 @@ internal class CommandRunnerExtension(val panel: MarkdownHtmlPanel,
     if (project != null && virtualFile != null) {
       TrustedProjectUtil.executeIfTrusted(project) {
         RUNNER_EXECUTED.log(project,  RunnerPlace.PREVIEW, RunnerType.BLOCK, runner.javaClass)
-        runner.run(command, project, virtualFile.parent.canonicalPath, executor)
+        invokeLater {
+          runner.run(command, project, virtualFile.parent.canonicalPath, executor)
+        }
       }
     }
   }
@@ -293,14 +295,20 @@ internal class CommandRunnerExtension(val panel: MarkdownHtmlPanel,
       val dataContext = createDataContext(project, localSession, workingDirectory)
 
       return runReadAction {
-        RunAnythingProvider.EP_NAME.extensionList
-          .asSequence()
+        RunAnythingProvider.EP_NAME.extensionList.asSequence()
           .filter { checkForCLI(it, allowRunConfigurations) }
           .any { provider -> provider.findMatchingValue(dataContext, trimmedCmd) != null }
       }
     }
 
-    fun execute(project: Project, workingDirectory: String?, localSession: Boolean, command: String, executor: Executor, place: RunnerPlace): Boolean {
+    fun execute(
+      project: Project,
+      workingDirectory: String?,
+      localSession: Boolean,
+      command: String,
+      executor: Executor,
+      place: RunnerPlace
+    ): Boolean {
       val dataContext = createDataContext(project, localSession, workingDirectory, executor)
       val trimmedCmd = command.trim()
       return runReadAction {
@@ -308,7 +316,9 @@ internal class CommandRunnerExtension(val panel: MarkdownHtmlPanel,
           val value = provider.findMatchingValue(dataContext, trimmedCmd) ?: continue
           return@runReadAction TrustedProjectUtil.executeIfTrusted(project) {
             RUNNER_EXECUTED.log(project, place, RunnerType.LINE, provider.javaClass)
-            provider.execute(dataContext, value)
+            invokeLater {
+              provider.execute(dataContext, value)
+            }
           }
         }
         return@runReadAction false

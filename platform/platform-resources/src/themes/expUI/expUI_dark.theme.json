@@ -3,6 +3,9 @@
   "dark": true,
   "author": "JetBrains",
   "editorScheme": "/themes/expUI/expUI_darkScheme.xml",
+  "additionalEditorSchemes": [
+    "/themes/expUI/expUI_darkSchemeNew.xml"
+  ],
 
   "colors": {
     "Grey1": "#1E1F22",
@@ -25,7 +28,7 @@
     "Blue3": "#35538F",
     "Blue4": "#375FAD",
     "Blue5": "#366ACE",
-    "Blue6": "#3573F0",
+    "Blue6": "#3574F0",
     "Blue7": "#467FF2",
     "Blue8": "#548AF7",
     "Blue9": "#6B9BFA",
@@ -111,7 +114,9 @@
       "focusColor": "Blue6",
 
       "separatorColor": "Grey3",
-      "separatorForeground": "Grey7"
+      "separatorForeground": "Grey7",
+
+      "modifiedItemForeground": "Blue9"
     },
 
     "ActionButton": {
@@ -121,6 +126,10 @@
       "pressedBorderColor": "Grey5",
       "focusedBorderColor": "Blue6",
       "hoverSeparatorColor": "Grey6"
+    },
+
+    "Bookmark": {
+      "Mnemonic.iconForeground": "Grey14"
     },
 
     "Borders.color": "Grey1",
@@ -155,7 +164,11 @@
     },
 
     "ComboBox": {
-      "ArrowButton.background": "Grey2"
+      "ArrowButton": {
+        "background": "Grey2",
+        "nonEditableBackground": "Grey3"
+      },
+      "nonEditableBackground": "Grey3"
     },
 
     "ComboPopup.border": "1,1,1,1,#43454A",
@@ -179,8 +192,10 @@
         "changedValueForeground": "Blue8",
         "modifyingValueForeground": "Blue8",
         "errorMessageForeground": "Red6",
-        "exceptionForeground": "Red6"
-      }
+        "exceptionForeground": "Red6",
+        "typeForeground": "Grey7"
+      },
+      "EvaluateExpression.background": "Grey3"
     },
 
     "FileColor": {
@@ -206,8 +221,9 @@
 
     "EditorTabs": {
       "tabInsets": "-3,12,-4,8",
-      "hoverBackground": "Grey1",
-      "inactiveHoverBackground": "Grey1",
+      "hoverBackground": "#1E1F2200",
+      "inactiveHoverBackground": "#1E1F2200",
+      "inactiveColoredFileBackground": "#1E1F2280",
       "underTabsBorderColor":"Grey3"
     },
 
@@ -225,11 +241,11 @@
     "Label.errorForeground": "Red6",
 
     "Link": {
-      "activeForeground": "Blue8",
-      "hoverForeground": "Blue8",
-      "pressedForeground": "Blue8",
-      "visitedForeground": "Blue8",
-      "secondaryForeground": "Blue8"
+      "activeForeground": "Blue9",
+      "hoverForeground": "Blue9",
+      "pressedForeground": "Blue9",
+      "visitedForeground": "Blue9",
+      "secondaryForeground": "Blue9"
     },
 
     "List": {
@@ -312,7 +328,7 @@
 
     "CompletionPopup": {
       "foreground": "Grey10",
-      "matchForeground": "Blue7",
+      "matchForeground": "Blue8",
       "Advertiser": {
         "foreground": "Grey7",
         "background": "Grey3",
@@ -352,7 +368,11 @@
       "endBackground": "Yellow5"
     },
 
-    "SearchOption.selectedBackground": "Blue2",
+    "SearchOption": {
+      "selectedBackground": "Blue3",
+      "selectedHoveredBackground": "Blue4",
+      "selectedPressedBackground": "Blue4"
+    },
 
     "SpeedSearch": {
       "background": "Grey1",
@@ -380,13 +400,17 @@
 
     "TabbedPane": {
       "tabHeight": 40,
+      "tabInsets": "0,12,0,12",
       "tabSelectionArc": 4,
       "hoverColor": "Grey4",
       "contentAreaColor": "Grey1",
       "focusColor": "Blue2"
     },
 
-    "Table.gridColor": "Grey1",
+    "Table": {
+      "gridColor": "Grey1",
+      "stripeColor": "Grey2"
+    },
 
     "TableHeader": {
       "bottomSeparatorColor": "Grey1",
@@ -480,8 +504,14 @@
         "unmatchedForeground": "Grey7",
         "hoveredBackground": "#FFFFFFED"
       },
-      "FileHistory.Commit.selectedBranchBackground": "#1c2433"
+      "FileHistory.Commit.selectedBranchBackground": "#1c2433",
+      "MarkerPopup": {
+        "borderInsets": "6,8,6,10",
+        "borderColor": "Grey4"
+      }
     },
+
+    "EditorPane.splitBorder": "Grey3",
 
     "WelcomeScreen.Details.background": "Grey1"
   },

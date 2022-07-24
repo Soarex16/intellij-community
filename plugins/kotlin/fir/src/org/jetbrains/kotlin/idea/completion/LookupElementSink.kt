@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.completion
 
@@ -9,10 +9,11 @@ import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementDecorator
 import com.intellij.openapi.editor.Document
 import com.intellij.psi.util.elementType
-import org.jetbrains.kotlin.idea.completion.stringTemplates.InsertStringTemplateBracesLookupElementDecorator
+import org.jetbrains.kotlin.idea.base.psi.canDropCurlyBrackets
+import org.jetbrains.kotlin.idea.base.psi.dropCurlyBrackets
+import org.jetbrains.kotlin.idea.base.psi.dropCurlyBracketsIfPossible
+import org.jetbrains.kotlin.idea.completion.stringTemplates.wrapLookupElementForStringTemplateAfterDotCompletion
 import org.jetbrains.kotlin.idea.completion.weighers.CompletionContributorGroupWeigher.groupPriority
-import org.jetbrains.kotlin.idea.core.canDropBraces
-import org.jetbrains.kotlin.idea.core.dropBraces
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtBlockStringTemplateEntry
 import org.jetbrains.kotlin.psi.KtNameReferenceExpression
@@ -51,7 +52,7 @@ private object WrappersProvider {
     fun getWrapperForLookupElement(parameters: KotlinFirCompletionParameters): List<LookupElementWrapper> {
         return when (parameters.type) {
             KotlinFirCompletionParameters.CorrectionType.BRACES_FOR_STRING_TEMPLATE -> {
-                listOf(LookupElementWrapper(::InsertStringTemplateBracesLookupElementDecorator))
+                listOf(LookupElementWrapper(::wrapLookupElementForStringTemplateAfterDotCompletion))
             }
             else -> listOf(LookupElementWrapper(::WrapSingleStringTemplateEntryWithBraces))
         }
@@ -88,9 +89,7 @@ private class WrapSingleStringTemplateEntryWithBraces(lookupElement: LookupEleme
 
     private fun removeUnneededBraces(context: InsertionContext) {
         val templateEntry = getContainingTemplateEntry(context) as? KtBlockStringTemplateEntry ?: return
-        if (templateEntry.canDropBraces()) {
-            templateEntry.dropBraces()
-        }
+        templateEntry.dropCurlyBracketsIfPossible()
     }
 
     private fun needInsertBraces(context: InsertionContext): Boolean =

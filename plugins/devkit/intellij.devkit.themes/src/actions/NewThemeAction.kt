@@ -28,10 +28,11 @@ import java.util.*
 import javax.swing.JComponent
 
 //TODO better undo support
-class NewThemeAction : AnAction(), UpdateInBackground {
+class NewThemeAction : AnAction() {
   private val THEME_JSON_TEMPLATE = "ThemeJson.json"
   private val THEME_PROVIDER_EP_NAME = UIThemeProvider.EP_NAME.name
 
+  override fun getActionUpdateThread() = ActionUpdateThread.BGT
 
   @Suppress("UsePropertyAccessSyntax") // IdeView#getOrChooseDirectory is not a getter
   override fun actionPerformed(e: AnActionEvent) {
@@ -56,7 +57,6 @@ class NewThemeAction : AnAction(), UpdateInBackground {
     e.presentation.isEnabled = module != null && (PluginModuleType.get(module) is PluginModuleType || PsiUtil.isPluginModule(module))
   }
 
-  @Suppress("HardCodedStringLiteral")
   private fun createThemeJson(themeName: String,
                               isDark: Boolean,
                               project: Project,
@@ -89,7 +89,7 @@ class NewThemeAction : AnAction(), UpdateInBackground {
   }
 
   private fun registerTheme(dir: PsiDirectory, file: PsiFile, module: Module) {
-    val relativeLocation = getSourceRootRelativeLocation(module, file) ?: return
+    val relativeLocation = getSourceRootRelativeLocation(module, file)
 
     val pluginXml = DevkitActionsUtil.choosePluginModuleDescriptor(dir) ?: return
     DescriptorUtil.checkPluginXmlsWritable(module.project, pluginXml)
@@ -103,7 +103,7 @@ class NewThemeAction : AnAction(), UpdateInBackground {
     }
   }
 
-  private fun getSourceRootRelativeLocation(module: Module, file: PsiFile): String? {
+  private fun getSourceRootRelativeLocation(module: Module, file: PsiFile): String {
     val rootManager = ModuleRootManager.getInstance(module)
     val sourceRoots = rootManager.getSourceRoots(false)
     val virtualFile = file.virtualFile
@@ -130,7 +130,7 @@ class NewThemeAction : AnAction(), UpdateInBackground {
       init()
     }
 
-    override fun createCenterPanel(): JComponent? {
+    override fun createCenterPanel(): JComponent {
       return panel {
         row(DevKitThemesBundle.message("new.theme.dialog.name.text.field.text")) {
           cell {

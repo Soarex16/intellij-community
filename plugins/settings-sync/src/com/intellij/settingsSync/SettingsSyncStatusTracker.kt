@@ -7,9 +7,9 @@ import org.jetbrains.annotations.Nls
 import java.util.*
 
 @Service
-internal final class SettingsSyncStatusTracker : SettingsSyncEnabledStateListener {
+internal class SettingsSyncStatusTracker : SettingsSyncEnabledStateListener {
   private var lastSyncTime = -1L
-  private var errorMessage = ""
+  private var errorMessage: String? = null
 
   private val eventDispatcher = EventDispatcher.create(Listener::class.java)
 
@@ -23,7 +23,7 @@ internal final class SettingsSyncStatusTracker : SettingsSyncEnabledStateListene
 
   fun updateOnSuccess() {
     lastSyncTime = System.currentTimeMillis()
-    errorMessage = ""
+    errorMessage = null
     eventDispatcher.multicaster.syncStatusChanged()
   }
 
@@ -33,18 +33,22 @@ internal final class SettingsSyncStatusTracker : SettingsSyncEnabledStateListene
     eventDispatcher.multicaster.syncStatusChanged()
   }
 
-  fun isSyncSuccessful() = lastSyncTime >= 0
+  fun isSyncSuccessful() = errorMessage == null
+
+  fun isSynced() = lastSyncTime >= 0
 
   fun getLastSyncTime() = lastSyncTime
 
   private fun clear() {
     lastSyncTime = -1
-    errorMessage = ""
+    errorMessage = null
   }
 
   override fun enabledStateChanged(syncEnabled: Boolean) {
     if (!syncEnabled) clear()
   }
+
+  fun getErrorMessage(): String? = errorMessage
 
   fun addListener(listener: Listener) {
     eventDispatcher.addListener(listener)

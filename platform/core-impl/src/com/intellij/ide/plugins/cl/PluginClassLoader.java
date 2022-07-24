@@ -67,11 +67,16 @@ public final class PluginClassLoader extends UrlClassLoader implements PluginAwa
       "kotlin.coroutines.CoroutineContext",
       "kotlin.coroutines.CoroutineContext$Element",
       "kotlin.coroutines.CoroutineContext$Key",
+      "kotlin.Result",
+      "kotlin.Result$Failure",
       // Even though it's internal class, it can leak (and it does) into API surface because it's exposed by public
       // `kotlin.coroutines.intrinsics.COROUTINE_SUSPENDED` property
       "kotlin.coroutines.intrinsics.CoroutineSingletons",
       "kotlin.coroutines.AbstractCoroutineContextElement",
-      "kotlin.coroutines.AbstractCoroutineContextKey"
+      "kotlin.coroutines.AbstractCoroutineContextKey",
+      "kotlin.coroutines.jvm.internal.ContinuationImpl", // IDEA-295189
+      "kotlin.coroutines.jvm.internal.BaseContinuationImpl", // IDEA-295189
+      "kotlin.coroutines.jvm.internal.CoroutineStackFrame" // IDEA-295189
     ));
     String classes = System.getProperty("idea.kotlin.classes.used.in.signatures");
     if (classes != null) {
@@ -349,7 +354,7 @@ public final class PluginClassLoader extends UrlClassLoader implements PluginAwa
     return result;
   }
 
-  private void collectClassLoaders(@NotNull Deque<ClassLoader> queue) {
+  private void collectClassLoaders(@NotNull Deque<? super ClassLoader> queue) {
     for (IdeaPluginDescriptorImpl parent : parents) {
       ClassLoader classLoader = parent.getPluginClassLoader();
       if (classLoader != null && classLoader != coreLoader) {
@@ -372,7 +377,7 @@ public final class PluginClassLoader extends UrlClassLoader implements PluginAwa
     // We assume that these classes don't change between Kotlin versions, so it's safe to always load them from platform's kotlin-runtime.
     return className.startsWith("kotlin.") && (className.startsWith("kotlin.jvm.functions.") ||
                                                (className.startsWith("kotlin.reflect.") &&
-                                                className.indexOf('.', 15 /* "kotlin.reflect".length */) < 0) ||
+                                                className.indexOf('.', 15 /* "kotlin.reflect.".length */) < 0) ||
                                                KOTLIN_STDLIB_CLASSES_USED_IN_SIGNATURES.contains(className));
   }
 
@@ -498,7 +503,7 @@ public final class PluginClassLoader extends UrlClassLoader implements PluginAwa
     return doFindResource(name, f1, f2);
   }
 
-  private <T> @Nullable T doFindResource(String name, Function<Resource, T> f1, BiFunction<ClassLoader, String, T> f2) {
+  private <T> @Nullable T doFindResource(String name, Function<? super Resource, ? extends T> f1, BiFunction<? super ClassLoader, ? super String, ? extends T> f2) {
     String canonicalPath = toCanonicalPath(name);
 
     Resource resource = classPath.findResource(canonicalPath);
@@ -589,10 +594,10 @@ public final class PluginClassLoader extends UrlClassLoader implements PluginAwa
   }
 
   private static final class DeepEnumeration implements Enumeration<URL> {
-    private final @NotNull List<Enumeration<URL>> list;
+    private final @NotNull List<? extends Enumeration<URL>> list;
     private int myIndex;
 
-    private DeepEnumeration(@NotNull List<Enumeration<URL>> enumerations) {
+    private DeepEnumeration(@NotNull List<? extends Enumeration<URL>> enumerations) {
       list = enumerations;
     }
 

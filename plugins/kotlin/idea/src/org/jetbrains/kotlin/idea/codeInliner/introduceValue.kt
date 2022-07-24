@@ -3,13 +3,13 @@
 package org.jetbrains.kotlin.idea.codeInliner
 
 import org.jetbrains.kotlin.config.LanguageVersionSettings
-import org.jetbrains.kotlin.idea.analysis.computeTypeInContext
+import org.jetbrains.kotlin.idea.base.fe10.codeInsight.newDeclaration.Fe10KotlinNameSuggester
+import org.jetbrains.kotlin.idea.caches.resolve.computeTypeInContext
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
-import org.jetbrains.kotlin.idea.core.KotlinNameSuggester
 import org.jetbrains.kotlin.idea.core.isVisible
 import org.jetbrains.kotlin.idea.core.setType
-import org.jetbrains.kotlin.idea.resolve.getLanguageVersionSettings
+import org.jetbrains.kotlin.idea.resolve.languageVersionSettings
 import org.jetbrains.kotlin.idea.util.getAllAccessibleVariables
 import org.jetbrains.kotlin.idea.util.getResolutionScope
 import org.jetbrains.kotlin.name.Name
@@ -62,9 +62,9 @@ internal fun MutableCodeToInline.introduceValue(
 
     fun suggestName(validator: (String) -> Boolean): Name {
         val name = if (nameSuggestion != null)
-            KotlinNameSuggester.suggestNameByName(nameSuggestion, validator)
+            Fe10KotlinNameSuggester.suggestNameByName(nameSuggestion, validator)
         else
-            KotlinNameSuggester.suggestNamesByExpressionOnly(value, bindingContext, validator, "t").first()
+            Fe10KotlinNameSuggester.suggestNamesByExpressionOnly(value, bindingContext, validator, "t").first()
         return Name.identifier(name)
     }
 
@@ -77,7 +77,7 @@ internal fun MutableCodeToInline.introduceValue(
             val resolutionScope = expressionToBeReplaced.getResolutionScope(bindingContext, resolutionFacade)
 
             val name = suggestName { name ->
-                !name.nameHasConflictsInScope(resolutionScope, resolutionFacade.getLanguageVersionSettings()) && !isNameUsed(name)
+              !name.nameHasConflictsInScope(resolutionScope, resolutionFacade.languageVersionSettings) && !isNameUsed(name)
             }
 
             val declaration = psiFactory.createDeclarationByPattern<KtVariableDeclaration>("val $0 = $1", name, value)

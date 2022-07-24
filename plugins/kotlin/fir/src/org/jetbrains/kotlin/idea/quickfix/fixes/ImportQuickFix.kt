@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.quickfix.fixes
 
@@ -6,6 +6,7 @@ import com.intellij.codeInsight.daemon.QuickFixBundle
 import com.intellij.codeInsight.hint.HintManager
 import com.intellij.codeInsight.hint.QuestionAction
 import com.intellij.codeInspection.HintAction
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopup
@@ -14,10 +15,6 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiModificationTracker
-import org.jetbrains.kotlin.analyzer.ModuleSourceInfoBase
-import org.jetbrains.kotlin.idea.KotlinBundle
-import org.jetbrains.kotlin.idea.fir.HLIndexHelper
-import org.jetbrains.kotlin.idea.fir.api.fixes.diagnosticFixFactory
 import org.jetbrains.kotlin.analysis.api.KtAnalysisSession
 import org.jetbrains.kotlin.analysis.api.fir.diagnostics.KtFirDiagnostic
 import org.jetbrains.kotlin.analysis.api.fir.utils.addImportToFile
@@ -28,9 +25,11 @@ import org.jetbrains.kotlin.analysis.api.symbols.markers.KtSymbolWithVisibility
 import org.jetbrains.kotlin.analysis.project.structure.KtSourceModule
 import org.jetbrains.kotlin.analysis.project.structure.getKtModuleOfTypeSafe
 import org.jetbrains.kotlin.analysis.project.structure.moduleScopeProvider
-import org.jetbrains.kotlin.idea.quickfix.QuickFixActionBase
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
+import org.jetbrains.kotlin.idea.fir.HLIndexHelper
+import org.jetbrains.kotlin.idea.codeinsight.api.applicators.fixes.diagnosticFixFactory
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.QuickFixActionBase
 import org.jetbrains.kotlin.idea.util.application.executeWriteCommand
-import org.jetbrains.kotlin.idea.util.module
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.psi.*
@@ -62,6 +61,13 @@ internal class ImportQuickFix(
 
     override fun showHint(editor: Editor): Boolean {
         val element = element ?: return false
+        if (
+            ApplicationManager.getApplication().isHeadlessEnvironment
+            || HintManager.getInstance().hasShownHintsThatWillHideByOtherHint(true)
+        ) {
+            return false
+        }
+
         val file = element.containingKtFile
         val project = file.project
 
@@ -79,7 +85,7 @@ internal class ImportQuickFix(
         return true
     }
 
-    private val modificationCountOnCreate: Long = PsiModificationTracker.SERVICE.getInstance(element.project).modificationCount
+    private val modificationCountOnCreate: Long = PsiModificationTracker.getInstance(element.project).modificationCount
 
     /**
      * This is a safe-guard against showing hint after the quickfix have been applied.
@@ -87,7 +93,7 @@ internal class ImportQuickFix(
      * Inspired by the org.jetbrains.kotlin.idea.quickfix.ImportFixBase.isOutdated
      */
     private fun isOutdated(project: Project): Boolean {
-        return modificationCountOnCreate != PsiModificationTracker.SERVICE.getInstance(project).modificationCount
+        return modificationCountOnCreate != PsiModificationTracker.getInstance(project).modificationCount
     }
 
     override fun isAvailableImpl(project: Project, editor: Editor?, file: PsiFile): Boolean {
@@ -106,15 +112,23 @@ internal class ImportQuickFix(
         }
 
         override fun execute(): Boolean {
-            val unambiguousImport = importCandidates.singleOrNull()
-            if (unambiguousImport != null) {
-                addImport(unambiguousImport)
-                return true
+            when (importCandidates.size) {
+                1 -> {
+                    addImport(importCandidates.single())
+                    return true
+                }
+
+                0 -> {
+                    return false
+                }
+
+                else -> {
+                    if (ApplicationManager.getApplication().isUnitTestMode) return false
+                    createImportSelectorPopup().showInBestPositionFor(editor)
+
+                    return true
+                }
             }
-
-            createImportSelectorPopup().showInBestPositionFor(editor)
-
-            return true
         }
 
         private fun createImportSelectorPopup(): JBPopup {

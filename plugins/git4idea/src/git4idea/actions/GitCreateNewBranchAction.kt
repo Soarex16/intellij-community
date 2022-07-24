@@ -1,11 +1,9 @@
-// Copyright 2000-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package git4idea.actions
 
-import com.intellij.dvcs.DvcsUtil.guessVcsRoot
 import com.intellij.dvcs.branch.DvcsSyncSettings.Value.SYNC
 import com.intellij.dvcs.getCommonCurrentBranch
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.actionSystem.CommonDataKeys.VIRTUAL_FILE
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.vcs.log.Hash
@@ -14,6 +12,7 @@ import com.intellij.vcs.log.VcsRef
 import git4idea.GitRemoteBranch
 import git4idea.GitUtil.HEAD
 import git4idea.GitUtil.getRepositoryManager
+import git4idea.branch.GitBranchUtil
 import git4idea.config.GitVcsSettings
 import git4idea.i18n.GitBundle
 import git4idea.repo.GitRepository
@@ -29,6 +28,7 @@ internal class GitCreateNewBranchAction : DumbAwareAction() {
                                                       data.name)
       is Data.NoCommit -> createOrCheckoutNewBranch(data.project, data.repositories, HEAD,
                                                     initialName = data.repositories.getCommonCurrentBranch())
+      is Data.Disabled, Data.Invisible -> {}
     }
   }
 
@@ -47,7 +47,7 @@ internal class GitCreateNewBranchAction : DumbAwareAction() {
 
   private sealed class Data {
     object Invisible : Data()
-    class Disabled(val description : @Nls String) : Data()
+    class Disabled(val description: @Nls String) : Data()
     class WithCommit(val repository: GitRepository, val hash: Hash, val name: String?) : Data()
     class NoCommit(val project: Project, val repositories: List<GitRepository>) : Data()
   }
@@ -57,9 +57,9 @@ internal class GitCreateNewBranchAction : DumbAwareAction() {
     val manager = getRepositoryManager(project)
     if (manager.repositories.isEmpty()) return Data.Invisible
 
-    val log = e.getData(VcsLogDataKeys.VCS_LOG)
-    if (log != null) {
-      val commits = log.selectedCommits
+    val selection = e.getData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION)
+    if (selection != null) {
+      val commits = selection.commits
       if (commits.isEmpty()) return Data.Invisible
       if (commits.size > 1) return Data.Disabled(GitBundle.message("action.New.Branch.disabled.several.commits.description"))
       val commit = commits.first()
@@ -74,13 +74,15 @@ internal class GitCreateNewBranchAction : DumbAwareAction() {
       if (manager.moreThanOneRoot()) {
         if (GitVcsSettings.getInstance(project).syncSetting == SYNC) manager.repositories
         else {
-          val repository = manager.getRepositoryForRootQuick(guessVcsRoot(project, e.getData(VIRTUAL_FILE)))
+          val repository = GitBranchUtil.guessRepositoryForOperation(project, e.dataContext)
           repository?.let { listOf(repository) }
         }
       }
       else listOf(manager.repositories.first())
 
-    if (repositories == null || repositories.any { it.isFresh }) return Data.Disabled(GitBundle.message("action.New.Branch.disabled.fresh.description"))
+    if (repositories == null || repositories.any { it.isFresh }) {
+      return Data.Disabled(GitBundle.message("action.New.Branch.disabled.fresh.description"))
+    }
     return Data.NoCommit(project, repositories)
   }
 

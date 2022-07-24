@@ -8,12 +8,16 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.psi.*
 import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.util.castSafelyTo
 import org.jetbrains.kotlin.idea.KotlinLanguage
+import org.jetbrains.kotlin.idea.base.fe10.codeInsight.newDeclaration.Fe10KotlinNameSuggester
+import org.jetbrains.kotlin.idea.base.psi.replaced
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
 import org.jetbrains.kotlin.idea.core.*
+import org.jetbrains.kotlin.idea.intentions.ImportAllMembersIntention
 import org.jetbrains.kotlin.idea.refactoring.fqName.fqName
 import org.jetbrains.kotlin.idea.references.KtSimpleNameReference
-import org.jetbrains.kotlin.idea.references.KtSimpleNameReferenceDescriptorsImpl
+import org.jetbrains.kotlin.references.fe10.KtFe10SimpleNameReference
 import org.jetbrains.kotlin.idea.util.getResolutionScope
 import org.jetbrains.kotlin.idea.util.resolveToKotlinType
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
@@ -76,7 +80,7 @@ class KotlinUastCodeGenerationPlugin : UastCodeGenerationPlugin {
     override fun bindToElement(reference: UReferenceExpression, element: PsiElement): PsiElement? {
         val sourcePsi = reference.sourcePsi ?: return null
         if (sourcePsi !is KtSimpleNameExpression) return null
-        return KtSimpleNameReferenceDescriptorsImpl(sourcePsi)
+        return KtFe10SimpleNameReference(sourcePsi)
             .bindToElement(element, KtSimpleNameReference.ShorteningMode.FORCED_SHORTENING)
     }
 
@@ -85,6 +89,14 @@ class KotlinUastCodeGenerationPlugin : UastCodeGenerationPlugin {
         if (sourcePsi !is KtElement) return null
         return ShortenReferences.DEFAULT.process(sourcePsi).toUElementOfType()
     }
+
+    override fun importMemberOnDemand(reference: UQualifiedReferenceExpression): UExpression? {
+        val ktQualifiedExpression = reference.sourcePsi?.castSafelyTo<KtDotQualifiedExpression>() ?: return null
+        val selector = ktQualifiedExpression.selectorExpression ?: return null
+        val ptr = SmartPointerManager.createPointer(selector)
+        ImportAllMembersIntention().applyTo(ktQualifiedExpression, null)
+        return ptr.element?.toUElementOfType()
+    }
 }
 
 private fun hasBraces(oldPsi: KtBlockExpression): Boolean = oldPsi.lBrace != null && oldPsi.rBrace != null
@@ -92,7 +104,6 @@ private fun hasBraces(oldPsi: KtBlockExpression): Boolean = oldPsi.lBrace != nul
 class KotlinUastElementFactory(project: Project) : UastElementFactory {
     private val psiFactory = KtPsiFactory(project)
 
-    @Suppress("UNUSED_PARAMETER")
     override fun createQualifiedReference(qualifiedName: String, context: PsiElement?): UQualifiedReferenceExpression? {
         return psiFactory.createExpression(qualifiedName).let {
             when (it) {
@@ -251,7 +262,7 @@ class KotlinUastElementFactory(project: Project) : UastElementFactory {
     }
 
     @Deprecated("use version with context parameter")
-    fun createSimpleReference(name: String): USimpleNameReferenceExpression? {
+    fun createSimpleReference(name: String): USimpleNameReferenceExpression {
         logger<KotlinUastElementFactory>().error("Please switch caller to the version with a context parameter")
         return createSimpleReference(name, null)
     }
@@ -271,7 +282,7 @@ class KotlinUastElementFactory(project: Project) : UastElementFactory {
     }
 
     @Deprecated("use version with context parameter")
-    fun createReturnExpresion(expression: UExpression?, inLambda: Boolean): UReturnExpression? {
+    fun createReturnExpresion(expression: UExpression?, inLambda: Boolean): UReturnExpression {
         logger<KotlinUastElementFactory>().error("Please switch caller to the version with a context parameter")
         return createReturnExpresion(expression, inLambda, null)
     }
@@ -363,7 +374,7 @@ class KotlinUastElementFactory(project: Project) : UastElementFactory {
     }
 
     @Deprecated("use version with context parameter")
-    fun createBlockExpression(expressions: List<UExpression>): UBlockExpression? {
+    fun createBlockExpression(expressions: List<UExpression>): UBlockExpression {
         logger<KotlinUastElementFactory>().error("Please switch caller to the version with a context parameter")
         return createBlockExpression(expressions, null)
     }
@@ -380,7 +391,7 @@ class KotlinUastElementFactory(project: Project) : UastElementFactory {
     }
 
     @Deprecated("use version with context parameter")
-    fun createDeclarationExpression(declarations: List<UDeclaration>): UDeclarationsExpression? {
+    fun createDeclarationExpression(declarations: List<UDeclaration>): UDeclarationsExpression {
         logger<KotlinUastElementFactory>().error("Please switch caller to the version with a context parameter")
         return createDeclarationExpression(declarations, null)
     }
@@ -414,8 +425,8 @@ class KotlinUastElementFactory(project: Project) : UastElementFactory {
             parameters.joinToString(", ") { p ->
                 val ktype = resolutionFacade?.let { p.type?.resolveToKotlinType(it) }
                 StringBuilder().apply {
-                    append(p.suggestedName ?: ktype?.let { KotlinNameSuggester.suggestNamesByType(it, validator).firstOrNull() })
-                        ?: KotlinNameSuggester.suggestNameByName("v", validator)
+                    append(p.suggestedName ?: ktype?.let { Fe10KotlinNameSuggester.suggestNamesByType(it, validator).firstOrNull() })
+                        ?: Fe10KotlinNameSuggester.suggestNameByName("v", validator)
                     ktype?.fqName?.toString()?.let { append(": ").append(it) }
                 }
             },
@@ -451,8 +462,8 @@ class KotlinUastElementFactory(project: Project) : UastElementFactory {
                 append("fun foo() { ")
                 append(if (immutable) "val" else "var")
                 append(" ")
-                append(suggestedName ?: ktype?.let { KotlinNameSuggester.suggestNamesByType(it, validator).firstOrNull() })
-                    ?: KotlinNameSuggester.suggestNameByName("v", validator)
+                append(suggestedName ?: ktype?.let { Fe10KotlinNameSuggester.suggestNamesByType(it, validator).firstOrNull() })
+                    ?: Fe10KotlinNameSuggester.suggestNameByName("v", validator)
                 ktype?.fqName?.toString()?.let { append(": ").append(it) }
                 append(" = null")
                 append("}")
@@ -470,7 +481,7 @@ class KotlinUastElementFactory(project: Project) : UastElementFactory {
         type: PsiType?,
         initializer: UExpression,
         immutable: Boolean
-    ): ULocalVariable? {
+    ): ULocalVariable {
         logger<KotlinUastElementFactory>().error("Please switch caller to the version with a context parameter")
         return createLocalVariable(suggestedName, type, initializer, immutable, null)
     }

@@ -92,7 +92,7 @@ public final class IconLoader {
       String modified = path.substring(0, path.length() - 4) + "@" + width + "x" + height + ".svg";
       try {
         Icon foundIcon = findIcon(new URL(modified));
-        if (foundIcon instanceof CachedImageIcon && foundIcon.getIconWidth() == width && foundIcon.getIconHeight() == height) {
+        if (foundIcon instanceof CachedImageIcon && foundIcon.getIconWidth() == JBUIScale.scale(width) && foundIcon.getIconHeight() == JBUIScale.scale(height)) {
           return foundIcon;
         }
       }
@@ -109,6 +109,9 @@ public final class IconLoader {
     }
 
     Icon cachedIcon = icon;
+    if (!(cachedIcon instanceof CachedImageIcon) && cachedIcon instanceof RetrievableIcon) {
+      cachedIcon = ((RetrievableIcon)cachedIcon).retrieveIcon();
+    }
     if (cachedIcon instanceof CachedImageIcon) {
       Icon version = loadCustomVersion((CachedImageIcon)cachedIcon, (int)size, (int)size);
       if (version != null) return version;

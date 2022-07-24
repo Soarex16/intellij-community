@@ -34,7 +34,9 @@ import com.intellij.util.io.HttpRequests
 import org.jetbrains.annotations.Nls
 import org.jetbrains.kotlin.asJava.LightClassUtil
 import org.jetbrains.kotlin.asJava.elements.KtLightDeclaration
+import org.jetbrains.kotlin.idea.base.util.KotlinPlatformUtils
 import org.jetbrains.kotlin.descriptors.*
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.caches.resolve.safeAnalyzeNonSourceRootCode
@@ -53,7 +55,6 @@ import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.idea.references.resolveToDescriptors
 import org.jetbrains.kotlin.idea.resolve.ResolutionFacade
 import org.jetbrains.kotlin.idea.resolve.frontendService
-import org.jetbrains.kotlin.idea.util.isRunningInCidrIde
 import org.jetbrains.kotlin.js.resolve.diagnostics.findPsi
 import org.jetbrains.kotlin.kdoc.psi.api.KDoc
 import org.jetbrains.kotlin.kdoc.psi.impl.KDocSection
@@ -72,12 +73,21 @@ import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameUnsafe
 import org.jetbrains.kotlin.resolve.descriptorUtil.getSuperClassNotAny
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.resolve.source.getPsi
+import org.jetbrains.kotlin.types.KotlinType
+import org.jetbrains.kotlin.types.isDefinitelyNotNullType
 import org.jetbrains.kotlin.utils.addToStdlib.constant
 import org.jetbrains.kotlin.utils.addToStdlib.safeAs
 import java.util.function.Consumer
 
-class HtmlClassifierNamePolicy(val base: ClassifierNamePolicy) : ClassifierNamePolicy {
-    override fun renderClassifier(classifier: ClassifierDescriptor, renderer: DescriptorRenderer): String {
+class HtmlClassifierNamePolicy(val base: ClassifierNamePolicy) : ClassifierNamePolicyEx {
+
+    override fun renderClassifier(classifier: ClassifierDescriptor, renderer: DescriptorRenderer): String =
+        render(classifier, renderer, null)
+
+    override fun renderClassifierWithType(classifier: ClassifierDescriptor, renderer: DescriptorRenderer, type: KotlinType): String =
+        render(classifier, renderer, type)
+
+    private fun render(classifier: ClassifierDescriptor, renderer: DescriptorRenderer, type: KotlinType?): String {
         if (DescriptorUtils.isAnonymousObject(classifier)) {
 
             val supertypes = classifier.typeConstructor.supertypes
@@ -97,7 +107,9 @@ class HtmlClassifierNamePolicy(val base: ClassifierNamePolicy) : ClassifierNameP
             }
         }
 
-        val name = base.renderClassifier(classifier, renderer)
+        val name =
+            base.renderClassifier(classifier, renderer) + (type?.takeIf { it.isDefinitelyNotNullType }?.let { " & Any" } ?: "")
+
         if (classifier.isBoringBuiltinClass())
             return name
         return buildString {
@@ -731,7 +743,10 @@ class KotlinDocumentationProvider : AbstractDocumentationProvider(), ExternalDoc
             element: PsiElement,
             originalElement: PsiElement?
         ): String? {
-            if (isRunningInCidrIde) return null // no Java support in CIDR
+            if (KotlinPlatformUtils.isCidr) {
+                // No Java support in CIDR
+                return null
+            }
 
             val originalInfo = JavaDocumentationProvider().getQuickNavigateInfo(element, originalElement)
             if (originalInfo != null) {

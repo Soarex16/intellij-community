@@ -20,6 +20,7 @@ import com.intellij.ide.util.gotoByName.ModelDiff;
 import com.intellij.ide.util.scopeChooser.ScopeChooserCombo;
 import com.intellij.internal.statistic.service.fus.collectors.UIEventLogger;
 import com.intellij.lang.Language;
+import com.intellij.lang.injection.InjectedLanguageManager;
 import com.intellij.navigation.ItemPresentation;
 import com.intellij.navigation.NavigationItem;
 import com.intellij.openapi.Disposable;
@@ -46,12 +47,12 @@ import com.intellij.openapi.ui.Splitter;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.ui.popup.PopupChooserBuilder;
+import com.intellij.openapi.ui.popup.util.PopupUtil;
 import com.intellij.openapi.util.*;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.HtmlBuilder;
 import com.intellij.openapi.util.text.HtmlChunk;
 import com.intellij.openapi.util.text.StringUtil;
-import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.IdeFocusManager;
 import com.intellij.openapi.wm.ToolWindowId;
 import com.intellij.openapi.wm.ToolWindowManager;
@@ -78,10 +79,9 @@ import com.intellij.util.messages.MessageBusConnection;
 import com.intellij.util.ui.*;
 import com.intellij.xml.util.XmlStringUtil;
 import org.jetbrains.annotations.*;
-import org.jetbrains.concurrency.Promise;
-import org.jetbrains.concurrency.Promises;
 
 import javax.swing.*;
+import javax.swing.border.Border;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.TableColumn;
 import java.awt.*;
@@ -91,6 +91,8 @@ import java.awt.event.MouseEvent;
 import java.beans.PropertyChangeListener;
 import java.util.List;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -105,7 +107,7 @@ import static com.intellij.find.actions.ShowUsagesActionHandler.getSecondInvocat
 import static com.intellij.find.findUsages.FindUsagesHandlerFactory.OperationMode.USAGES_WITH_DEFAULT_OPTIONS;
 import static org.jetbrains.annotations.Nls.Capitalization.Sentence;
 
-public class ShowUsagesAction extends AnAction implements PopupAction, HintManagerImpl.ActionToIgnore, UpdateInBackground {
+public class ShowUsagesAction extends AnAction implements PopupAction, HintManagerImpl.ActionToIgnore {
   public static final String ID = "ShowUsages";
   private static final String DIMENSION_SERVICE_KEY = "ShowUsagesActions.dimensionServiceKey";
   private static final String SPLITTER_SERVICE_KEY = "ShowUsagesActions.splitterServiceKey";
@@ -115,6 +117,11 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
 
   public ShowUsagesAction() {
     setInjectedContext(true);
+  }
+
+  @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.BGT;
   }
 
   private static final class UsageNodeComparator implements Comparator<UsageNode> {
@@ -139,27 +146,7 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
       int weight2 = o2 == myTable.USAGES_FILTERED_OUT_SEPARATOR ? 3 : o2 == myTable.USAGES_OUTSIDE_SCOPE_SEPARATOR ? 2 : o2 == myTable.MORE_USAGES_SEPARATOR ? 1 : 0;
       if (weight1 != weight2) return weight1 - weight2;
 
-      if (o1 instanceof Comparable && o2 instanceof Comparable) {
-        //noinspection unchecked,rawtypes
-        return ((Comparable)o1).compareTo(o2);
-      }
-
-      VirtualFile v1 = UsageListCellRenderer.getVirtualFile(o1);
-      VirtualFile v2 = UsageListCellRenderer.getVirtualFile(o2);
-      String name1 = v1 == null ? null : v1.getName();
-      String name2 = v2 == null ? null : v2.getName();
-      int i = Comparing.compare(name1, name2);
-      if (i != 0) return i;
-      if (Comparing.equal(v1, v2)) {
-        FileEditorLocation loc1 = o1.getLocation();
-        FileEditorLocation loc2 = o2.getLocation();
-        return Comparing.compare(loc1, loc2);
-      }
-      else {
-        String path1 = v1 == null ? null : v1.getPath();
-        String path2 = v2 == null ? null : v2.getPath();
-        return Comparing.compare(path1, path2);
-      }
+      return UsageViewImpl.USAGE_COMPARATOR_BY_FILE_AND_OFFSET.compare(o1, o2);
     }
   }
 
@@ -418,10 +405,7 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
       }
     };
 
-    AbstractPopup popup = createUsagePopup(
-      usageView, table, itemChosenCallback, tableResizer, statusPanel,
-      parameters, actionHandler
-    );
+    AbstractPopup popup = createUsagePopup(usageView, table, itemChosenCallback, statusPanel, parameters, actionHandler, tableResizer);
 
     popup.addResizeListener(() -> manuallyResized.set(true), popup);
 
@@ -586,8 +570,8 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
         long current = System.nanoTime();
         UsageViewStatisticsCollector.logSearchFinished(project,
            actionHandler.getTargetClass(), searchScope, actionHandler.getTargetLanguage(), usages.size(),
-           TimeUnit.MILLISECONDS.convert(current - firstUsageAddedTS.get(), TimeUnit.NANOSECONDS),
-           TimeUnit.MILLISECONDS.convert(current - searchStarted, TimeUnit.NANOSECONDS),
+           TimeUnit.NANOSECONDS.toMillis(current - firstUsageAddedTS.get()),
+           TimeUnit.NANOSECONDS.toMillis(current - searchStarted),
            tooManyResults.get(),
            CodeNavigateSource.ShowUsagesPopup);
       },
@@ -695,10 +679,10 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
   private static AbstractPopup createUsagePopup(@NotNull UsageViewImpl usageView,
                                                 @NotNull JTable table,
                                                 @NotNull Runnable itemChoseCallback,
-                                                @NotNull Consumer<AbstractPopup> tableResizer,
                                                 @NotNull TitlePanel statusPanel,
                                                 @NotNull ShowUsagesParameters parameters,
-                                                @NotNull ShowUsagesActionHandler actionHandler) {
+                                                @NotNull ShowUsagesActionHandler actionHandler,
+                                                @NotNull Consumer<? super AbstractPopup> tableResizer) {
     ApplicationManager.getApplication().assertIsDispatchThread();
     Project project = parameters.project;
     String title = actionHandler.getPresentation().getSearchTargetString();
@@ -713,7 +697,7 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
 
     PropertiesComponent properties = PropertiesComponent.getInstance(project);
     boolean addCodePreview = properties.isValueSet(PREVIEW_PROPERTY_KEY);
-    JBSplitter contentSplitter = null;
+    OnePixelSplitter contentSplitter = null;
     if (addCodePreview) {
       contentSplitter = new OnePixelSplitter(true, .6f);
       contentSplitter.setSplitterProportionKey(SPLITTER_SERVICE_KEY);
@@ -806,14 +790,14 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
     DefaultActionGroup settingsGroup = new DefaultActionGroup(
       new SettingsAction(project, () -> cancel(popupRef.get()), showDialogAndRestartRunnable(parameters, actionHandler)));
     actionToolbar = createActionToolbar(table, settingsGroup);
-    toolbarComponent = actionToolbar.getComponent();
-    toolbarComponent.setOpaque(false);
+    JComponent settingsToolbarComponent = actionToolbar.getComponent();
+    settingsToolbarComponent.setOpaque(false);
 
     if (Registry.is("ide.usages.popup.show.options.string")) {
       JLabel optionsLabel = new JLabel(actionHandler.getPresentation().getOptionsString());
       northPanel.add(optionsLabel, gc.next());
     }
-    northPanel.add(toolbarComponent, gc.next());
+    northPanel.add(settingsToolbarComponent, gc.next());
 
     builder.setNorthComponent(northPanel);
 
@@ -825,7 +809,7 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
 
     if (addCodePreview) {
       SimpleColoredComponent previewTitle = new SimpleColoredComponent();
-      previewTitle.setBorder(JBUI.Borders.empty(3, 8, 4, 8));
+      PopupUtil.applyPreviewTitleInsets(previewTitle);
       UsagePreviewPanel usagePreviewPanel = new UsagePreviewPanel(project, usageView.getPresentation(), false) {
         @Override
         public Dimension getPreferredSize() {
@@ -856,6 +840,11 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
       previewPanel.add(usagePreviewPanel.createComponent(), BorderLayout.CENTER);
       contentSplitter.setSecondComponent(previewPanel);
 
+      if (ExperimentalUI.isNewUI()) {
+        previewPanel.setBackground(JBUI.CurrentTheme.Popup.BACKGROUND);
+        previewTitle.setOpaque(false);
+      }
+
       new DoubleClickListener() {
         @Override
         protected boolean onDoubleClick(@NotNull MouseEvent event) {
@@ -871,7 +860,7 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
       Runnable updatePreviewRunnable = () -> {
         if (popupRef.get().isDisposed()) return;
         int[] selectedRows = table.getSelectedRows();
-        final List<Promise<UsageInfo[]>> selectedUsagePromises = new SmartList<>();
+        final List<CompletableFuture<UsageInfo[]>> selectedUsagePromises = new SmartList<>();
         String file = null;
         for (int row : selectedRows) {
           Object value = table.getModel().getValueAt(row, 0);
@@ -889,10 +878,16 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
         }
 
         String selectedFile = file;
-        Promises.collectResults(selectedUsagePromises).onSuccess(data -> {
-          final List<UsageInfo> selectedUsages = new SmartList<>();
-          for (UsageInfo[] usageInfos : data) {
-            Collections.addAll(selectedUsages, usageInfos);
+        CompletableFuture.allOf(selectedUsagePromises.toArray(new CompletableFuture[0])).thenAccept(__ -> {
+          final List<UsageInfo> selectedUsages = new ArrayList<>(selectedUsagePromises.size());
+          for (CompletableFuture<UsageInfo[]> f : selectedUsagePromises) {
+            try {
+              UsageInfo[] usageInfos = f.get();
+              Collections.addAll(selectedUsages, usageInfos);
+            }
+            catch (InterruptedException | ExecutionException e) {
+              throw new RuntimeException(e);
+            }
           }
 
           usagePreviewPanel.updateLayout(selectedUsages);
@@ -924,6 +919,22 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
       Insets insets = JBUI.CurrentTheme.Popup.headerInsets();
       //noinspection UseDPIAwareBorders
       statusPanel.getLabel().setBorder(new EmptyBorder(insets.top, 0, insets.bottom, JBUI.scale(10)));
+      popup.getTitle().setBorder(JBUI.Borders.customLineBottom(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()));
+      popup.getTitle().setBackground(JBUI.CurrentTheme.ComplexPopup.HEADER_BACKGROUND);
+      // Cannot use opaque: TitlePanel ignores it
+      statusPanel.setBackground(JBUI.CurrentTheme.ComplexPopup.HEADER_BACKGROUND);
+      northPanel.setBackground(JBUI.CurrentTheme.Popup.BACKGROUND);
+      table.setBackground(JBUI.CurrentTheme.Popup.BACKGROUND);
+      northPanel.setBorder(createComplexPopupToolbarBorder());
+      toolbarComponent.setBorder(JBUI.Borders.emptyRight(16));
+      settingsToolbarComponent.setBorder(JBUI.Borders.emptyLeft(12));
+      if (contentSplitter != null) {
+        contentSplitter.setBackground(JBUI.CurrentTheme.Popup.BACKGROUND);
+        contentSplitter.setOpaque(true);
+        Insets textFieldBorderInsets = JBUI.CurrentTheme.ComplexPopup.textFieldBorderInsets();
+        //noinspection UseDPIAwareInsets
+        contentSplitter.setBlindZone(() -> new Insets(0, textFieldBorderInsets.left, 0, textFieldBorderInsets.right));
+      }
     }
 
     // Set title text alignment
@@ -958,6 +969,13 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
     return popup;
   }
 
+  private static Border createComplexPopupToolbarBorder() {
+    Insets textFieldBorderInsets = JBUI.CurrentTheme.ComplexPopup.textFieldBorderInsets();
+    //noinspection UseDPIAwareBorders
+    return JBUI.Borders.compound(new EmptyBorder(0, textFieldBorderInsets.left, 4, textFieldBorderInsets.right),
+                                 JBUI.Borders.customLineBottom(JBUI.CurrentTheme.CustomFrameDecorations.separatorForeground()),
+                                 JBUI.Borders.empty(6, 4));
+  }
 
   @NotNull
   private static ActionToolbar createActionToolbar(@NotNull JTable table, @NotNull DefaultActionGroup group) {
@@ -1035,6 +1053,8 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
         scopeComboBox.putClientProperty("JComboBox.isBorderless", Boolean.TRUE);
       });
     scopeChooserCombo.setButtonVisible(false);
+    scopeChooserCombo.setOpaque(false);
+    scopeChooserCombo.getComboBox().setOpaque(false);
     return scopeChooserCombo;
   }
 
@@ -1072,10 +1092,14 @@ public class ShowUsagesAction extends AnAction implements PopupAction, HintManag
     if (!(usage instanceof UsageInfo2UsageAdapter)) return -1;
     PsiElement element = ((UsageInfo2UsageAdapter)usage).getElement();
     if (element == null) return -1;
+    InjectedLanguageManager injectionManager = InjectedLanguageManager.getInstance(element.getProject());
+    if (injectionManager.isInjectedFragment(element.getContainingFile())) {
+      return injectionManager.injectedToHost(element, element.getTextRange().getStartOffset());
+    }
     return element.getTextRange().getStartOffset();
   }
 
-  private static boolean areAllUsagesInOneLine(@NotNull Usage visibleUsage, @NotNull List<? extends Usage> usages) {
+  static boolean areAllUsagesInOneLine(@NotNull Usage visibleUsage, @NotNull List<? extends Usage> usages) {
     Editor editor = getEditorFor(visibleUsage);
     if (editor == null) return false;
     int offset = getUsageOffset(visibleUsage);

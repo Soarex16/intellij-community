@@ -18,6 +18,7 @@ import java.util.List;
 
 @ApiStatus.Internal
 public final class InternalMavenModuleBuilder extends AbstractMavenModuleBuilder {
+
   @Override
   public ModuleWizardStep[] createWizardSteps(@NotNull WizardContext wizardContext, @NotNull ModulesProvider modulesProvider) {
     return new ModuleWizardStep[]{
@@ -30,7 +31,7 @@ public final class InternalMavenModuleBuilder extends AbstractMavenModuleBuilder
   protected void setupModule(Module module) throws ConfigurationException {
     super.setupModule(module);
     if (MavenProjectImporter.isImportToWorkspaceModelEnabled()
-        || MavenProjectImporter.isImportToTreeStructureEnabled(module.getProject())) {
+        || MavenProjectImporter.isLegacyImportToTreeStructureEnabled(module.getProject())) {
       //this is needed to ensure that dummy module created here will be correctly replaced by real ModuleEntity when import finishes
       ExternalSystemModulePropertyManager.getInstance(module).setMavenized(true);
     }

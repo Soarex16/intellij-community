@@ -1,6 +1,7 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.diagnostic;
 
+import com.intellij.util.SystemProperties;
 import org.apache.log4j.Level;
 import org.apache.log4j.Priority;
 import org.jetbrains.annotations.NotNull;
@@ -30,7 +31,6 @@ public class JulLogger extends Logger {
   @Override
   public void debug(String message) {
     myLogger.log(java.util.logging.Level.FINE, message);
-
   }
 
   @Override
@@ -114,30 +114,57 @@ public class JulLogger extends Logger {
   }
 
   public static void clearHandlers() {
-    java.util.logging.Logger rootLogger = java.util.logging.Logger.getLogger("");
-    clearHandlers(rootLogger);
+    clearHandlers(java.util.logging.Logger.getLogger(""));
   }
 
   public static void clearHandlers(java.util.logging.Logger logger) {
-    Handler[] handlers = logger.getHandlers();
-    for (Handler handler : handlers) {
+    for (Handler handler : logger.getHandlers()) {
       logger.removeHandler(handler);
     }
   }
+
   public static void configureLogFileAndConsole(@NotNull Path logFilePath,
                                                 boolean appendToFile,
                                                 boolean showDateInConsole,
+                                                boolean enableConsoleLogger,
                                                 @Nullable Runnable onRotate) {
-    RollingFileHandler fileHandler = new RollingFileHandler(logFilePath, 10_000_000, 12, appendToFile, onRotate);
+    long limit = 10_000_000;
+    String limitProp = System.getProperty("idea.log.limit");
+    if (limitProp != null) {
+      try {
+        limit = Long.parseLong(limitProp);
+      }
+      catch (NumberFormatException e) {
+        // ignore
+      }
+    }
+
+    int count = 12;
+    String countProp = System.getProperty("idea.log.count");
+    if (countProp != null) {
+      try {
+        count = Integer.parseInt(countProp);
+      }
+      catch (NumberFormatException e) {
+        // ignore
+      }
+    }
+
+    boolean logConsole = SystemProperties.getBooleanProperty("idea.log.console", true);
+
+    java.util.logging.Logger rootLogger = java.util.logging.Logger.getLogger("");
+
+    RollingFileHandler fileHandler = new RollingFileHandler(logFilePath, limit, count, appendToFile, onRotate);
     fileHandler.setLevel(java.util.logging.Level.FINEST);
     IdeaLogRecordFormatter layout = new IdeaLogRecordFormatter();
     fileHandler.setFormatter(layout);
-    java.util.logging.Logger rootLogger = java.util.logging.Logger.getLogger("");
     rootLogger.addHandler(fileHandler);
 
-    ConsoleHandler consoleHandler = new ConsoleHandler();
-    consoleHandler.setFormatter(new IdeaLogRecordFormatter(layout, showDateInConsole));
-    consoleHandler.setLevel(java.util.logging.Level.WARNING);
-    rootLogger.addHandler(consoleHandler);
+    if (enableConsoleLogger && logConsole) {
+      ConsoleHandler consoleHandler = new ConsoleHandler();
+      consoleHandler.setFormatter(new IdeaLogRecordFormatter(layout, showDateInConsole));
+      consoleHandler.setLevel(java.util.logging.Level.WARNING);
+      rootLogger.addHandler(consoleHandler);
+    }
   }
 }

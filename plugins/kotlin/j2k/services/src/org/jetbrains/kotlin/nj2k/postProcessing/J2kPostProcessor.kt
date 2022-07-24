@@ -165,7 +165,6 @@ private val addOrRemoveModifiersProcessingGroup =
             RemoveRedundantVisibilityModifierProcessing(),
             RemoveRedundantModalityModifierProcessing(),
             inspectionBasedProcessing(AddOperatorModifierInspection(), writeActionNeeded = false),
-            RemoveExplicitUnitTypeProcessing()
         )
     )
 
@@ -180,16 +179,6 @@ private val removeRedundantElementsProcessingGroup =
             intentionBasedProcessing(RemoveEmptyClassBodyIntention())
         )
     )
-
-private val removeRedundantSemicolonProcessing =
-    InspectionLikeProcessingGroup(
-        runSingleTime = true,
-        acceptNonKtElements = true,
-        processings = listOf(
-            RedundantSemicolonInspectionBasedProcessing()
-        )
-    )
-
 
 private val inspectionLikePostProcessingGroup =
     InspectionLikeProcessingGroup(
@@ -214,7 +203,6 @@ private val inspectionLikePostProcessingGroup =
         RemoveRedundantNullabilityProcessing(),
         CanBeValInspectionBasedProcessing(),
         inspectionBasedProcessing(FoldInitializerAndIfToElvisInspection(), writeActionNeeded = false),
-        intentionBasedProcessing(RemoveRedundantCallsOfConversionMethodsIntention()),
         inspectionBasedProcessing(JavaMapForEachInspection()),
         intentionBasedProcessing(FoldIfToReturnIntention()) { it.then.isTrivialStatementBody() && it.`else`.isTrivialStatementBody() },
         intentionBasedProcessing(FoldIfToReturnAsymmetricallyIntention()) {
@@ -284,11 +272,10 @@ private val processings: List<NamedPostProcessingGroup> = listOf(
                 RemoveExplicitGetterInspectionBasedProcessing(),
                 RemoveExplicitSetterInspectionBasedProcessing()
             ),
-            ConvertToDataClassProcessing(),
+            MergePropertyWithConstructorParameterProcessing(),
             errorsFixingDiagnosticBasedPostProcessingGroup,
             addOrRemoveModifiersProcessingGroup,
             inspectionLikePostProcessingGroup,
-            removeRedundantSemicolonProcessing,
             removeRedundantElementsProcessingGroup,
             cleaningUpDiagnosticBasedPostProcessingGroup
         )

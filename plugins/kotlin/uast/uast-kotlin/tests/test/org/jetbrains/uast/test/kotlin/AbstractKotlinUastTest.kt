@@ -9,6 +9,7 @@ import com.intellij.openapi.extensions.Extensions
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.testFramework.LightProjectDescriptor
 import com.intellij.util.io.URLUtil
 import org.jetbrains.kotlin.idea.checkers.CompilerTestLanguageVersionSettings
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
@@ -21,7 +22,8 @@ import org.jetbrains.kotlin.cli.jvm.compiler.NoScopeRecordCliBindingTrace
 import org.jetbrains.kotlin.cli.jvm.compiler.TopDownAnalyzerFacadeForJVM
 import org.jetbrains.kotlin.cli.jvm.plugins.PluginCliParser
 import org.jetbrains.kotlin.config.*
-import org.jetbrains.kotlin.idea.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.TestKotlinArtifacts
 import org.jetbrains.kotlin.parsing.KotlinParserDefinition
 import org.jetbrains.kotlin.resolve.jvm.extensions.AnalysisHandlerExtension
 import org.jetbrains.kotlin.idea.test.ConfigurationKind
@@ -112,7 +114,7 @@ abstract class AbstractKotlinUastTest : AbstractUastTest() {
         val appWasNull = ApplicationManager.getApplication() == null
         compilerConfiguration = createKotlinCompilerConfiguration(source)
         compilerConfiguration.put(JVMConfigurationKeys.USE_PSI_CLASS_FILES_READING, true)
-        compilerConfiguration.put(CLIConfigurationKeys.PATH_TO_KOTLIN_COMPILER_JAR, KotlinArtifacts.instance.kotlinCompiler)
+        compilerConfiguration.put(CLIConfigurationKeys.PATH_TO_KOTLIN_COMPILER_JAR, KotlinArtifacts.kotlinCompiler)
 
         val parentDisposable = Disposer.newDisposable()
         val kotlinCoreEnvironment =
@@ -139,7 +141,7 @@ abstract class AbstractKotlinUastTest : AbstractUastTest() {
             val messageCollector = PrintingMessageCollector(System.err, MessageRenderer.PLAIN_RELATIVE_PATHS, true)
             put(CLIConfigurationKeys.MESSAGE_COLLECTOR_KEY, messageCollector)
 
-            put(CommonConfigurationKeys.MODULE_NAME, "test-module")
+            put(CommonConfigurationKeys.MODULE_NAME, LightProjectDescriptor.TEST_MODULE_NAME)
 
             if (sourceFile.extension == KotlinParserDefinition.STD_SCRIPT_SUFFIX) {
                 loadScriptingPlugin(this)
@@ -175,13 +177,12 @@ abstract class AbstractKotlinUastTest : AbstractUastTest() {
 val TEST_KOTLIN_MODEL_DIR = KotlinRoot.DIR.resolve("uast/uast-kotlin/tests/testData")
 
 private fun loadScriptingPlugin(configuration: CompilerConfiguration) {
-    val artifacts = KotlinArtifacts.instance
     val pluginClasspath = listOf(
-        artifacts.kotlinScriptingCompiler,
-        artifacts.kotlinScriptingCompilerImpl,
-        artifacts.kotlinScriptingCommon,
-        artifacts.kotlinScriptingJvm
-    ).map { it.absolutePath }
+        TestKotlinArtifacts.kotlinScriptingCompiler,
+        TestKotlinArtifacts.kotlinScriptingCompilerImpl,
+        TestKotlinArtifacts.kotlinScriptingCommon,
+        TestKotlinArtifacts.kotlinScriptingJvm
+    )
 
-    PluginCliParser.loadPluginsSafe(pluginClasspath, null, configuration)
+    PluginCliParser.loadPluginsSafe(pluginClasspath.map { it.absolutePath }, null, configuration)
 }

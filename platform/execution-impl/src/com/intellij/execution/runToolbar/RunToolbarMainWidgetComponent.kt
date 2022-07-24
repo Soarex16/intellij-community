@@ -4,10 +4,7 @@ package com.intellij.execution.runToolbar
 import com.intellij.execution.runToolbar.data.RWSlotManagerState
 import com.intellij.execution.runToolbar.data.RWStateListener
 import com.intellij.ide.DataManager
-import com.intellij.openapi.actionSystem.ActionGroup
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.actionSystem.DataProvider
-import com.intellij.openapi.actionSystem.Presentation
+import com.intellij.openapi.actionSystem.*
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
@@ -54,6 +51,7 @@ class RunToolbarMainWidgetComponent(val presentation: Presentation, place: Strin
   private val managerStateListener = object : RWStateListener {
     override fun stateChanged(state: RWSlotManagerState) {
       updateState()
+      this@RunToolbarMainWidgetComponent.updateActionsImmediately(true)
     }
   }
 
@@ -85,7 +83,7 @@ class RunToolbarMainWidgetComponent(val presentation: Presentation, place: Strin
   }
 
   override fun traceState(lastIds: List<String>, filteredIds: List<String>, ides: List<String>) {
-    if(logNeeded() && filteredIds != lastIds) LOG.info("MAIN SLOT state: ${state} new filtered: ${filteredIds}} visible: $ides RunToolbar")
+    if(logNeeded()) LOG.info("MAIN SLOT state: ${state} new filtered: ${filteredIds}} visible: $ides RunToolbar")
   }
 
   internal var isOpened = false
@@ -106,7 +104,7 @@ class RunToolbarMainWidgetComponent(val presentation: Presentation, place: Strin
       if(action is RTBarAction) {
         action.checkMainSlotVisibility(it)
       } else true
-    } ?: true
+    } ?: false
   }
 
   override fun addNotify() {
@@ -146,6 +144,9 @@ class RunToolbarMainWidgetComponent(val presentation: Presentation, place: Strin
     val slotManager = RunToolbarSlotManager.getInstance(project)
     DataManager.registerDataProvider(component, DataProvider { key ->
       when {
+        RunToolbarProcessData.RW_SLOT.`is`(key) -> {
+          slotManager.mainSlotData.id
+        }
         RunToolbarData.RUN_TOOLBAR_DATA_KEY.`is`(key) -> {
           slotManager.mainSlotData
         }
@@ -169,12 +170,14 @@ class RunToolbarMainWidgetComponent(val presentation: Presentation, place: Strin
   }
 
   private fun remove(project: Project) {
-    RunToolbarSlotManager.getInstance(project).stateListeners.removeListener(managerStateListener)
+    val slotManager = if (!project.isDisposed) RunToolbarSlotManager.getInstance(project) else null
+    slotManager?.stateListeners?.removeListener(managerStateListener)
+
     counter[project]?.let {
       val value = maxOf(it - 1, 0)
       counter[project] = value
       if (value == 0) {
-        RunToolbarSlotManager.getInstance(project).active = false
+        slotManager?.active = false
         counter.remove(project)
       }
     }

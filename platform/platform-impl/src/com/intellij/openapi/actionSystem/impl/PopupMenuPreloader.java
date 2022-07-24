@@ -7,6 +7,7 @@ import com.intellij.openapi.actionSystem.ActionGroup;
 import com.intellij.openapi.actionSystem.ActionPlaces;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.DataContext;
+import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.ex.util.EditorUtil;
 import com.intellij.openapi.editor.impl.EditorComponentImpl;
@@ -49,6 +50,7 @@ public final class PopupMenuPreloader implements Runnable, HierarchyListener {
                              @NotNull String actionPlace,
                              @Nullable PopupHandler popupHandler,
                              @NotNull Supplier<? extends ActionGroup> groupSupplier) {
+    if (ApplicationManager.getApplication().isUnitTestMode()) return;
     if (component instanceof EditorComponentImpl && ourEditorContextMenuPreloadCount > 4 ||
         component instanceof IdeMenuBar && SwingUtilities.getWindowAncestor(component) instanceof IdeFrame.Child) {
       return;
@@ -108,11 +110,12 @@ public final class PopupMenuPreloader implements Runnable, HierarchyListener {
     }
     Component contextComponent = ActionPlaces.MAIN_MENU.equals(myPlace) ?
                                  IJSwingUtilities.getFocusedComponentInWindowOrSelf(component) : component;
-    DataContext dataContext = Utils.wrapToAsyncDataContext(DataManager.getInstance().getDataContext(contextComponent));
+    DataContext dataContext = Utils.freezeDataContext(
+      Utils.wrapToAsyncDataContext(DataManager.getInstance().getDataContext(contextComponent)), null);
     long start = System.nanoTime();
     myRetries ++;
     CancellablePromise<List<AnAction>> promise = Utils.expandActionGroupAsync(
-      actionGroup, new PresentationFactory(), dataContext, myPlace);
+      actionGroup, new PresentationFactory(), dataContext, myPlace, false, true);
     promise.onSuccess(__ -> dispose(TimeoutUtil.getDurationMillis(start)));
     promise.onError(__ -> {
       int retries = Math.max(1, Registry.intValue("actionSystem.update.actions.max.retries", 20));

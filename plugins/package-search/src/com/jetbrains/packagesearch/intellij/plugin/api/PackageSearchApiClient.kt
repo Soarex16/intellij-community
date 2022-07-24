@@ -1,20 +1,36 @@
+/*******************************************************************************
+ * Copyright 2000-2022 JetBrains s.r.o. and contributors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ ******************************************************************************/
+
 package com.jetbrains.packagesearch.intellij.plugin.api
 
-import com.jetbrains.packagesearch.api.v2.ApiPackagesResponse
-import com.jetbrains.packagesearch.api.v2.ApiRepositoriesResponse
-import com.jetbrains.packagesearch.api.v2.ApiStandardPackage
 import com.jetbrains.packagesearch.intellij.plugin.PackageSearchBundle
 import com.jetbrains.packagesearch.intellij.plugin.PluginEnvironment
 import com.jetbrains.packagesearch.intellij.plugin.api.http.requestString
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.apache.commons.httpclient.util.URIUtil
+import org.jetbrains.packagesearch.api.v2.ApiPackagesResponse
+import org.jetbrains.packagesearch.api.v2.ApiRepositoriesResponse
+import org.jetbrains.packagesearch.api.v2.ApiStandardPackage
 
 internal object ServerURLs {
+
     const val base = "https://package-search.services.jetbrains.com/api"
 }
 
-@Suppress("unused") // Used in SearchClient but the lazy throws off the IDE code analysis
 private val contentType by lazy {
     @Suppress("MayBeConst") // False positive
     object {
@@ -35,6 +51,7 @@ internal class PackageSearchApiClient(
         Pair("JB-IDE-Version", PluginEnvironment.ideVersion)
     )
 ) {
+
     private val maxRequestResultsCount = 25
     private val maxMavenCoordinatesParts = 3
 
@@ -43,7 +60,6 @@ internal class PackageSearchApiClient(
         encodeDefaults = false
     }
 
-    @Suppress("BlockingMethodInNonBlockingContext")
     suspend fun packagesByQuery(
         searchQuery: String,
         onlyStable: Boolean = false,

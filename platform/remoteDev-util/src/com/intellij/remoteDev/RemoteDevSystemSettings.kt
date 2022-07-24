@@ -3,7 +3,9 @@ package com.intellij.remoteDev
 import java.net.URI
 
 object RemoteDevSystemSettings {
-  private val osRegistryConfigProvider = OsRegistryConfigProvider("RemoteDev")
+  const val sectionName = "RemoteDev"
+
+  private val osRegistryConfigProvider = OsRegistryConfigProvider(sectionName)
 
   private const val productCodePlaceholder = "<PRODUCT_CODE>"
   private const val productsInfoUrlKey = "productsInfoUrl"
@@ -12,8 +14,8 @@ object RemoteDevSystemSettings {
   private const val pgpPublicKeyUrlKey = "pgpPublicKeyUrl"
 
   private fun defaultProductsUrl(productCode: String) = "https://data.services.jetbrains.com/products?code=$productCode"
-  private const val defaultClientUrlLocation = "https://cache-redirector.jetbrains.com/download.jetbrains.com/idea/code-with-me/"
-  private const val defaultJreUrlLocation = "https://cache-redirector.jetbrains.com/download.jetbrains.com/idea/jbr/"
+  private const val defaultClientUrlLocation = "https://download.jetbrains.com/idea/code-with-me/"
+  private const val defaultJreUrlLocation = "https://download.jetbrains.com/idea/jbr/"
 
   fun getProductsUrl(productCode: String): OsRegistryConfigProvider.OsRegistrySystemSetting<String> {
     val systemValue = osRegistryConfigProvider.get(productsInfoUrlKey)

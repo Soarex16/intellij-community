@@ -92,6 +92,10 @@
       "mnemonicsBorderInsets": {
         "os.default":"0,8,1,6",
         "os.linux":"0,8,1,8"
+      },
+      "mnemonicsInsets": {
+        "os.default":"0,0,0,8",
+        "os.linux":"0,0,0,8"
       }
     },
 
@@ -525,8 +529,7 @@
     "PopupMenu": {
       "border": "com.intellij.ide.ui.laf.darcula.ui.DarculaPopupMenuBorder",
       "borderInsets": "6,1,6,1",
-      "borderCornerRadiusX": 16,
-      "borderCornerRadiusY": 16,
+      "borderCornerRadius": 8,
       "leftBorderWith": 10,
       "rightBorderWith": 0,
       "translucentBackground": "panel",

@@ -1,6 +1,7 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.vcs.log.data;
 
+import com.intellij.diagnostic.opentelemetry.TraceManager;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ApplicationNamesInfo;
@@ -17,14 +18,17 @@ import com.intellij.openapi.vcs.VcsException;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.vcs.log.*;
+import com.intellij.vcs.log.data.index.IndexDiagnosticRunner;
 import com.intellij.vcs.log.data.index.VcsLogIndex;
 import com.intellij.vcs.log.data.index.VcsLogModifiableIndex;
 import com.intellij.vcs.log.data.index.VcsLogPersistentIndex;
-import com.intellij.vcs.log.impl.FatalErrorHandler;
+import com.intellij.vcs.log.impl.VcsLogErrorHandler;
 import com.intellij.vcs.log.impl.VcsLogCachesInvalidator;
 import com.intellij.vcs.log.impl.VcsLogSharedSettings;
 import com.intellij.vcs.log.util.PersistentUtil;
-import com.intellij.vcs.log.util.StopWatch;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -67,8 +71,9 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
   @NotNull private final VcsLogRefresherImpl myRefresher;
   @NotNull private final List<DataPackChangeListener> myDataPackChangeListeners = ContainerUtil.createLockFreeCopyOnWriteList();
 
-  @NotNull private final FatalErrorHandler myFatalErrorsConsumer;
+  @NotNull private final VcsLogErrorHandler myErrorHandler;
   @NotNull private final VcsLogModifiableIndex myIndex;
+  @NotNull private final IndexDiagnosticRunner myIndexDiagnosticRunner;
 
   @NotNull private final Object myLock = new Object();
   @NotNull private State myState = State.CREATED;
@@ -76,19 +81,19 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
 
   public VcsLogData(@NotNull Project project,
                     @NotNull Map<VirtualFile, VcsLogProvider> logProviders,
-                    @NotNull FatalErrorHandler fatalErrorsConsumer,
+                    @NotNull VcsLogErrorHandler errorHandler,
                     @NotNull Disposable parentDisposable) {
     myProject = project;
     myLogProviders = logProviders;
     myUserRegistry = (VcsUserRegistryImpl)project.getService(VcsUserRegistry.class);
-    myFatalErrorsConsumer = fatalErrorsConsumer;
+    myErrorHandler = errorHandler;
 
     VcsLogProgress progress = new VcsLogProgress(this);
 
     if (VcsLogCachesInvalidator.getInstance().isValid()) {
       myStorage = createStorage();
       if (VcsLogSharedSettings.isIndexSwitchedOn(myProject)) {
-        myIndex = new VcsLogPersistentIndex(myProject, myStorage, progress, logProviders, myFatalErrorsConsumer, this);
+        myIndex = new VcsLogPersistentIndex(myProject, myStorage, progress, logProviders, myErrorHandler, this);
       }
       else {
         LOG.info("Vcs log index is turned off for project " + myProject.getName());
@@ -102,8 +107,8 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
       // so use memory storage (probably leading to out of memory at some point) + no index
 
       LOG.error("Could not delete caches at " + PersistentUtil.LOG_CACHE);
-      myFatalErrorsConsumer.displayFatalErrorMessage(VcsLogBundle.message("vcs.log.fatal.error.message", PersistentUtil.LOG_CACHE,
-                                                                          ApplicationNamesInfo.getInstance().getFullProductName()));
+      myErrorHandler.displayMessage(VcsLogBundle.message("vcs.log.fatal.error.message", PersistentUtil.LOG_CACHE,
+                                                         ApplicationNamesInfo.getInstance().getFullProductName()));
       myStorage = new InMemoryStorage();
       myIndex = new EmptyIndex();
     }
@@ -118,6 +123,9 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
 
     myContainingBranchesGetter = new ContainingBranchesGetter(this, this);
     myUserResolver = new MyVcsLogUserResolver();
+
+    myIndexDiagnosticRunner = new IndexDiagnosticRunner(myIndex, myStorage, myLogProviders.keySet(),
+                                                        this::getDataPack, myDetailsGetter, myErrorHandler, this);
 
     Disposer.register(parentDisposable, this);
     Disposer.register(this, () -> {
@@ -134,7 +142,7 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
   private VcsLogStorage createStorage() {
     VcsLogStorage vcsLogStorage;
     try {
-      vcsLogStorage = new VcsLogStorageImpl(myProject, myLogProviders, myFatalErrorsConsumer, this);
+      vcsLogStorage = new VcsLogStorageImpl(myProject, myLogProviders, myErrorHandler, this);
     }
     catch (IOException e) {
       vcsLogStorage = new InMemoryStorage();
@@ -147,18 +155,20 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
     synchronized (myLock) {
       if (myState.equals(State.CREATED)) {
         myState = State.INITIALIZED;
-        StopWatch stopWatch = StopWatch.start("initialize");
+        Span span = TraceManager.INSTANCE.getTracer("vcs").spanBuilder("initialize").startSpan();
         Task.Backgroundable backgroundable = new Task.Backgroundable(myProject,
                                                                      VcsLogBundle.message("vcs.log.initial.loading.process"),
                                                                      false) {
           @Override
           public void run(@NotNull ProgressIndicator indicator) {
+            Scope scope = span.makeCurrent();
             indicator.setIndeterminate(true);
             resetState();
             readCurrentUser();
             DataPack dataPack = myRefresher.readFirstBlock();
             fireDataPackChangeEvent(dataPack);
-            stopWatch.report();
+            span.end();
+            scope.close();
           }
 
           @Override
@@ -207,7 +217,7 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
   }
 
   private void readCurrentUser() {
-    StopWatch sw = StopWatch.start("readCurrentUser");
+    Span span = TraceManager.INSTANCE.getTracer("vcs").spanBuilder("readCurrentUser").startSpan();
     for (Map.Entry<VirtualFile, VcsLogProvider> entry : myLogProviders.entrySet()) {
       VirtualFile root = entry.getKey();
       try {
@@ -223,7 +233,7 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
         LOG.warn("Couldn't read the username from root " + root, e);
       }
     }
-    sw.report();
+    span.end();
   }
 
   private void fireDataPackChangeEvent(@NotNull final DataPack dataPack) {
@@ -232,6 +242,7 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
         listener.onDataPackChange(dataPack);
       }
     }, o -> myDisposableFlag.isDisposed());
+    myIndexDiagnosticRunner.onDataPackChange();
   }
 
   public void addDataPackChangeListener(@NotNull final DataPackChangeListener listener) {
@@ -299,7 +310,7 @@ public class VcsLogData implements Disposable, VcsLogDataProvider {
 
   /**
    * Makes the log perform refresh for the given root.
-   * This refresh can be optimized, i. e. it can query VCS just for the part of the log.
+   * This refresh can be optimized, i.e. it can query VCS just for the part of the log.
    */
   public void refresh(@NotNull Collection<VirtualFile> roots) {
     initialize();

@@ -17,6 +17,7 @@ package com.siyeh.ig.controlflow;
 
 import com.intellij.codeInsight.daemon.impl.quickfix.ConvertSwitchToIfIntention;
 import com.intellij.codeInsight.daemon.impl.quickfix.UnwrapSwitchLabelFix;
+import com.intellij.codeInspection.CleanupLocalInspectionTool;
 import com.intellij.codeInspection.CommonQuickFixBundle;
 import com.intellij.codeInspection.ProblemDescriptor;
 import com.intellij.codeInspection.SetInspectionOptionFix;
@@ -40,7 +41,7 @@ import javax.swing.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SwitchStatementWithTooFewBranchesInspection extends BaseInspection {
+public class SwitchStatementWithTooFewBranchesInspection extends BaseInspection implements CleanupLocalInspectionTool {
 
   private static final int DEFAULT_BRANCH_LIMIT = 2;
 
@@ -105,7 +106,7 @@ public class SwitchStatementWithTooFewBranchesInspection extends BaseInspection 
 
   private class MinimumSwitchBranchesVisitor extends BaseInspectionVisitor {
     @Override
-    public void visitSwitchExpression(PsiSwitchExpression expression) {
+    public void visitSwitchExpression(@NotNull PsiSwitchExpression expression) {
       Object[] infos = processSwitch(expression);
       if (infos == null) return;
       registerError(expression.getFirstChild(), infos);
@@ -132,6 +133,12 @@ public class SwitchStatementWithTooFewBranchesInspection extends BaseInspection 
       }
       boolean patternSwitch = ContainerUtil.exists(SwitchUtils.getSwitchBranches(block), e -> e instanceof PsiPattern);
       if (patternSwitch && ignorePatternSwitch) return null;
+      if (branchCount > 0 && (patternSwitch || block instanceof PsiSwitchExpression)) {
+        // Absence of 'default' branch makes the pattern-switch or expression-switch exhaustive
+        // skip reporting in this case, as conversion to if-else or ?: will remove the compile-time
+        // exhaustiveness check
+        return null;
+      }
       boolean fixIsAvailable;
       if (block instanceof PsiSwitchStatement) {
         fixIsAvailable = ConvertSwitchToIfIntention.isAvailable((PsiSwitchStatement)block);
@@ -140,7 +147,7 @@ public class SwitchStatementWithTooFewBranchesInspection extends BaseInspection 
         PsiStatement[] statements = body.getStatements();
         if (statements.length == 1 && statements[0] instanceof PsiSwitchLabeledRuleStatement) {
           PsiSwitchLabeledRuleStatement statement = (PsiSwitchLabeledRuleStatement)statements[0];
-          fixIsAvailable = statement.isDefaultCase() && statement.getBody() instanceof PsiExpressionStatement;
+          fixIsAvailable = SwitchUtils.isDefaultLabel(statement) && statement.getBody() instanceof PsiExpressionStatement;
         }
         else {
           fixIsAvailable = false;

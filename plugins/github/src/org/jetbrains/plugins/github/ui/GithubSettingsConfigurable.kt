@@ -2,15 +2,18 @@
 package org.jetbrains.plugins.github.ui
 
 import com.intellij.collaboration.auth.ui.AccountsPanelFactory
+import com.intellij.collaboration.util.ProgressIndicatorsProvider
 import com.intellij.ide.DataManager
 import com.intellij.openapi.components.service
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.dsl.builder.*
 import com.intellij.ui.dsl.gridLayout.HorizontalAlign
 import com.intellij.ui.dsl.gridLayout.VerticalAlign
 import org.jetbrains.plugins.github.GithubIcons
+import org.jetbrains.plugins.github.api.GithubApiRequestExecutor
 import org.jetbrains.plugins.github.authentication.accounts.GHAccountManager
 import org.jetbrains.plugins.github.authentication.accounts.GithubProjectDefaultAccountHolder
 import org.jetbrains.plugins.github.authentication.ui.GHAccountsDetailsLoader
@@ -28,7 +31,15 @@ internal class GithubSettingsConfigurable internal constructor(private val proje
     val settings = GithubSettings.getInstance()
 
     val accountsModel = GHAccountsListModel(project)
-    val detailsLoader = GHAccountsDetailsLoader(accountManager, accountsModel)
+    val indicatorsProvider = ProgressIndicatorsProvider().also {
+      Disposer.register(disposable!!, it)
+    }
+    val detailsLoader = GHAccountsDetailsLoader(indicatorsProvider) {
+      val token = accountsModel.newCredentials.getOrElse(it) {
+        accountManager.findCredentials(it)
+      } ?: return@GHAccountsDetailsLoader null
+      service<GithubApiRequestExecutor.Factory>().create(token)
+    }
 
     val panelFactory = AccountsPanelFactory(accountManager, defaultAccountHolder, accountsModel, detailsLoader, disposable!!)
 

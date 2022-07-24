@@ -1,9 +1,10 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.vcs.log.ui.table;
 
 import com.google.common.primitives.Ints;
 import com.intellij.ide.CopyProvider;
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.DataContext;
 import com.intellij.openapi.actionSystem.DataProvider;
 import com.intellij.openapi.actionSystem.PlatformDataKeys;
@@ -115,7 +116,7 @@ public class VcsLogGraphTable extends TableWithProgress implements DataProvider,
 
   @NotNull private final Collection<VcsLogHighlighter> myHighlighters = new LinkedHashSet<>();
 
-  @Nullable private Selection mySelection = null;
+  @Nullable private SelectionSnapshot mySelectionSnapshot = null;
 
   public VcsLogGraphTable(@NotNull String logId, @NotNull VcsLogData logData,
                           @NotNull VcsLogUiProperties uiProperties, @NotNull VcsLogColorManager colorManager,
@@ -156,7 +157,7 @@ public class VcsLogGraphTable extends TableWithProgress implements DataProvider,
     addMouseMotionListener(myMouseAdapter);
     addMouseListener(myMouseAdapter);
 
-    getSelectionModel().addListSelectionListener(e -> mySelection = null);
+    getSelectionModel().addListSelectionListener(e -> mySelectionSnapshot = null);
     getColumnModel().setColumnSelectionAllowed(false);
 
     ScrollingUtil.installActions(this, false);
@@ -168,6 +169,10 @@ public class VcsLogGraphTable extends TableWithProgress implements DataProvider,
 
   @Override
   public void dispose() {
+  }
+
+  public @NotNull VcsLogCommitSelection getSelection() {
+    return getModel().createSelection(getSelectedRows());
   }
 
   private void initColumnModel() {
@@ -183,7 +188,6 @@ public class VcsLogGraphTable extends TableWithProgress implements DataProvider,
   protected void setErrorEmptyText(@NotNull Throwable error, @NlsContexts.StatusText @NotNull String defaultText) {
     String message = ObjectUtils.chooseNotNull(error.getLocalizedMessage(), defaultText);
     String shortenedMessage = StringUtil.shortenTextWithEllipsis(message, 150, 0, true);
-    //noinspection HardCodedStringLiteral
     getEmptyText().setText(shortenedMessage.replace('\n', ' '));
   }
 
@@ -194,7 +198,7 @@ public class VcsLogGraphTable extends TableWithProgress implements DataProvider,
   public void updateDataPack(@NotNull VisiblePack visiblePack, boolean permGraphChanged) {
     boolean filtersChanged = !getModel().getVisiblePack().getFilters().equals(visiblePack.getFilters());
 
-    Selection previousSelection = getSelection();
+    SelectionSnapshot previousSelection = getSelectionSnapshot();
     getModel().setVisiblePack(visiblePack);
     previousSelection.restore(visiblePack.getVisibleGraph(), true, permGraphChanged);
 
@@ -557,6 +561,11 @@ public class VcsLogGraphTable extends TableWithProgress implements DataProvider,
   }
 
   @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.EDT;
+  }
+
+  @Override
   public boolean isCopyEnabled(@NotNull DataContext dataContext) {
     return getSelectedRowCount() > 0;
   }
@@ -655,7 +664,7 @@ public class VcsLogGraphTable extends TableWithProgress implements DataProvider,
           model.fireTableChanged(evt);
         }
       }
-      mySelection = null;
+      mySelectionSnapshot = null;
     });
   }
 
@@ -675,9 +684,9 @@ public class VcsLogGraphTable extends TableWithProgress implements DataProvider,
   }
 
   @NotNull
-  public Selection getSelection() {
-    if (mySelection == null) mySelection = new Selection(this);
-    return mySelection;
+  SelectionSnapshot getSelectionSnapshot() {
+    if (mySelectionSnapshot == null) mySelectionSnapshot = new SelectionSnapshot(this);
+    return mySelectionSnapshot;
   }
 
   public void handleAnswer(@NotNull GraphAnswer<Integer> answer) {
@@ -777,19 +786,13 @@ public class VcsLogGraphTable extends TableWithProgress implements DataProvider,
     public VcsCommitStyle getBaseStyle(int row, int column, boolean hasFocus, boolean selected) {
       Component dummyRendererComponent = myDummyRenderer.getTableCellRendererComponent(myTable, "", selected, hasFocus, row, column);
       Color background = selected ? getSelectionBackground(myTable.hasFocus()) : getBackground();
-      Color foreground = selected ? getSelectionForeground(myTable.hasFocus()) : dummyRendererComponent.getForeground();
 
-      return createStyle(foreground, background, VcsLogHighlighter.TextStyle.NORMAL);
+      return createStyle(dummyRendererComponent.getForeground(), background, VcsLogHighlighter.TextStyle.NORMAL);
     }
 
     @NotNull
     private static Color getBackground() {
       return ExperimentalUI.isNewUI() ? JBUI.CurrentTheme.ToolWindow.background() : UIUtil.getListBackground();
-    }
-
-    @NotNull
-    private static Color getSelectionForeground(boolean hasFocus) {
-      return hasFocus ? SELECTION_FOREGROUND : SELECTION_FOREGROUND_INACTIVE;
     }
 
     @NotNull
@@ -1070,5 +1073,10 @@ public class VcsLogGraphTable extends TableWithProgress implements DataProvider,
       myInitializedColumns.remove(column);
       onColumnOrderSettingChanged();
     }
+  }
+
+  @NotNull
+  public static Color getSelectionForeground(boolean hasFocus) {
+    return hasFocus ? SELECTION_FOREGROUND : SELECTION_FOREGROUND_INACTIVE;
   }
 }

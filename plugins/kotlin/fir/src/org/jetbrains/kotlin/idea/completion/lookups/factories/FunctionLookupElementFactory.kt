@@ -13,13 +13,14 @@ import com.intellij.refactoring.suggested.endOffset
 import org.jetbrains.kotlin.analysis.api.KtAnalysisSession
 import org.jetbrains.kotlin.analysis.api.symbols.KtFunctionSymbol
 import org.jetbrains.kotlin.analysis.api.types.KtSubstitutor
+import org.jetbrains.kotlin.idea.base.analysis.api.utils.shortenReferencesInRange
+import org.jetbrains.kotlin.idea.base.analysis.withRootPrefixIfNeeded
 import org.jetbrains.kotlin.idea.completion.contributors.helpers.insertSymbol
 import org.jetbrains.kotlin.idea.completion.lookups.*
 import org.jetbrains.kotlin.idea.completion.lookups.CompletionShortNamesRenderer.TYPE_RENDERING_OPTIONS
 import org.jetbrains.kotlin.idea.completion.lookups.CompletionShortNamesRenderer.renderFunctionParameters
 import org.jetbrains.kotlin.idea.completion.lookups.TailTextProvider.getTailText
 import org.jetbrains.kotlin.idea.completion.lookups.TailTextProvider.insertLambdaBraces
-import org.jetbrains.kotlin.idea.core.withRootPrefixIfNeeded
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.psi.KtFile
@@ -41,7 +42,7 @@ internal class FunctionLookupElementFactory {
         )
 
         val builder = LookupElementBuilder.create(lookupObject, symbol.name.asString())
-            .withTypeText(substitutor.substituteOrSelf(symbol.returnType).render(TYPE_RENDERING_OPTIONS))
+            .withTypeText(substitutor.substitute(symbol.returnType).render(TYPE_RENDERING_OPTIONS))
             .withTailText(getTailText(symbol, substitutor))
             .let { withSymbolInfo(symbol, it) }
 
@@ -191,7 +192,7 @@ internal object FunctionInsertionHandler : QuotedNamesAwareInsertionHandler() {
             addArguments(context, element, lookupObject)
             context.commitDocument()
 
-            shortenReferencesForFirCompletion(targetFile, TextRange(context.startOffset, context.tailOffset))
+            shortenReferencesInRange(targetFile, TextRange(context.startOffset, context.tailOffset))
         } else {
             addArguments(context, element, lookupObject)
             context.commitDocument()

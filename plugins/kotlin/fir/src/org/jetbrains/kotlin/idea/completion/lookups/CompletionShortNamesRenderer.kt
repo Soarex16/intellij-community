@@ -12,9 +12,7 @@ import org.jetbrains.kotlin.analysis.api.types.KtSubstitutor
 
 internal object CompletionShortNamesRenderer {
     fun KtAnalysisSession.renderFunctionParameters(function: KtFunctionSymbol, substitutor: KtSubstitutor): String {
-        val receiver = renderReceiver(function, substitutor)
-        val parameters = function.valueParameters.joinToString(", ", "(", ")") { renderFunctionParameter(it, substitutor) }
-        return receiver + parameters
+        return function.valueParameters.joinToString(", ", "(", ")") { renderFunctionParameter(it, substitutor) }
     }
 
     fun KtAnalysisSession.renderVariable(function: KtVariableLikeSymbol, substitutor: KtSubstitutor): String {
@@ -22,13 +20,13 @@ internal object CompletionShortNamesRenderer {
     }
 
     private fun KtAnalysisSession.renderReceiver(symbol: KtCallableSymbol, substitutor: KtSubstitutor): String {
-        val receiverType = symbol.receiverType?.let { substitutor.substituteOrSelf(it) } ?: return ""
+        val receiverType = symbol.receiverType?.let { substitutor.substitute(it) } ?: return ""
         return receiverType.render(TYPE_RENDERING_OPTIONS) + "."
     }
 
     private fun KtAnalysisSession.renderFunctionParameter(param: KtValueParameterSymbol, substitutor: KtSubstitutor): String =
         "${if (param.isVararg) "vararg " else ""}${param.name.asString()}: ${
-            substitutor.substituteOrSelf(param.returnType).render(TYPE_RENDERING_OPTIONS)
+            substitutor.substitute(param.returnType).render(TYPE_RENDERING_OPTIONS)
         }"
 
     val TYPE_RENDERING_OPTIONS = KtTypeRendererOptions.SHORT_NAMES

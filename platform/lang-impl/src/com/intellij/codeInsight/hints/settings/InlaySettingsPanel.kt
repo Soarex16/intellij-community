@@ -172,7 +172,9 @@ class InlaySettingsPanel(val project: Project): JPanel(BorderLayout()) {
         override fun setChecked(checked: Boolean) {
           super.setChecked(checked)
           it.value = checked
-          model.onChangeListener?.settingsChanged()
+          if (PREVIEW_KEY.get(currentEditor) == this) {
+            model.onChangeListener?.settingsChanged()
+          }
         }
       }
       node.add(caseNode)
@@ -187,17 +189,34 @@ class InlaySettingsPanel(val project: Project): JPanel(BorderLayout()) {
     rightPanel.removeAll()
     currentEditor = null
     when (val item = treeNode?.userObject) {
+      is InlayGroup -> {
+        addDescription(item.description)
+      }
       is InlayGroupSettingProvider -> {
+        addDescription(item.group.description)
         rightPanel.add(item.component)
       }
+      is Language -> {
+        configureLanguageNode(treeNode)?.let {
+          configurePreview((treeNode.firstChild as CheckedTreeNode).userObject as InlayProviderSettingsModel, treeNode)
+        }
+      }
       is InlayProviderSettingsModel -> {
+        if (item.isMergedNode && item.description == null) {
+          configureLanguageNode(treeNode)
+        }
         if (item.description != null) {
           addDescription(item.description)
         }
-        item.component.border = JBUI.Borders.empty()
-        rightPanel.add(item.component)
+        if (!(item.component is JPanel) || item.component.componentCount > 0) {
+          item.component.border = JBUI.Borders.empty()
+          rightPanel.add(item.component)
+        }
         if (treeNode.isLeaf) {
-          addPreview(item.getCasePreview(null) ?: item.previewText, item, null)
+          addPreview(item.getCasePreview(null) ?: item.previewText, item, null, treeNode)
+        }
+        else if (item.isMergedNode) {
+          configurePreview(item, treeNode)
         }
       }
       is ImmediateConfigurable.Case -> {
@@ -205,7 +224,7 @@ class InlaySettingsPanel(val project: Project): JPanel(BorderLayout()) {
         val model = parent.userObject as InlayProviderSettingsModel
         addDescription(model.getCaseDescription(item))
         val preview = model.getCasePreview(item)
-        addPreview(preview, model, item)
+        addPreview(preview, model, item, treeNode)
       }
     }
     if (treeNode != null) {
@@ -215,11 +234,36 @@ class InlaySettingsPanel(val project: Project): JPanel(BorderLayout()) {
     rightPanel.repaint()
   }
 
-  private fun addPreview(previewText: String?, model: InlayProviderSettingsModel, case: ImmediateConfigurable.Case?) {
+  private fun configurePreview(item: InlayProviderSettingsModel, treeNode: CheckedTreeNode) {
+    val previewText = item.getCasePreview(null) ?: item.previewText
+    if (previewText != null) {
+      addPreview(previewText, item, null, treeNode)
+    }
+    else {
+      for (case in item.cases) {
+        val preview = item.getCasePreview(case)
+        if (preview != null) {
+          addPreview(preview, item, case, treeNode)
+          break
+        }
+      }
+    }
+  }
+
+  private fun configureLanguageNode(treeNode: CheckedTreeNode): String? {
+    val description = ((treeNode.parent as CheckedTreeNode).userObject as InlayGroup).description
+    addDescription(description)
+    return description
+  }
+
+  private fun addPreview(previewText: String?,
+                         model: InlayProviderSettingsModel,
+                         case: ImmediateConfigurable.Case?,
+                         treeNode: CheckedTreeNode) {
     if (previewText != null) {
       val editorTextField = createEditor(model.getCasePreviewLanguage(null) ?: model.language, project) { editor ->
         currentEditor = editor
-        PREVIEW_KEY.set(editor, "")
+        PREVIEW_KEY.set(editor, treeNode)
         CASE_KEY.set(editor, case)
         updateHints(editor, model)
       }

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.structuralsearch.plugin.ui;
 
 import com.intellij.core.CoreBundle;
@@ -56,6 +56,7 @@ public abstract class Configuration implements JDOMExternalizable {
   private @NonNls String refName;
 
   private transient String myCurrentVariableName;
+  private String shortName;
 
   public Configuration() {
     name = "";
@@ -92,7 +93,7 @@ public abstract class Configuration implements JDOMExternalizable {
 
   public void setName(@NotNull @Nls(capitalization = Nls.Capitalization.Sentence) String value) {
     if (uuid == null) {
-      uuid = UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8));
+      getUuid();
     }
     name = value;
   }
@@ -130,8 +131,13 @@ public abstract class Configuration implements JDOMExternalizable {
     return uuid == null ? (uuid = UUID.nameUUIDFromBytes(name.getBytes(StandardCharsets.UTF_8))) : uuid;
   }
 
+  public String getShortName() {
+    return shortName == null ? (shortName = getUuid().toString()) : shortName;
+  }
+
   public void setUuid(@Nullable UUID uuid) {
     this.uuid = uuid;
+    this.shortName = uuid != null ? uuid.toString() : null;
   }
 
   public @NlsSafe @Nullable String getDescription() {

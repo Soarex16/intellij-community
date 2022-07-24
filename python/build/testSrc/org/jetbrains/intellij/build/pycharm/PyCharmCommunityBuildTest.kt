@@ -3,16 +3,17 @@ package org.jetbrains.intellij.build.pycharm
 
 import com.intellij.openapi.application.PathManager
 import org.jetbrains.intellij.build.BuildOptions
+import org.jetbrains.intellij.build.dependencies.BuildDependenciesCommunityRoot
 import org.jetbrains.intellij.build.testFramework.runTestBuild
 import org.junit.Test
 
 class PyCharmCommunityBuildTest {
   @Test
   fun testBuild() {
-    val homePath = PathManager.getHomePathFor(javaClass)!!
-    val communityHomePath = "$homePath/community"
+    val homePath = PathManager.getHomeDirFor(javaClass)!!
+    val communityHomePath = BuildDependenciesCommunityRoot(homePath.resolve("community"))
     runTestBuild(
-      homePath = communityHomePath,
+      homePath = communityHomePath.communityRoot,
       communityHomePath = communityHomePath,
       productProperties = PyCharmCommunityProperties(communityHomePath),
     ) {

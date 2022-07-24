@@ -1,5 +1,4 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("TestOnlyProblems") // KTIJ-19938
 
 package com.intellij.lang.documentation.ide.impl
 
@@ -177,6 +176,14 @@ internal class DocumentationBrowser private constructor(
       val browser = DocumentationBrowser(project, DocumentationPage(request = initialRequest))
       browser.reload() // init loading
       return browser
+    }
+
+    /**
+     * @return `true` if a loaded page has some content,
+     * or `false` if a loaded page is empty
+     */
+    suspend fun DocumentationBrowser.waitForContent(): Boolean {
+      return pageFlow.first().waitForContent()
     }
   }
 }

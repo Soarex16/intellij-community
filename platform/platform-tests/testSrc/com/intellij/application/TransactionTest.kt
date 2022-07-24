@@ -7,6 +7,7 @@ import com.intellij.openapi.diagnostic.DefaultLogger
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.util.ProgressIndicatorBase
 import com.intellij.openapi.progress.util.ProgressWindow
+import com.intellij.openapi.project.RootsChangeRescanningInfo
 import com.intellij.openapi.roots.ex.ProjectRootManagerEx
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.EmptyRunnable
@@ -45,10 +46,17 @@ class TransactionTest : LightPlatformTestCase() {
   }
 
   override fun tearDown() {
-    PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
-    log.clear()
-    LaterInvocator.leaveAllModals()
-    super.tearDown()
+    try {
+      PlatformTestUtil.dispatchAllInvocationEventsInIdeEventQueue()
+      log.clear()
+      LaterInvocator.leaveAllModals()
+    }
+    catch (e: Throwable) {
+      addSuppressedException(e)
+    }
+    finally {
+      super.tearDown()
+    }
   }
 
   @Test
@@ -96,7 +104,7 @@ class TransactionTest : LightPlatformTestCase() {
   }
 
   private fun makeRootsChange() {
-    ProjectRootManagerEx.getInstanceEx(project).makeRootsChange(EmptyRunnable.getInstance(), false, true)
+    ProjectRootManagerEx.getInstanceEx(project).makeRootsChange(EmptyRunnable.getInstance(), RootsChangeRescanningInfo.NO_RESCAN_NEEDED)
   }
 
   fun `test parent disposable`() {

@@ -3,6 +3,7 @@ package com.intellij.codeInspection;
 
 import com.intellij.codeInsight.Nullability;
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightingFeature;
+import com.intellij.codeInspection.compiler.JavacQuirksInspectionVisitor;
 import com.intellij.codeInspection.dataFlow.NullabilityUtil;
 import com.intellij.openapi.diagnostic.Attachment;
 import com.intellij.openapi.diagnostic.Logger;
@@ -63,7 +64,7 @@ public class LambdaCanBeMethodReferenceInspection extends AbstractBaseJavaLocalI
     }
     return new JavaElementVisitor() {
       @Override
-      public void visitLambdaExpression(PsiLambdaExpression expression) {
+      public void visitLambdaExpression(@NotNull PsiLambdaExpression expression) {
         super.visitLambdaExpression(expression);
         final PsiElement body = expression.getBody();
         MethodReferenceCandidate methodRefCandidate = extractMethodReferenceCandidateExpression(body);
@@ -402,6 +403,10 @@ public class LambdaCanBeMethodReferenceInspection extends AbstractBaseJavaLocalI
         return null;
       }
 
+      if (JavacQuirksInspectionVisitor.getInaccessibleMethodReferenceClass(element, psiMethod) != null) {
+        return null;
+      }
+
       final PsiReferenceExpression methodExpression = methodCall.getMethodExpression();
       final String qualifierByMethodCall = getQualifierTextByMethodCall(methodCall, functionalInterfaceType, parameters, psiMethod, result.getSubstitutor());
       if (qualifierByMethodCall != null) {
@@ -451,7 +456,7 @@ public class LambdaCanBeMethodReferenceInspection extends AbstractBaseJavaLocalI
       PsiTypeCastExpression castExpression = (PsiTypeCastExpression)element;
       if(isSoleParameter(parameters, castExpression.getOperand())) {
         PsiTypeElement type = castExpression.getCastType();
-        if (type != null) {
+        if (type != null && !PsiUtilCore.hasErrorElementChild(type)) {
           return type.getText() + ".class::cast";
         }
       }

@@ -16,7 +16,7 @@ import com.intellij.testFramework.fixtures.CodeInsightTestFixture
 import junit.framework.TestCase
 import org.intellij.lang.annotations.Language
 import org.jetbrains.kotlin.asJava.toLightElements
-import org.jetbrains.kotlin.idea.search.allScope
+import org.jetbrains.kotlin.idea.base.util.allScope
 import org.jetbrains.kotlin.idea.test.KotlinWithJdkAndRuntimeLightProjectDescriptor
 import org.jetbrains.kotlin.psi.KtModifierListOwner
 import org.jetbrains.kotlin.psi.KtNamedFunction
@@ -33,7 +33,7 @@ class CommonIntentionActionsTest : BasePlatformTestCase() {
         private val modifiers: Collection<JvmModifier> = emptyList(),
         private val returnType: ExpectedTypes = emptyList(),
         private val annotations: Collection<AnnotationRequest> = emptyList(),
-        @Suppress("MissingRecentApi") parameters: List<ExpectedParameter> = emptyList(),
+        parameters: List<ExpectedParameter> = emptyList(),
         private val targetSubstitutor: JvmSubstitutor = PsiJvmSubstitutor(project, PsiSubstitutor.EMPTY)
     ) : CreateMethodRequest {
         private val expectedParameters = parameters
@@ -46,7 +46,6 @@ class CommonIntentionActionsTest : BasePlatformTestCase() {
 
         override fun getAnnotations() = annotations
 
-        @Suppress("MissingRecentApi")
         override fun getExpectedParameters(): List<ExpectedParameter> = expectedParameters
 
         override fun getReturnType() = returnType
@@ -1194,7 +1193,6 @@ class CommonIntentionActionsTest : BasePlatformTestCase() {
 
 internal inline fun <reified T : JvmElement> CodeInsightTestFixture.atCaret() = elementAtCaret.toUElement() as T
 
-@Suppress("MissingRecentApi")
 private class TestModifierRequest(private val _modifier: JvmModifier, private val shouldBePresent: Boolean) : ChangeModifierRequest {
     override fun shouldBePresent(): Boolean = shouldBePresent
     override fun isValid(): Boolean = true

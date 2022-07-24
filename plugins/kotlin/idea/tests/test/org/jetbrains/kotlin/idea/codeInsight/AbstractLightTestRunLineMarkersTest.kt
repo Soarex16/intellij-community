@@ -1,9 +1,9 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.codeInsight
 
 import com.intellij.rt.execution.junit.FileComparisonFailure
 import com.intellij.testFramework.ExtensionTestUtil
-import org.jetbrains.kotlin.idea.testIntegration.framework.KotlinDelegatingTestFramework
+import org.jetbrains.kotlin.idea.runConfigurations.jvm.KotlinDelegatingTestFramework
 import org.jetbrains.kotlin.idea.testIntegration.framework.KotlinTestFramework
 
 abstract class AbstractLightTestRunLineMarkersTest: AbstractLineMarkersTest() {
@@ -18,7 +18,7 @@ abstract class AbstractLightTestRunLineMarkersTest: AbstractLineMarkersTest() {
             } catch (e: FileComparisonFailure) {
                 val lines = e.actual.split("\n")
                 e.message?.let { msg ->
-                    val regex = "^${Regex.escapeReplacement(testDataFile().name)}: missing \\((\\d+):".toRegex()
+                    val regex = "^${Regex.escapeReplacement(dataFile().name)}: missing \\((\\d+):".toRegex()
                     regex.findAll(msg).toList().takeIf { it.isNotEmpty() }?.forEach {
                         val lineNo = it.groupValues[1].toInt()
                         val line = lines[lineNo - 1]

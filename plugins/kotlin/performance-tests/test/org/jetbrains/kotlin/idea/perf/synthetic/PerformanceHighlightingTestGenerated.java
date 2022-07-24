@@ -81,6 +81,11 @@ public abstract class PerformanceHighlightingTestGenerated extends AbstractPerfo
             runTest("../idea/tests/testData/highlighter/deprecated/Operation.kt");
         }
 
+        @TestMetadata("OperationSuppressedDeprecation.kt")
+        public void testOperationSuppressedDeprecation() throws Exception {
+            runTest("../idea/tests/testData/highlighter/deprecated/OperationSuppressedDeprecation.kt");
+        }
+
         @TestMetadata("Property.kt")
         public void testProperty() throws Exception {
             runTest("../idea/tests/testData/highlighter/deprecated/Property.kt");
@@ -104,6 +109,49 @@ public abstract class PerformanceHighlightingTestGenerated extends AbstractPerfo
         @TestMetadata("Trait.kt")
         public void testTrait() throws Exception {
             runTest("../idea/tests/testData/highlighter/deprecated/Trait.kt");
+        }
+    }
+
+    @RunWith(JUnit3RunnerWithInners.class)
+    @TestMetadata("../idea/tests/testData/highlighter/suppress")
+    public static class Suppress extends AbstractPerformanceHighlightingTest {
+        private void runTest(String testDataFilePath) throws Exception {
+            KotlinTestUtils.runTest(this::doPerfTest, this, testDataFilePath);
+        }
+
+        @TestMetadata("AllSuppressed.kt")
+        public void testAllSuppressed() throws Exception {
+            runTest("../idea/tests/testData/highlighter/suppress/AllSuppressed.kt");
+        }
+
+        @TestMetadata("Class.kt")
+        public void testClass() throws Exception {
+            runTest("../idea/tests/testData/highlighter/suppress/Class.kt");
+        }
+
+        @TestMetadata("Diagnosics.kt")
+        public void testDiagnosics() throws Exception {
+            runTest("../idea/tests/testData/highlighter/suppress/Diagnosics.kt");
+        }
+
+        @TestMetadata("File.kt")
+        public void testFile() throws Exception {
+            runTest("../idea/tests/testData/highlighter/suppress/File.kt");
+        }
+
+        @TestMetadata("Functions.kt")
+        public void testFunctions() throws Exception {
+            runTest("../idea/tests/testData/highlighter/suppress/Functions.kt");
+        }
+
+        @TestMetadata("Parameter.kt")
+        public void testParameter() throws Exception {
+            runTest("../idea/tests/testData/highlighter/suppress/Parameter.kt");
+        }
+
+        @TestMetadata("Unused.kt")
+        public void testUnused() throws Exception {
+            runTest("../idea/tests/testData/highlighter/suppress/Unused.kt");
         }
     }
 

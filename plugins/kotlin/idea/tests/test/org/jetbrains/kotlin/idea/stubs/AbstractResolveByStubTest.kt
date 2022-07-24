@@ -6,7 +6,7 @@ import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.testFramework.IdeaTestUtil
 import com.intellij.testFramework.LightProjectDescriptor
-import org.jetbrains.kotlin.idea.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts
 import org.jetbrains.kotlin.idea.caches.resolve.findModuleDescriptor
 import org.jetbrains.kotlin.idea.test.*
 import org.jetbrains.kotlin.idea.test.util.DescriptorValidator.ValidationVisitor.errorTypesForbidden
@@ -19,7 +19,7 @@ import java.io.File
 
 abstract class AbstractResolveByStubTest : KotlinLightCodeInsightFixtureTestCase() {
     protected fun doTest(testFileName: String) {
-        if (InTextDirectivesUtils.isDirectiveDefined(testDataFile().readText(), "NO_CHECK_SOURCE_VS_BINARY")) {
+        if (InTextDirectivesUtils.isDirectiveDefined(dataFile().readText(), "NO_CHECK_SOURCE_VS_BINARY")) {
             // If NO_CHECK_SOURCE_VS_BINARY is enabled, source vs binary descriptors differ, which means that we should not run this test:
             // it would compare descriptors resolved from sources (by stubs) with .txt, which describes binary descriptors
             return
@@ -29,13 +29,13 @@ abstract class AbstractResolveByStubTest : KotlinLightCodeInsightFixtureTestCase
         myFixture.configureByFile(fileName)
         val shouldFail = getTestName(false) == "ClassWithConstVal"
         AstAccessControl.testWithControlledAccessToAst(shouldFail, project, testRootDisposable) {
-            performTest(testPath())
+            performTest(dataFilePath(fileName()))
         }
     }
 
     // In compiler repo for these test MOCK_JDK is used which is currently 1.6 JDK
     override fun getProjectDescriptor(): LightProjectDescriptor = object : KotlinWithJdkAndRuntimeLightProjectDescriptor(
-        listOf(KotlinArtifacts.instance.kotlinStdlib), listOf(KotlinArtifacts.instance.kotlinStdlibSources)
+        listOf(KotlinArtifacts.kotlinStdlib), listOf(KotlinArtifacts.kotlinStdlibSources)
     ) {
         override fun getSdk(): Sdk = IdeaTestUtil.getMockJdk16()
     }

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package training.project
 
 import com.intellij.ide.GeneralSettings
@@ -8,8 +8,6 @@ import com.intellij.ide.ReopenProjectAction
 import com.intellij.ide.impl.OpenProjectTask
 import com.intellij.ide.impl.TrustedPaths
 import com.intellij.ide.util.PropertiesComponent
-import com.intellij.notification.Notification
-import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.*
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
@@ -32,7 +30,6 @@ import training.lang.LangManager
 import training.lang.LangSupport
 import training.learn.LearnBundle
 import training.util.featureTrainerVersion
-import training.util.iftNotificationGroup
 import java.io.File
 import java.io.FileFilter
 import java.io.IOException
@@ -75,7 +72,7 @@ object ProjectUtils {
       else {
         val path = langSupport.getLearningProjectPath(dest).toAbsolutePath().toString()
         LangManager.getInstance().setLearningProjectPath(langSupport, path)
-        openOrImportLearningProject(dest, OpenProjectTask(projectToClose = projectToClose), langSupport, postInitCallback)
+        openOrImportLearningProject(dest, OpenProjectTask { this.projectToClose = projectToClose }, langSupport, postInitCallback)
       }
     }
   }
@@ -171,6 +168,9 @@ object ProjectUtils {
       NOTIFICATIONS_SILENT_MODE.set(it, true)
     })
     invokeLater {
+      // Set it every time when project opens to ensure that it will be trusted in case of restoring default settings
+      TrustedPaths.getInstance().setProjectPathTrusted(contentRoot, true)
+
       val confirmOpenNewProject = GeneralSettings.getInstance().confirmOpenNewProject
       if (confirmOpenNewProject == GeneralSettings.OPEN_PROJECT_SAME_WINDOW_ATTACH) {
         GeneralSettings.getInstance().confirmOpenNewProject = GeneralSettings.OPEN_PROJECT_SAME_WINDOW
@@ -208,7 +208,6 @@ object ProjectUtils {
     }
     val path = langSupport.getLearningProjectPath(targetDirectory)
     LangManager.getInstance().setLearningProjectPath(langSupport, path.toAbsolutePath().toString())
-    TrustedPaths.getInstance().setProjectPathTrusted(path, true)
     return targetDirectory
   }
 
@@ -280,17 +279,8 @@ object ProjectUtils {
     } ?: error("Failed to find content entry for file: ${sourcesRoot.name}")
 
     contentEntry.addSourceFolder(sourcesRoot, false)
-    runWriteAction {
-      rootsModel.commit()
-      project.save()
-    }
-  }
-
-  fun createSdkDownloadingNotification(): Notification {
-    return iftNotificationGroup.createNotification(LearnBundle.message("learn.project.initializing.jdk.download.notification.title"),
-                                                LearnBundle.message("learn.project.initializing.jdk.download.notification.message",
-                                                                    ApplicationNamesInfo.getInstance().fullProductName),
-                                                NotificationType.INFORMATION)
+    runWriteAction(rootsModel::commit)
+    project.save()
   }
 
   fun closeAllEditorsInProject(project: Project) {

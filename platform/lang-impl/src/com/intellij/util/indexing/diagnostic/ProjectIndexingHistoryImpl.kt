@@ -19,7 +19,7 @@ import kotlin.reflect.KMutableProperty1
 @ApiStatus.Internal
 data class ProjectIndexingHistoryImpl(override val project: Project,
                                       override val indexingReason: String?,
-                                      private val wasFullIndexing: Boolean) : ProjectIndexingHistory {
+                                      private val scanningType: ScanningType) : ProjectIndexingHistory {
   private companion object {
     val indexingSessionIdSequencer = AtomicLong()
     val log = thisLogger()
@@ -31,7 +31,7 @@ data class ProjectIndexingHistoryImpl(override val project: Project,
 
   override val times: IndexingTimes by ::timesImpl
 
-  private val timesImpl = IndexingTimesImpl(indexingReason = indexingReason, wasFullIndexing = wasFullIndexing,
+  private val timesImpl = IndexingTimesImpl(indexingReason = indexingReason, scanningType = scanningType,
                                             updatingStart = ZonedDateTime.now(ZoneOffset.UTC), totalUpdatingTime = System.nanoTime())
 
   override val scanningStatistics = arrayListOf<JsonScanningStatistics>()
@@ -79,7 +79,7 @@ data class ProjectIndexingHistoryImpl(override val project: Project,
           totalNumberOfFiles = 0,
           totalNumberOfFilesIndexedByExtensions = 0,
           totalBytes = 0,
-          totalIndexingTimeInAllThreads = 0,
+          totalIndexValueChangerEvaluationTimeInAllThreads = 0,
           snapshotInputMappingStats = SnapshotInputMappingStatsImpl(
             requests = 0,
             misses = 0
@@ -89,7 +89,7 @@ data class ProjectIndexingHistoryImpl(override val project: Project,
       totalStats.totalNumberOfFiles += stats.numberOfFiles
       totalStats.totalNumberOfFilesIndexedByExtensions += stats.numberOfFilesIndexedByExtensions
       totalStats.totalBytes += stats.totalBytes
-      totalStats.totalIndexingTimeInAllThreads += stats.indexingTime
+      totalStats.totalIndexValueChangerEvaluationTimeInAllThreads += stats.evaluateIndexValueChangerTime
     }
   }
 
@@ -100,7 +100,7 @@ data class ProjectIndexingHistoryImpl(override val project: Project,
           totalNumberOfFiles = 0,
           totalNumberOfFilesIndexedByExtensions = 0,
           totalBytes = 0,
-          totalIndexingTimeInAllThreads = 0,
+          totalIndexValueChangerEvaluationTimeInAllThreads = 0,
           snapshotInputMappingStats = SnapshotInputMappingStatsImpl(requests = 0, misses = 0))
       }
       totalStats.snapshotInputMappingStats.requests += mappingsStatistic.totalRequests
@@ -318,13 +318,13 @@ data class ProjectIndexingHistoryImpl(override val project: Project,
     override var totalNumberOfFiles: Int,
     override var totalNumberOfFilesIndexedByExtensions: Int,
     override var totalBytes: BytesNumber,
-    override var totalIndexingTimeInAllThreads: TimeNano,
+    override var totalIndexValueChangerEvaluationTimeInAllThreads: TimeNano,
     override var snapshotInputMappingStats: SnapshotInputMappingStatsImpl
   ): StatsPerIndexer
 
   data class IndexingTimesImpl(
     override val indexingReason: String?,
-    override val wasFullIndexing: Boolean,
+    override val scanningType: ScanningType,
     override val updatingStart: ZonedDateTime,
     override var totalUpdatingTime: TimeNano,
     override var updatingEnd: ZonedDateTime = updatingStart,

@@ -17,7 +17,8 @@ import com.sun.jdi.Location
 import org.jetbrains.kotlin.idea.debugger.coroutine.KotlinDebuggerCoroutinesBundle
 import org.jetbrains.kotlin.idea.debugger.coroutine.KotlinVariableNameFinder
 import org.jetbrains.kotlin.idea.debugger.coroutine.proxy.safeCoroutineStackFrameProxy
-import org.jetbrains.kotlin.idea.debugger.safeLocation
+import org.jetbrains.kotlin.idea.debugger.base.util.safeLocation
+import org.jetbrains.kotlin.idea.debugger.stackFrame.InlineStackTraceCalculator
 import org.jetbrains.kotlin.idea.debugger.stackFrame.KotlinStackFrame
 
 /**
@@ -60,7 +61,14 @@ open class CoroutineStackFrame(
     private val spilledVariables: List<JavaValue> = emptyList(),
     private val includeFrameVariables: Boolean = true,
     location: Location? = frame.safeLocation(),
-) : KotlinStackFrame(safeCoroutineStackFrameProxy(location, spilledVariables, frame)) {
+) : KotlinStackFrame(
+    safeCoroutineStackFrameProxy(location, spilledVariables, frame),
+    if (spilledVariables.isEmpty() || includeFrameVariables) {
+        InlineStackTraceCalculator.calculateVisibleVariables(frame)
+    } else {
+        listOf()
+    }
+) {
 
     init {
         descriptor.updateRepresentation(null, DescriptorLabelListener.DUMMY_LISTENER)

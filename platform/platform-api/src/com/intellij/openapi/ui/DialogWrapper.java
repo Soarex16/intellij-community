@@ -2,6 +2,7 @@
 package com.intellij.openapi.ui;
 
 import com.intellij.CommonBundle;
+import com.intellij.diagnostic.LoadingState;
 import com.intellij.ide.HelpTooltip;
 import com.intellij.ide.actions.ActionsCollector;
 import com.intellij.ide.ui.UISettings;
@@ -24,13 +25,10 @@ import com.intellij.openapi.util.*;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.HtmlBuilder;
 import com.intellij.openapi.util.text.HtmlChunk;
-import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.util.text.Strings;
 import com.intellij.openapi.wm.IdeFocusManager;
 import com.intellij.openapi.wm.WindowManager;
-import com.intellij.ui.ColorUtil;
-import com.intellij.ui.ScreenUtil;
-import com.intellij.ui.UIBundle;
-import com.intellij.ui.UiInterceptors;
+import com.intellij.ui.*;
 import com.intellij.ui.border.CustomLineBorder;
 import com.intellij.ui.components.JBOptionButton;
 import com.intellij.ui.components.JBScrollPane;
@@ -57,6 +55,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import static com.intellij.openapi.util.Pair.pair;
@@ -233,6 +232,10 @@ public abstract class DialogWrapper {
     myCreateSouthSection = createSouth;
     initResizeListener();
     createDefaultActions();
+    if(myPeer.getWindow() != null) {
+      ToolbarUtil.setTransparentTitleBar(myPeer.getWindow(), myPeer.getRootPane(),
+                                         runnable -> Disposer.register(myDisposable, () -> runnable.run()));
+    }
   }
 
   protected final void initResizeListener() {
@@ -315,14 +318,10 @@ public abstract class DialogWrapper {
     createDefaultActions();
   }
 
-  protected DialogWrapper(@NotNull PeerFactory peerFactory) {
-    myPeer = peerFactory.createPeer(this);
+  protected DialogWrapper(@NotNull Function<DialogWrapper, DialogWrapperPeer> peerFactory) {
+    myPeer = peerFactory.apply(this);
     myCreateSouthSection = false;
     createDefaultActions();
-  }
-
-  public interface PeerFactory {
-    @NotNull DialogWrapperPeer createPeer(@NotNull DialogWrapper dialogWrapper);
   }
 
   protected @NotNull @NlsContexts.Checkbox String getDoNotShowMessage() {
@@ -1470,6 +1469,10 @@ public abstract class DialogWrapper {
     return myPeer.isModal();
   }
 
+  public void setOnDeactivationAction(@NotNull Runnable action) {
+    myPeer.setOnDeactivationAction(myDisposable, action);
+  }
+
   public boolean isOKActionEnabled() {
     return myOKAction.isEnabled();
   }
@@ -1621,7 +1624,9 @@ public abstract class DialogWrapper {
    * @see #showAndGet()
    */
   public void show() {
-    logShowDialogEvent();
+    if (LoadingState.APP_STARTED.isOccurred()) {
+      logShowDialogEvent();
+    }
     doShow();
   }
 
@@ -1749,7 +1754,7 @@ public abstract class DialogWrapper {
     boolean canRecord = canRecordDialogId();
     if (canRecord) {
       String dialogId = getClass().getName();
-      if (StringUtil.isNotEmpty(dialogId)) {
+      if (Strings.isNotEmpty(dialogId)) {
         FeatureUsageUiEventsKt.getUiEventLogger().logCloseDialog(dialogId, exitCode, getClass());
       }
     }
@@ -1759,7 +1764,7 @@ public abstract class DialogWrapper {
     boolean canRecord = canRecordDialogId();
     if (canRecord) {
       String dialogId = getClass().getName();
-      if (StringUtil.isNotEmpty(dialogId)) {
+      if (Strings.isNotEmpty(dialogId)) {
         FeatureUsageUiEventsKt.getUiEventLogger().logShowDialog(dialogId, getClass());
       }
     }
@@ -1768,7 +1773,7 @@ public abstract class DialogWrapper {
   private void logClickOnHelpDialogEvent() {
     if (!canRecordDialogId()) return;
     String dialogId = getClass().getName();
-    if (StringUtil.isNotEmpty(dialogId)) {
+    if (Strings.isNotEmpty(dialogId)) {
       FeatureUsageUiEventsKt.getUiEventLogger().logClickOnHelpDialog(dialogId, getClass());
     }
   }
@@ -1981,7 +1986,9 @@ public abstract class DialogWrapper {
   private void doUpdateErrorText(@NotNull ErrorText errorText, @NotNull List<ValidationInfo> infos) {
     HtmlBuilder htmlBuilder = new HtmlBuilder();
     for (ValidationInfo info : infos) {
-      if (info.component != null || StringUtil.isEmptyOrSpaces(info.message)) continue;
+      if (info.component != null || Strings.isEmptyOrSpaces(info.message)) {
+        continue;
+      }
 
       Color color = info.warning ? MessageType.WARNING.getTitleForeground() : UIUtil.getErrorForeground();
       htmlBuilder

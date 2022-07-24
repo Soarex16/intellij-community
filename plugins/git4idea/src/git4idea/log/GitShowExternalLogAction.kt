@@ -2,6 +2,7 @@
 package git4idea.log
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.application.ApplicationManager
@@ -52,6 +53,10 @@ import javax.swing.JComponent
 import javax.swing.JPanel
 
 class GitShowExternalLogAction : DumbAwareAction() {
+  override fun getActionUpdateThread(): ActionUpdateThread {
+    return ActionUpdateThread.BGT
+  }
+
   override fun update(e: AnActionEvent) {
     super.update(e)
     e.presentation.isEnabledAndVisible = e.project != null
@@ -90,7 +95,7 @@ fun showExternalGitLogInToolwindow(project: Project,
     if (!selectProjectLog(project, vcs, roots) && !selectAlreadyOpened(cm, roots)) {
       val isToolWindowTab = toolWindow.id == ChangesViewContentManager.TOOLWINDOW_ID
       val component = createManagerAndContent(project, vcs, roots, isToolWindowTab)
-      val content = ContentFactory.SERVICE.getInstance().createContent(component, tabTitle, false)
+      val content = ContentFactory.getInstance().createContent(component, tabTitle, false)
       content.setDisposer(component.disposable)
       content.description = tabDescription
       content.isCloseable = true

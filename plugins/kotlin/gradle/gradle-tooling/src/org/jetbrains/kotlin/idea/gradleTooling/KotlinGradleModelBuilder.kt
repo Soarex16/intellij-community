@@ -15,7 +15,7 @@ import org.gradle.util.GradleVersion
 import org.jetbrains.kotlin.idea.gradleTooling.arguments.CachedExtractedArgsInfo
 import org.jetbrains.kotlin.idea.gradleTooling.arguments.CompilerArgumentsCacheMapperImpl
 import org.jetbrains.kotlin.idea.gradleTooling.arguments.CompilerArgumentsCachingChain
-import org.jetbrains.kotlin.idea.gradleTooling.arguments.CompilerArgumentsCachingManager.cacheCompilerArgument
+import org.jetbrains.kotlin.idea.gradleTooling.arguments.KotlinCachedRegularCompilerArgument
 import org.jetbrains.kotlin.idea.projectModel.CompilerArgumentsCacheAware
 import org.jetbrains.kotlin.idea.projectModel.KotlinTaskProperties
 import org.jetbrains.plugins.gradle.model.ProjectImportModelProvider
@@ -61,7 +61,7 @@ interface KotlinGradleModel : Serializable {
     val gradleUserHome: String
     val cacheAware: CompilerArgumentsCacheAware
 
-    @Deprecated(level = DeprecationLevel.ERROR, message = "Use KotlinGradleModel#cacheAware instead")
+    @Deprecated(level = DeprecationLevel.WARNING, message = "Use KotlinGradleModel#cacheAware instead")
     val partialCacheAware: CompilerArgumentsCacheAware
 }
 
@@ -86,7 +86,7 @@ data class KotlinGradleModelImpl(
     )
     @Suppress("OverridingDeprecatedMember")
     override val partialCacheAware: CompilerArgumentsCacheAware
-        get() = throw UnsupportedOperationException("Not yet implemented")
+        get() = cacheAware
 }
 
 abstract class AbstractKotlinGradleModelBuilder : ModelBuilderService {
@@ -273,7 +273,8 @@ class KotlinGradleModelBuilder : AbstractKotlinGradleModelBuilder(), ModelBuilde
             if (androidVariantRequest.shouldSkipSourceSet(sourceSetName)) return@forEach
             val currentArguments = CompilerArgumentsCachingChain.extractAndCacheTask(compileTask, argsMapper, defaultsOnly = false)
             val defaultArguments = CompilerArgumentsCachingChain.extractAndCacheTask(compileTask, argsMapper, defaultsOnly = true)
-            val dependencyClasspath = compileTask.getDependencyClasspath().map { cacheCompilerArgument(it, argsMapper) }
+            val dependencyClasspath = compileTask.getDependencyClasspath()
+                .map { KotlinCachedRegularCompilerArgument(argsMapper.cacheArgument(it)) }
             cachedCompilerArgumentsBySourceSet[sourceSetName] =
                 CachedExtractedArgsInfo(argsMapper.cacheOriginIdentifier, currentArguments, defaultArguments, dependencyClasspath)
 

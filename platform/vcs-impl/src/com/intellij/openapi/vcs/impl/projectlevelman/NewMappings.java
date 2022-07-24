@@ -15,6 +15,7 @@ import com.intellij.openapi.ui.MessageType;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.SystemInfo;
+import com.intellij.openapi.util.SystemInfoRt;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.openapi.vcs.*;
 import com.intellij.openapi.vcs.ex.ProjectLevelVcsManagerEx;
@@ -29,6 +30,7 @@ import com.intellij.openapi.vfs.pointers.VirtualFilePointerListener;
 import com.intellij.openapi.vfs.pointers.VirtualFilePointerManager;
 import com.intellij.openapi.wm.ex.WindowManagerEx;
 import com.intellij.openapi.wm.impl.ProjectFrameHelper;
+import com.intellij.ui.ExperimentalUI;
 import com.intellij.util.Alarm;
 import com.intellij.util.ExceptionUtil;
 import com.intellij.util.Functions;
@@ -229,12 +231,15 @@ public final class NewMappings implements Disposable {
   }
 
   private void refreshMainMenu() {
-    ApplicationManager.getApplication().invokeLater(() -> {
-      ProjectFrameHelper frame = WindowManagerEx.getInstanceEx().getFrameHelper(myProject);
-      if (frame != null && frame.getRootPane() != null) {
-        frame.updateView();
-      }
-    }, myProject.getDisposed());
+    // GitToolbarWidgetFactory handles update in a new UI
+    if (!(SystemInfoRt.isMac && ExperimentalUI.isNewUI())) {
+      ApplicationManager.getApplication().invokeLater(() -> {
+        ProjectFrameHelper frame = WindowManagerEx.getInstanceEx().getFrameHelper(myProject);
+        if (frame != null && frame.getRootPane() != null) {
+          frame.updateView();
+        }
+      }, myProject.getDisposed());
+    }
   }
 
   /**
@@ -447,12 +452,11 @@ public final class NewMappings implements Disposable {
   }
 
   public @Nullable MappedRoot getMappedRootFor(@Nullable VirtualFile file) {
-    if (file == null || !file.isInLocalFileSystem() || myMappedRoots.isEmpty() || myVcsManager.isIgnored(file)) {
-      return null;
-    }
-    else {
-      return myMappedRootsMapping.getRootFor(file);
-    }
+    if (file == null || !file.isInLocalFileSystem()) return null;
+    if (myMappedRoots.isEmpty()) return null;
+    if (myVcsManager.isIgnored(file)) return null;
+
+    return myMappedRootsMapping.getRootFor(file);
   }
 
   public @Nullable MappedRoot getMappedRootFor(@Nullable FilePath file) {
@@ -562,7 +566,7 @@ public final class NewMappings implements Disposable {
   }
 
   private @NotNull MyVcsActivator createVcsActivator() {
-    Set<AbstractVcs> newVcses = TrustedProjects.isTrusted(myProject)
+    Set<AbstractVcs> newVcses = !myProject.isDisposed() && TrustedProjects.isTrusted(myProject)
                                 ? ContainerUtil.map2SetNotNull(myMappings, this::getMappingsVcs)
                                 : Collections.emptySet();
 

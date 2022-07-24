@@ -14,6 +14,7 @@ import org.junit.runner.RunWith
 @RunWith(JUnit38ClassRunner::class)
 class FirUastResolveApiFixtureTest : KotlinLightCodeInsightFixtureTestCase(), UastResolveApiFixtureTestBase {
     override val isFirUastPlugin: Boolean = true
+    override fun isFirPlugin(): Boolean = true
 
     override fun getProjectDescriptor(): LightProjectDescriptor =
         KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE
@@ -93,6 +94,11 @@ class FirUastResolveApiFixtureTest : KotlinLightCodeInsightFixtureTestCase(), Ua
         doCheck("MultiResolveInClass", ::checkMultiResolveInClass)
     }
 
+    fun testResolveToFacade() {
+        doCheck("ResolveToFacade", ::checkResolveToFacade)
+    }
+
+
     fun testMultiConstructorResolve() {
         doCheck("MultiConstructorResolve", ::checkMultiConstructorResolve)
     }
@@ -113,8 +119,20 @@ class FirUastResolveApiFixtureTest : KotlinLightCodeInsightFixtureTestCase(), Ua
         doCheck("ResolveLocalDefaultConstructor", ::checkResolveLocalDefaultConstructor)
     }
 
+    fun testResolveJavaClassAsAnonymousObjectSuperType() {
+        doCheck("ResolveJavaClassAsAnonymousObjectSuperType", ::checkResolveJavaClassAsAnonymousObjectSuperType)
+    }
+
     fun testResolveCompiledAnnotation() {
         doCheck("ResolveCompiledAnnotation", ::checkResolveCompiledAnnotation)
+    }
+
+    fun testResolveExplicitLambdaParameter() {
+        doCheck("ResolveExplicitLambdaParameter", ::checkResolveExplicitLambdaParameter)
+    }
+
+    fun testResolveImplicitLambdaParameter() {
+        doCheck("ResolveImplicitLambdaParameter", ::checkResolveImplicitLambdaParameter)
     }
 
     fun testResolveSyntheticMethod() {
@@ -125,8 +143,32 @@ class FirUastResolveApiFixtureTest : KotlinLightCodeInsightFixtureTestCase(), Ua
         doCheck("AssigningArrayElementType", ::checkAssigningArrayElementType)
     }
 
+    fun testMapFunctions() {
+        doCheck("MapFunctions", ::checkMapFunctions)
+    }
+
+    fun testListIterator() {
+        doCheck("ListIterator", ::checkListIterator)
+    }
+
     fun testDivByZero() {
         doCheck("DivByZero", ::checkDivByZero)
+    }
+
+    fun testArgumentMappingDefaultValue() {
+        doCheck("ArgumentMappingDefaultValue", ::checkArgumentMappingDefaultValue)
+    }
+
+    fun testArgumentMappingExtensionFunction() {
+        doCheck("ArgumentMappingExtensionFunction", ::checkArgumentMappingExtensionFunction)
+    }
+
+    fun testArgumentMappingVararg() {
+        doCheck("ArgumentMappingVararg", ::checkArgumentMappingVararg)
+    }
+
+    fun testArgumentMappingOOBE() {
+        doCheck("ArgumentMappingOOBE", ::checkArgumentMappingOOBE)
     }
 
     fun testDetailsOfDeprecatedHidden() {
@@ -135,5 +177,25 @@ class FirUastResolveApiFixtureTest : KotlinLightCodeInsightFixtureTestCase(), Ua
 
     fun testSyntheticEnumMethods() {
         doCheck("SyntheticEnumMethods", ::checkSyntheticEnumMethods)
+    }
+
+    fun testImplicitReceiverType() {
+        doCheck("ImplicitReceiverType", ::checkImplicitReceiverType)
+    }
+
+    fun testSubstitutedReceiverType() {
+        doCheck("SubstitutedReceiverType", ::checkSubstitutedReceiverType)
+    }
+
+    fun testCallKindOfSamConstructor() {
+        doCheck("CallKindOfSamConstructor", ::checkCallKindOfSamConstructor)
+    }
+
+    fun testArrayAccessOverloads() {
+        doCheck("ArrayAccessOverloads", ::checkArrayAccessOverloads)
+    }
+
+    fun testOperatorOverloads() {
+        doCheck("OperatorOverloads", ::checkOperatorOverloads)
     }
 }

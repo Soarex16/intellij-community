@@ -1,5 +1,5 @@
 {
-  "version": "0.5",
+  "version": "0.6",
   "definitions": {
     "color": {
       "type": "string",
@@ -279,6 +279,10 @@
       "examples": [
         "/editorScheme.xml"
       ]
+    },
+    "additionalEditorSchemes": {
+      "type": "array",
+      "title": "Array of paths to additional editor schemes xml files starting with '/'"
     },
     "ui": {
       "type": "object"

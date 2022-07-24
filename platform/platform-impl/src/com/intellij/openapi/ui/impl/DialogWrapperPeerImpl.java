@@ -1,8 +1,8 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.ui.impl;
 
+import com.intellij.concurrency.ThreadContext;
 import com.intellij.ide.DataManager;
-import com.intellij.ide.impl.TypeSafeDataProviderAdapter;
 import com.intellij.ide.ui.AntialiasingType;
 import com.intellij.ide.ui.UISettings;
 import com.intellij.openapi.Disposable;
@@ -57,6 +57,7 @@ import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 public class DialogWrapperPeerImpl extends DialogWrapperPeer {
   private static final Logger LOG = Logger.getInstance(DialogWrapper.class);
@@ -190,6 +191,10 @@ public class DialogWrapperPeerImpl extends DialogWrapperPeer {
   @Override
   public boolean isHeadless() {
     return myDialog instanceof HeadlessDialog;
+  }
+
+  public void setOnDeactivationAction(@NotNull Disposable disposable, @NotNull Runnable onDialogDeactivated) {
+    WindowDeactivationManager.getInstance().addWindowDeactivationListener(getWindow(), myProject, disposable, onDialogDeactivated);
   }
 
   @Override
@@ -375,9 +380,9 @@ public class DialogWrapperPeerImpl extends DialogWrapperPeer {
   }
 
   @Override
-  public ActionCallback show() {
+  public CompletableFuture<?> show() {
     LOG.assertTrue(EventQueue.isDispatchThread(), "Access is allowed from event dispatch thread only");
-    final ActionCallback result = new ActionCallback();
+    final CompletableFuture<Void> result = new CompletableFuture<Void>();
 
     final AnCancelAction anCancelAction = new AnCancelAction();
     final JRootPane rootPane = getRootPane();
@@ -443,7 +448,10 @@ public class DialogWrapperPeerImpl extends DialogWrapperPeer {
       }
     }
 
-    try (AccessToken ignore = SlowOperations.allowSlowOperations(SlowOperations.RESET)) {
+    try (
+      AccessToken ignore = SlowOperations.allowSlowOperations(SlowOperations.RESET);
+      AccessToken ignore2 = ThreadContext.resetThreadContext()
+    ) {
       myDialog.show();
     }
     finally {
@@ -457,7 +465,7 @@ public class DialogWrapperPeerImpl extends DialogWrapperPeer {
         }
       }
 
-      myDialog.getFocusManager().doWhenFocusSettlesDown(result.createSetDoneRunnable());
+      myDialog.getFocusManager().doWhenFocusSettlesDown(() -> result.complete(null));
     }
 
     return result;
@@ -579,13 +587,9 @@ public class DialogWrapperPeerImpl extends DialogWrapperPeer {
 
     @Override
     public Object getData(@NotNull String dataId) {
-      final DialogWrapper wrapper = myDialogWrapper.get();
+      DialogWrapper wrapper = myDialogWrapper.get();
       if (wrapper instanceof DataProvider) {
         return ((DataProvider)wrapper).getData(dataId);
-      }
-      if (wrapper instanceof TypeSafeDataProvider) {
-        DataProvider adapter = new TypeSafeDataProviderAdapter((TypeSafeDataProvider)wrapper);
-        return adapter.getData(dataId);
       }
       return null;
     }

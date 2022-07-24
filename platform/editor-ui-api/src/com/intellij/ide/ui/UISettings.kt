@@ -23,7 +23,6 @@ import com.intellij.util.ui.GraphicsUtil
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.xmlb.annotations.Transient
 import org.jetbrains.annotations.ApiStatus.ScheduledForRemoval
-import org.jetbrains.annotations.NonNls
 import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.RenderingHints
@@ -148,12 +147,6 @@ class UISettings @NonInjectable constructor(private val notRoamableOptions: NotR
 
   val cycleScrolling: Boolean
     get() = AdvancedSettings.getBoolean("ide.cycle.scrolling")
-
-  var selectedTabsLayoutInfoId: @NonNls String?
-    get() = state.selectedTabsLayoutInfoId
-    set(value) {
-      state.selectedTabsLayoutInfoId = value
-    }
 
   val scrollTabLayoutInEditor: Boolean
     get() = state.scrollTabLayoutInEditor
@@ -384,7 +377,6 @@ class UISettings @NonInjectable constructor(private val notRoamableOptions: NotR
       state.markModifiedTabsWithAsterisk = value
     }
 
-  @Suppress("unused")
   var overrideConsoleCycleBufferSize: Boolean
     get() = state.overrideConsoleCycleBufferSize
     set(value) {
@@ -407,6 +399,12 @@ class UISettings @NonInjectable constructor(private val notRoamableOptions: NotR
     get() = state.sortTabsAlphabetically
     set(value) {
       state.sortTabsAlphabetically = value
+    }
+
+  var alwaysKeepTabsAlphabeticallySorted: Boolean
+    get() = state.alwaysKeepTabsAlphabeticallySorted
+    set(value) {
+      state.alwaysKeepTabsAlphabeticallySorted = value
     }
 
   var openTabsAtTheEnd: Boolean
@@ -454,7 +452,6 @@ class UISettings @NonInjectable constructor(private val notRoamableOptions: NotR
     /** Not tabbed pane.  */
     const val TABS_NONE = 0
 
-    @Suppress("ObjectPropertyName")
     @Volatile
     private var cachedInstance: UISettings? = null
 
@@ -584,7 +581,7 @@ class UISettings @NonInjectable constructor(private val notRoamableOptions: NotR
     @Deprecated("Use {@link #restoreFontSize(Float, Float?)} instead")
     @JvmStatic
     fun restoreFontSize(readSize: Int, readScale: Float?): Int {
-      return restoreFontSize(readSize.toFloat(), readScale).toInt();
+      return restoreFontSize(readSize.toFloat(), readScale).toInt()
     }
 
     @JvmStatic
@@ -724,25 +721,25 @@ class UISettings @NonInjectable constructor(private val notRoamableOptions: NotR
   }
 
   //<editor-fold desc="Deprecated stuff.">
-  @Suppress("unused", "PropertyName")
+  @Suppress("PropertyName")
   @Deprecated("Use fontFace", replaceWith = ReplaceWith("fontFace"))
   @JvmField
   @Transient
   var FONT_FACE: String? = null
 
-  @Suppress("unused", "PropertyName")
+  @Suppress("PropertyName")
   @Deprecated("Use fontSize", replaceWith = ReplaceWith("fontSize"))
   @JvmField
   @Transient
   var FONT_SIZE: Int? = 0
 
-  @Suppress("unused", "PropertyName")
+  @Suppress("PropertyName")
   @Deprecated("Use hideToolStripes", replaceWith = ReplaceWith("hideToolStripes"))
   @JvmField
   @Transient
   var HIDE_TOOL_STRIPES = true
 
-  @Suppress("unused", "PropertyName")
+  @Suppress("PropertyName")
   @Deprecated("Use consoleCommandHistoryLimit", replaceWith = ReplaceWith("consoleCommandHistoryLimit"))
   @JvmField
   @Transient
@@ -754,37 +751,37 @@ class UISettings @NonInjectable constructor(private val notRoamableOptions: NotR
   @Transient
   var CYCLE_SCROLLING = true
 
-  @Suppress("unused", "PropertyName")
+  @Suppress("PropertyName")
   @Deprecated("Use showMainToolbar", replaceWith = ReplaceWith("showMainToolbar"))
   @JvmField
   @Transient
   var SHOW_MAIN_TOOLBAR = false
 
-  @Suppress("unused", "PropertyName")
+  @Suppress("PropertyName")
   @Deprecated("Use showCloseButton", replaceWith = ReplaceWith("showCloseButton"))
   @JvmField
   @Transient
   var SHOW_CLOSE_BUTTON = true
 
-  @Suppress("unused", "PropertyName")
+  @Suppress("PropertyName")
   @Deprecated("Use presentationMode", replaceWith = ReplaceWith("presentationMode"))
   @JvmField
   @Transient
   var PRESENTATION_MODE = false
 
-  @Suppress("unused", "PropertyName", "SpellCheckingInspection")
+  @Suppress("PropertyName", "SpellCheckingInspection")
   @Deprecated("Use overrideLafFonts", replaceWith = ReplaceWith("overrideLafFonts"))
   @JvmField
   @Transient
   var OVERRIDE_NONIDEA_LAF_FONTS = false
 
-  @Suppress("unused", "PropertyName")
+  @Suppress("PropertyName")
   @Deprecated("Use presentationModeFontSize", replaceWith = ReplaceWith("presentationModeFontSize"))
   @JvmField
   @Transient
   var PRESENTATION_MODE_FONT_SIZE = 24
 
-  @Suppress("unused", "PropertyName")
+  @Suppress("PropertyName")
   @Deprecated("Use editorTabLimit", replaceWith = ReplaceWith("editorTabLimit"))
   @JvmField
   @Transient

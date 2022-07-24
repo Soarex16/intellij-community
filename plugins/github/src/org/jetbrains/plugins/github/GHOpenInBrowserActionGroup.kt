@@ -1,9 +1,10 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.plugins.github
 
 import com.intellij.icons.AllIcons
 import com.intellij.ide.BrowserUtil
 import com.intellij.openapi.actionSystem.*
+import com.intellij.openapi.actionSystem.impl.ActionButton
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.progress.ProgressIndicator
@@ -46,7 +47,9 @@ open class GHOpenInBrowserActionGroup
     val data = getData(e.dataContext)
     e.presentation.isEnabledAndVisible = !data.isNullOrEmpty()
     e.presentation.isPerformGroup = data?.size == 1
+    e.presentation.putClientProperty(ActionButton.HIDE_DROPDOWN_ICON, e.presentation.isPerformGroup);
     e.presentation.isPopupGroup = true
+    e.presentation.isDisableGroupIfEmpty = false
   }
 
   override fun getChildren(e: AnActionEvent?): Array<AnAction> {
@@ -60,8 +63,6 @@ open class GHOpenInBrowserActionGroup
   override fun actionPerformed(e: AnActionEvent) {
     getData(e.dataContext)?.let { GithubOpenInBrowserAction(it.first()) }?.actionPerformed(e)
   }
-
-  override fun disableIfNoVisibleChildren(): Boolean = false
 
   protected open fun getData(dataContext: DataContext): List<Data>? {
     val project = dataContext.getData(CommonDataKeys.PROJECT) ?: return null
@@ -93,9 +94,9 @@ open class GHOpenInBrowserActionGroup
   }
 
   private fun getDataFromLog(project: Project, dataContext: DataContext): List<Data>? {
-    val log = dataContext.getData(VcsLogDataKeys.VCS_LOG) ?: return null
+    val selection = dataContext.getData(VcsLogDataKeys.VCS_LOG_COMMIT_SELECTION) ?: return null
 
-    val selectedCommits = log.selectedCommits
+    val selectedCommits = selection.commits
     if (selectedCommits.size != 1) return null
 
     val commit = ContainerUtil.getFirstItem(selectedCommits) ?: return null
@@ -198,7 +199,7 @@ open class GHOpenInBrowserActionGroup
         }
 
         val githubUrl = GHPathUtil.makeUrlToOpen(editor, relativePath, hash, path)
-        if (githubUrl != null) BrowserUtil.browse(githubUrl)
+        BrowserUtil.browse(githubUrl)
       }
 
       private fun getCurrentFileRevisionHash(project: Project, file: VirtualFile): String? {
@@ -236,7 +237,7 @@ object GHPathUtil {
     return makeUrlToOpen(editor, relativePath, hash, path)
   }
 
-  fun makeUrlToOpen(editor: Editor?, relativePath: String, branch: String, path: GHRepositoryCoordinates): String? {
+  fun makeUrlToOpen(editor: Editor?, relativePath: String, branch: String, path: GHRepositoryCoordinates): String {
     val builder = StringBuilder()
 
     if (StringUtil.isEmptyOrSpaces(relativePath)) {

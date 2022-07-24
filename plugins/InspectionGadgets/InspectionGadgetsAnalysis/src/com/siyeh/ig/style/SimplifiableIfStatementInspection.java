@@ -18,7 +18,7 @@ import javax.swing.*;
 
 import static com.intellij.util.ObjectUtils.tryCast;
 
-public class SimplifiableIfStatementInspection extends AbstractBaseJavaLocalInspectionTool {
+public class SimplifiableIfStatementInspection extends AbstractBaseJavaLocalInspectionTool implements CleanupLocalInspectionTool {
   public boolean DONT_WARN_ON_TERNARY = true;
   public boolean DONT_WARN_ON_CHAINED_ID = true;
 
@@ -35,7 +35,7 @@ public class SimplifiableIfStatementInspection extends AbstractBaseJavaLocalInsp
   public @NotNull PsiElementVisitor buildVisitor(@NotNull ProblemsHolder holder, boolean isOnTheFly) {
     return new JavaElementVisitor() {
       @Override
-      public void visitIfStatement(PsiIfStatement ifStatement) {
+      public void visitIfStatement(@NotNull PsiIfStatement ifStatement) {
         IfConditionalModel model = IfConditionalModel.from(ifStatement, false);
         if (model == null) return;
         ConditionalExpressionGenerator generator = ConditionalExpressionGenerator.from(model);

@@ -1,9 +1,9 @@
 package com.intellij.codeInspection.tests.java.test.junit
 
-import com.intellij.codeInspection.tests.JUnitUnconstructableTestCaseTestBase
 import com.intellij.codeInspection.tests.ULanguage
+import com.intellij.codeInspection.tests.test.junit.JUnitUnconstructableTestCaseInspectionTestBase
 
-class JavaJUnitUnconstructableInspectionTest : JUnitUnconstructableTestCaseTestBase() {
+class JavaJUnitUnconstructableInspectionTest : JUnitUnconstructableTestCaseInspectionTestBase() {
   fun testPlain() {
     myFixture.testHighlighting(ULanguage.JAVA, """
       class Plain { }
@@ -61,6 +61,18 @@ class JavaJUnitUnconstructableInspectionTest : JUnitUnconstructableTestCaseTestB
     """.trimIndent())
   }
 
+  fun testUnconstructableJUnit3TestCaseLocalClass() {
+    myFixture.testHighlighting(ULanguage.JAVA, """
+      import junit.framework.TestCase;
+
+      public class UnconstructableJUnit3TestCaseLocalClass {
+          public static void main() {
+            class LocalClass extends TestCase { }
+          }
+      }
+    """.trimIndent())
+  }
+
   fun testUnconstructableJUnit4TestCase1() {
     myFixture.testHighlighting(ULanguage.JAVA, """
       import org.junit.Test;
@@ -102,6 +114,30 @@ class JavaJUnitUnconstructableInspectionTest : JUnitUnconstructableTestCaseTestB
 
       class <warning descr="Test class 'UnconstructableJUnit4TestCase3' is not constructable because it is not 'public'">UnconstructableJUnit4TestCase3</warning> {
         UnconstructableJUnit4TestCase3() {}
+
+        @Test
+        void testMe() {}
+      }
+    """.trimIndent())
+  }
+
+  fun testConstructableJunit3WithJunit4runner() {
+    myFixture.testHighlighting(ULanguage.JAVA, """
+      import java.util.Collection;
+      import java.util.Arrays;
+      import junit.framework.TestCase;
+      import org.junit.runner.RunWith;
+      import org.junit.runners.Parameterized;
+      import org.junit.Test;
+
+      @RunWith(Parameterized.class)
+      class ConstructableJunit3WithJunit4runner extends TestCase {
+        ConstructableJunit3WithJunit4runner(Integer i) {}
+        
+        @Parameterized.Parameters
+        public static Collection<Integer> params() {
+          return Arrays.asList(1, 2, 3);
+        }
 
         @Test
         void testMe() {}

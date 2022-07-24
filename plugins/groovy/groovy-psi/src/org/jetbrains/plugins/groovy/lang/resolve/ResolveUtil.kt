@@ -35,9 +35,15 @@ val NON_CODE: Key<Boolean?> = Key.create("groovy.process.non.code.members")
 @JvmField
 val sorryCannotKnowElementKind: Key<Boolean> = Key.create("groovy.skip.kind.check.please")
 
+private val IGNORE_IMPORTS : Key<Unit> = Key.create("groovy.defer.imports")
+
 fun initialState(processNonCodeMembers: Boolean): ResolveState = ResolveState.initial().put(NON_CODE, processNonCodeMembers)
 
 fun ResolveState.processNonCodeMembers(): Boolean = get(NON_CODE).let { it == null || it }
+
+fun ResolveState.ignoreImports() : ResolveState = put(IGNORE_IMPORTS, Unit)
+
+fun ResolveState.areImportsIgnored(): Boolean = get(IGNORE_IMPORTS) != null
 
 fun treeWalkUp(place: PsiElement, processor: PsiScopeProcessor, state: ResolveState): Boolean {
   return ResolveUtil.treeWalkUp(place, place, processor, state)
@@ -175,7 +181,7 @@ fun GroovyResolveResult?.asJavaClassResult(): PsiClassType.ClassResolveResult {
   if (this == null) return PsiClassType.ClassResolveResult.EMPTY
   val clazz = element as? PsiClass ?: return PsiClassType.ClassResolveResult.EMPTY
   return object : PsiClassType.ClassResolveResult {
-    override fun getElement(): PsiClass? = clazz
+    override fun getElement(): PsiClass = clazz
     override fun getSubstitutor(): PsiSubstitutor = this@asJavaClassResult.substitutor
     override fun isPackagePrefixPackageReference(): Boolean = false
     override fun isAccessible(): Boolean = true

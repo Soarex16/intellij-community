@@ -10,14 +10,19 @@ import com.intellij.testFramework.runInEdtAndWait
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinPluginLayout
 import org.jetbrains.kotlin.idea.configuration.notifications.disableNewKotlinCompilerAvailableNotification
 import org.jetbrains.kotlin.idea.notification.catchNotificationText
-import org.jetbrains.plugins.gradle.importing.GradleImportingTestCase
 import org.jetbrains.plugins.gradle.tooling.annotation.TargetVersions
+import org.junit.AssumptionViolatedException
 import org.junit.Test
 
-class GradleMigrateTest : GradleImportingTestCase() {
+class GradleMigrateTest : MultiplePluginVersionGradleImportingTestCase() {
+
     @Test
-    @TargetVersions("6.9")
+    @TargetVersions("6.9+")
     fun testMigrateStdlib() {
+        if (kotlinPluginVersion != KotlinGradlePluginVersions.lastStable) {
+            if (IS_UNDER_TEAMCITY) return else throw AssumptionViolatedException("Ignored KGP version $kotlinPluginVersion")
+        }
+
         val notificationText = doMigrationTest(
             beforeText = """
             buildscript {
@@ -25,14 +30,14 @@ class GradleMigrateTest : GradleImportingTestCase() {
                     ${GradleKotlinTestUtils.listRepositories(false, gradleVersion)}                    
                 }
                 dependencies {
-                    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${GradleKotlinTestUtils.TestedKotlinGradlePluginVersions.V_1_5_31}"
+                    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${KotlinGradlePluginVersions.V_1_5_32}"
                 }
             }
 
             apply plugin: 'kotlin'
 
             dependencies {
-                compile "org.jetbrains.kotlin:kotlin-stdlib:${GradleKotlinTestUtils.TestedKotlinGradlePluginVersions.V_1_5_31}"
+                implementation "org.jetbrains.kotlin:kotlin-stdlib:${KotlinGradlePluginVersions.V_1_5_32}"
             }
             """,
             afterText =
@@ -42,14 +47,14 @@ class GradleMigrateTest : GradleImportingTestCase() {
                     ${GradleKotlinTestUtils.listRepositories(false, gradleVersion)}                    
                 }
                 dependencies {
-                    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${GradleKotlinTestUtils.TestedKotlinGradlePluginVersions.V_1_6_20}"
+                    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${KotlinGradlePluginVersions.V_1_6_21}"
                 }
             }
 
             apply plugin: 'kotlin'
 
             dependencies {
-                compile "org.jetbrains.kotlin:kotlin-stdlib:${GradleKotlinTestUtils.TestedKotlinGradlePluginVersions.V_1_6_20}"
+                implementation "org.jetbrains.kotlin:kotlin-stdlib:${KotlinGradlePluginVersions.V_1_6_21}"
             }
             """
         )
@@ -66,7 +71,7 @@ class GradleMigrateTest : GradleImportingTestCase() {
 
         runInEdtAndWait {
             runWriteAction {
-                disableNewKotlinCompilerAvailableNotification(KotlinPluginLayout.instance.standaloneCompilerVersion.kotlinVersion)
+                disableNewKotlinCompilerAvailableNotification(KotlinPluginLayout.standaloneCompilerVersion.kotlinVersion)
             }
         }
 

@@ -14,7 +14,7 @@ import com.intellij.execution.runners.ProgramRunner;
 import com.intellij.execution.target.HostPort;
 import com.intellij.execution.target.TargetEnvironment;
 import com.intellij.execution.target.TargetEnvironmentRequest;
-import com.intellij.execution.target.local.LocalTargetEnvironment;
+import com.intellij.execution.target.local.LocalTargetEnvironmentRequest;
 import com.intellij.execution.target.value.TargetEnvironmentFunctions;
 import com.intellij.execution.ui.ExecutionConsole;
 import com.intellij.execution.ui.RunContentDescriptor;
@@ -22,10 +22,11 @@ import com.intellij.openapi.application.AppUIExecutor;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.PathManager;
 import com.intellij.openapi.fileEditor.FileDocumentManager;
+import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
+import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.roots.OrderRootType;
-import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.util.text.StringUtil;
@@ -54,9 +55,12 @@ import org.jetbrains.concurrency.Promises;
 import java.io.File;
 import java.net.ServerSocket;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 
 public class PyDebugRunner implements ProgramRunner<RunnerSettings> {
@@ -498,7 +502,7 @@ public class PyDebugRunner implements ProgramRunner<RunnerSettings> {
     configureDebugParameters(project, pyState, debuggerScript, false);
 
     // TODO [Targets API] This workaround is required until Cython extensions are uploaded using Targets API
-    boolean isLocalTarget = targetEnvironmentRequest instanceof LocalTargetEnvironment;
+    boolean isLocalTarget = targetEnvironmentRequest instanceof LocalTargetEnvironmentRequest;
     configureDebugEnvironment(project, new TargetEnvironmentController(debuggerScript.getEnvs(), targetEnvironmentRequest), runProfile,
                               isLocalTarget);
 
@@ -563,10 +567,14 @@ public class PyDebugRunner implements ProgramRunner<RunnerSettings> {
       environmentController.appendTargetPathToPathsValue(PYTHONPATH_ENV_NAME, CYTHON_EXTENSIONS_DIR);
     }
 
-    addProjectRootsToEnv(project, environmentController);
-
     final AbstractPythonRunConfiguration runConfiguration = runProfile instanceof AbstractPythonRunConfiguration ?
                                                             (AbstractPythonRunConfiguration)runProfile : null;
+    final Module module = runConfiguration != null ? runConfiguration.getModule() : null;
+
+    if (module != null) {
+      addProjectRootsToEnv(module, environmentController);
+    }
+
     if (runConfiguration != null) {
       final Sdk sdk = runConfiguration.getSdk();
       if (sdk != null) {
@@ -606,6 +614,10 @@ public class PyDebugRunner implements ProgramRunner<RunnerSettings> {
                                           @NotNull PythonCommandLineState pyState,
                                           @NotNull PythonExecution debuggerScript,
                                           boolean debuggerScriptInServerMode) {
+    if (pyState instanceof PythonScriptCommandLineState && ((PythonScriptCommandLineState)pyState).showCommandLineAfterwards()) {
+      debuggerScript.addParameter("--cmd-line");
+    }
+
     if (pyState.isMultiprocessDebug() && !debuggerScriptInServerMode) {
       //noinspection SpellCheckingInspection
       debuggerScript.addParameter(getMultiprocessDebugParameter());
@@ -665,6 +677,11 @@ public class PyDebugRunner implements ProgramRunner<RunnerSettings> {
     }
   }
 
+  /**
+   * To be deprecated.
+   * <p>
+   * The part of the legacy implementation based on {@link GeneralCommandLine}.
+   */
   public static void disableBuiltinBreakpoint(@Nullable Sdk sdk, Map<String, String> env) {
     if (sdk != null) {
       final PythonSdkFlavor flavor = PythonSdkFlavor.getFlavor(sdk);
@@ -727,14 +744,18 @@ public class PyDebugRunner implements ProgramRunner<RunnerSettings> {
     debuggerScript.addParameter(FILE_PARAM);
   }
 
-  private static void addProjectRootsToEnv(@NotNull Project project, @NotNull EnvironmentController environment) {
+  private static void addProjectRootsToEnv(@NotNull Module module, @NotNull EnvironmentController environment) {
+    final ModuleRootManager moduleRootManager = ModuleRootManager.getInstance(module);
+    Stream<VirtualFile> contentRoots = Stream.concat(Arrays.stream(moduleRootManager.getContentRoots()),
+                                                     getDependenciesContentRoots(module));
 
-    List<String> roots = new ArrayList<>();
-    for (VirtualFile contentRoot : ProjectRootManager.getInstance(project).getContentRoots()) {
-      roots.add(contentRoot.getPath());
-    }
+    environment.putTargetPathsValue(IDE_PROJECT_ROOTS, contentRoots.map(contentRoot -> contentRoot.getPath()).collect(Collectors.toList()));
+  }
 
-    environment.putTargetPathsValue(IDE_PROJECT_ROOTS, roots);
+  private static Stream<VirtualFile> getDependenciesContentRoots(Module module) {
+    final ModuleRootManager moduleRootManager = ModuleRootManager.getInstance(module);
+    final Stream<Module> dependencies = Arrays.stream(moduleRootManager.getDependencies());
+    return dependencies.flatMap(d -> Arrays.stream(ModuleRootManager.getInstance(d).getContentRoots()));
   }
 
   private static void addSdkRootsToEnv(@NotNull EnvironmentController environmentController,

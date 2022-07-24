@@ -28,6 +28,7 @@ import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.actionSystem.ex.ActionUtil;
 import com.intellij.openapi.actionSystem.ex.ComboBoxAction;
+import com.intellij.openapi.actionSystem.impl.ActionButton;
 import com.intellij.openapi.actionSystem.impl.ActionToolbarImpl;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ModalityState;
@@ -708,7 +709,7 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
     }
   }
 
-  private class ShowInExternalToolActionGroup extends ActionGroup {
+  private class ShowInExternalToolActionGroup extends ActionGroup implements DumbAware {
     private ShowInExternalToolActionGroup() {
       ActionUtil.copyFrom(this, "Diff.ShowInExternalTool");
     }
@@ -720,17 +721,19 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
 
     @Override
     public void update(@NotNull AnActionEvent e) {
+      Presentation presentation = e.getPresentation();
       if (!ExternalDiffTool.isEnabled()) {
-        e.getPresentation().setEnabledAndVisible(false);
+        presentation.setEnabledAndVisible(false);
         return;
       }
 
       List<ShowInExternalToolAction> actions = getShowActions();
 
-      e.getPresentation().setEnabled(ExternalDiffTool.canShow(myActiveRequest));
-      e.getPresentation().setPerformGroup(actions.size() == 1);
-      e.getPresentation().setPopupGroup(true);
-      e.getPresentation().setVisible(true);
+      presentation.setEnabled(ExternalDiffTool.canShow(myActiveRequest));
+      presentation.setPerformGroup(actions.size() == 1);
+      presentation.putClientProperty(ActionButton.HIDE_DROPDOWN_ICON, presentation.isPerformGroup());
+      presentation.setPopupGroup(true);
+      presentation.setVisible(true);
     }
 
     @Override
@@ -898,11 +901,6 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
     public MyNextDifferenceAction() {
     }
 
-    @Nullable
-    protected PrevNextDifferenceIterable getDifferenceIterable(@NotNull AnActionEvent e) {
-      return e.getData(DiffDataKeys.PREV_NEXT_DIFFERENCE_ITERABLE);
-    }
-
     @Override
     public void update(@NotNull AnActionEvent e) {
       if (DiffUtil.isFromShortcut(e)) {
@@ -910,7 +908,7 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
         return;
       }
 
-      PrevNextDifferenceIterable iterable = getDifferenceIterable(e);
+      PrevNextDifferenceIterable iterable = e.getData(DiffDataKeys.PREV_NEXT_DIFFERENCE_ITERABLE);
       if (iterable != null && iterable.canGoNext()) {
         e.getPresentation().setEnabled(true);
         return;
@@ -926,7 +924,7 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
-      PrevNextDifferenceIterable iterable = getDifferenceIterable(e);
+      PrevNextDifferenceIterable iterable = e.getData(DiffDataKeys.PREV_NEXT_DIFFERENCE_ITERABLE);
       if (iterable != null && iterable.canGoNext()) {
         iterable.goNext();
         myIterationState = IterationState.NONE;
@@ -951,11 +949,6 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
     public MyPrevDifferenceAction() {
     }
 
-    @Nullable
-    protected PrevNextDifferenceIterable getDifferenceIterable(@NotNull AnActionEvent e) {
-      return e.getData(DiffDataKeys.PREV_NEXT_DIFFERENCE_ITERABLE);
-    }
-
     @Override
     public void update(@NotNull AnActionEvent e) {
       if (DiffUtil.isFromShortcut(e)) {
@@ -963,7 +956,7 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
         return;
       }
 
-      PrevNextDifferenceIterable iterable = getDifferenceIterable(e);
+      PrevNextDifferenceIterable iterable = e.getData(DiffDataKeys.PREV_NEXT_DIFFERENCE_ITERABLE);
       if (iterable != null && iterable.canGoPrev()) {
         e.getPresentation().setEnabled(true);
         return;
@@ -979,7 +972,7 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
-      PrevNextDifferenceIterable iterable = getDifferenceIterable(e);
+      PrevNextDifferenceIterable iterable = e.getData(DiffDataKeys.PREV_NEXT_DIFFERENCE_ITERABLE);
       if (iterable != null && iterable.canGoPrev()) {
         iterable.goPrev();
         myIterationState = IterationState.NONE;
@@ -1051,6 +1044,7 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
       .setPreferredPosition(above ? Balloon.Position.above : Balloon.Position.below)
       .setAwtTooltip(true)
       .setFont(StartupUiUtil.getLabelFont().deriveFont(Font.BOLD))
+      .setBorderColor(HintUtil.getHintBorderColor())
       .setTextBg(HintUtil.getInformationColor())
       .setShowImmediately(true);
   }
@@ -1058,7 +1052,7 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
   // Iterate requests
 
   protected class MyNextChangeAction extends NextChangeAction {
-    public MyNextChangeAction() {}
+    public MyNextChangeAction() { }
 
     @Override
     public void update(@NotNull AnActionEvent e) {
@@ -1085,7 +1079,7 @@ public abstract class DiffRequestProcessor implements CheckedDisposable {
   }
 
   protected class MyPrevChangeAction extends PrevChangeAction {
-    public MyPrevChangeAction() {}
+    public MyPrevChangeAction() { }
 
     @Override
     public void update(@NotNull AnActionEvent e) {

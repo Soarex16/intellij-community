@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.internal.statistic.collectors.fus.ui;
 
 import com.intellij.ide.ui.LafManager;
@@ -33,7 +33,7 @@ import java.util.Set;
  */
 final class UiInfoUsageCollector extends ApplicationUsagesCollector {
   private static final Logger LOG = Logger.getInstance(UiInfoUsageCollector.class);
-  private static final EventLogGroup GROUP = new EventLogGroup("ui.info.features", 11);
+  private static final EventLogGroup GROUP = new EventLogGroup("ui.info.features", 12);
   private static final EnumEventField<VisibilityType> orientationField = EventFields.Enum("value", VisibilityType.class);
   private static final EventId1<NavBarType> NAV_BAR = GROUP.registerEvent("Nav.Bar", EventFields.Enum("value", NavBarType.class));
   private static final EventId1<VisibilityType> NAV_BAR_MEMBERS = GROUP.registerEvent("Nav.Bar.members", orientationField);
@@ -48,6 +48,7 @@ final class UiInfoUsageCollector extends ApplicationUsagesCollector {
   private static final EventId1<Boolean> QUICK_DOC_AUTO_UPDATE = GROUP.registerEvent("QuickDoc.AutoUpdate", EventFields.Enabled);
   private static final EventId1<String>
     LOOK_AND_FEEL = GROUP.registerEvent("Look.and.Feel", EventFields.StringValidatedByEnum("value", "look_and_feel"));
+  private static final EventId1<Boolean> LAF_AUTODETECT = GROUP.registerEvent("laf.autodetect", EventFields.Enabled);
   private static final EventId1<HidpiMode> HIDPI_MODE = GROUP.registerEvent("Hidpi.Mode", EventFields.Enum("value", HidpiMode.class));
   private static final EventId1<Boolean> SCREEN_READER = GROUP.registerEvent("Screen.Reader", EventFields.Enabled);
   private static final EventId1<Integer> QUICK_LISTS_COUNT = GROUP.registerEvent("QuickListsCount", EventFields.Int("value"));
@@ -103,6 +104,7 @@ final class UiInfoUsageCollector extends ApplicationUsagesCollector {
     UIManager.LookAndFeelInfo laf = LafManager.getInstance().getCurrentLookAndFeel();
     String value1 = StringUtil.notNullize(laf != null ? laf.getName() : null, "unknown");
     set.add(LOOK_AND_FEEL.metric(value1));
+    set.add(LAF_AUTODETECT.metric(LafManager.getInstance().getAutodetect()));
 
     HidpiMode value = JreHiDpiUtil.isJreHiDPIEnabled() ? HidpiMode.per_monitor_dpi : HidpiMode.system_dpi;
     set.add(HIDPI_MODE.metric(value));
@@ -166,7 +168,7 @@ final class UiInfoUsageCollector extends ApplicationUsagesCollector {
       try {
         SwingUtilities.invokeAndWait(() -> {
           DisplayMode dm = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDisplayMode();
-          isScaleMode.set(dm != null && JdkEx.getDisplayModeEx().isDefault(dm));
+          isScaleMode.set(dm != null && !JdkEx.getDisplayModeEx().isDefault(dm));
         });
       }
       catch (InvocationTargetException e) {

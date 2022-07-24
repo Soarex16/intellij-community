@@ -2,6 +2,7 @@
 package org.jetbrains.kotlin.idea.debugger.test
 
 import com.intellij.debugger.engine.dfaassist.DfaAssistTest
+import com.intellij.debugger.mockJDI.MockLocalVariable
 import com.intellij.debugger.mockJDI.MockStackFrame
 import com.intellij.debugger.mockJDI.MockVirtualMachine
 import com.intellij.debugger.mockJDI.values.MockBooleanValue
@@ -10,6 +11,7 @@ import com.intellij.debugger.mockJDI.values.MockObjectReference
 import com.intellij.debugger.mockJDI.values.MockValue
 import com.intellij.testFramework.LightProjectDescriptor
 import org.jetbrains.kotlin.idea.test.ProjectDescriptorWithStdlibSources
+import java.lang.annotation.ElementType
 import java.util.function.BiConsumer
 
 class KotlinDfaAssistTest : DfaAssistTest() {
@@ -40,6 +42,7 @@ class KotlinDfaAssistTest : DfaAssistTest() {
                if (y || x/*TRUE*/) {}
                var z: Boolean
                z = x/*TRUE*/
+               var b = true
             }""") { vm, frame -> frame.addVariable("x", MockBooleanValue(vm, true)) }
     }
 
@@ -131,6 +134,67 @@ class KotlinDfaAssistTest : DfaAssistTest() {
                   }""") { vm, frame ->
             frame.addVariable("a", MockIntegerValue(vm, 3))
             frame.addVariable("b", MockIntegerValue(vm, 5))
+        }
+    }
+
+    fun testNPE() {
+        doTest("""
+            fun test(x: String?) {
+              <caret>println(x/*NPE*/!!)
+            }
+        """.trimIndent()) { vm, frame ->
+            frame.addVariable(MockLocalVariable(vm, "x", vm.createReferenceType(String::class.java), null))
+        }
+    }
+
+    fun testAsNull() {
+        doTest("""
+            fun test(x: Any?) {
+              <caret>println(x as String?) 
+              println(x as/*NPE*/ String)
+            }
+        """.trimIndent()) { vm, frame ->
+            frame.addVariable(MockLocalVariable(vm, "x", vm.createReferenceType(String::class.java), null))
+        }
+    }
+
+    fun testAs() {
+        doTest("""
+            fun test(x: Any?) {
+              <caret>println(x as/*CCE*/ Int) 
+            }
+        """.trimIndent()) { vm, frame ->
+            frame.addVariable("x", MockValue.createValue("", vm))
+        }
+    }
+
+    fun testNull() {
+        doTest("""
+            fun main() {
+                test("hello", null)
+            }
+
+            fun test(x: Any, y: String?) {
+                <caret>println(x as? Int/*NULL*/)
+                println(y/*NULL*/ ?: "oops")
+            }
+        """.trimIndent()) { vm, frame ->
+            frame.addVariable("x", MockValue.createValue("xyz", vm))
+            frame.addVariable(MockLocalVariable(vm, "y", vm.createReferenceType(String::class.java), null))
+        }
+    }
+
+    fun testEnum() {
+        val text = """import java.lang.annotation.ElementType
+                
+                class Test {
+                  fun test(t : ElementType) {
+                    <caret>if (t == ElementType.PARAMETER/*FALSE*/) {}
+                    if (t == ElementType.METHOD/*TRUE*/) {}
+                  }
+                }"""
+        doTest(text) { vm, frame ->
+            frame.addVariable("t", MockValue.createValue(ElementType.METHOD, ElementType::class.java, vm))
         }
     }
 

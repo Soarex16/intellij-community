@@ -110,7 +110,7 @@ public final class FileWatcher {
   }
 
   public boolean isSettingRoots() {
-    Future<?> lastTask = myLastTask.get();  // a new task may come after the read, but this seem to be an acceptable race
+    Future<?> lastTask = myLastTask.get();  // a new task may come after the read, but this seems to be an acceptable race
     if (lastTask != null && !lastTask.isDone()) {
       return true;
     }
@@ -173,7 +173,10 @@ public final class FileWatcher {
       () -> {
         Notification notification = group.createNotification(title, cause, NotificationType.WARNING);
         notification.setSuggestionType(true);
-        if (listener != null) notification.setListener(listener);
+        if (listener != null) {
+          //noinspection deprecation
+          notification.setListener(listener);
+        }
         Notifications.Bus.notify(notification);
       },
       ModalityState.NON_MODAL);
@@ -223,7 +226,7 @@ public final class FileWatcher {
     }
 
     @Override
-    public void notifyMapping(@NotNull Collection<? extends Pair<String, String>> mapping) {
+    public void notifyMapping(@NotNull Collection<Pair<String, String>> mapping) {
       if (!mapping.isEmpty()) {
         myPathMap.addMapping(mapping);
       }
@@ -312,15 +315,15 @@ public final class FileWatcher {
   public static final String RESET = "(reset)";
   public static final String OTHER = "(other)";
 
-  private volatile Consumer<String> myTestNotifier;
+  private volatile Consumer<? super String> myTestNotifier;
 
   private void notifyOnEvent(String path) {
-    Consumer<String> notifier = myTestNotifier;
+    Consumer<? super String> notifier = myTestNotifier;
     if (notifier != null) notifier.accept(path);
   }
 
   @TestOnly
-  public void startup(@Nullable Consumer<String> notifier) throws Exception {
+  public void startup(@Nullable Consumer<? super String> notifier) throws Exception {
     myTestNotifier = notifier;
     myFileWatcherExecutor.submit(() -> {
       for (PluggableFileWatcher watcher : PluggableFileWatcher.EP_NAME.getIterable()) {

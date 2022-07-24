@@ -1,6 +1,7 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.kotlin.idea.inspections
 
+import com.intellij.codeInspection.CleanupLocalInspectionTool
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemsHolder
@@ -8,7 +9,7 @@ import com.intellij.openapi.project.Project
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.descriptors.ReceiverParameterDescriptor
 import org.jetbrains.kotlin.descriptors.SimpleFunctionDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
@@ -22,6 +23,8 @@ import org.jetbrains.kotlin.resolve.findOriginalTopMostOverriddenDescriptors
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.resolve.scopes.receivers.ReceiverValue
 import org.jetbrains.kotlin.types.isError
+
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.inspections.AbstractKotlinInspection
 
 class VerboseNullabilityAndEmptinessInspection : AbstractKotlinInspection() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean) = binaryExpressionVisitor(fun(unwrappedNullCheckExpression) {
@@ -166,6 +169,7 @@ class VerboseNullabilityAndEmptinessInspection : AbstractKotlinInspection() {
         override fun applyFix(project: Project, descriptor: ProblemDescriptor) {
             val nullCheckExpression = descriptor.psiElement as? KtExpression ?: return
             val binaryExpression = findBinaryExpression(nullCheckExpression) ?: return
+            val parenthesizedParent = binaryExpression.getTopmostParenthesizedParent() as? KtParenthesizedExpression
 
             val expressionText = buildString {
                 if (isPositiveCheck) append("!")
@@ -186,6 +190,9 @@ class VerboseNullabilityAndEmptinessInspection : AbstractKotlinInspection() {
                     binaryExpression.replace(leftExpression) // flag && a != null && a.isNotEmpty() -> flag && a.isNotEmpty()
                     outerBinaryExpression.right?.replace(callExpression) // flag && a.isNotEmpty() -> flag && !a.isNullOrEmpty()
                 }
+            }
+            if (parenthesizedParent != null && KtPsiUtil.areParenthesesUseless(parenthesizedParent)) {
+                parenthesizedParent.replace(parenthesizedParent.deparenthesize())
             }
         }
 
@@ -245,8 +252,7 @@ class VerboseNullabilityAndEmptinessInspection : AbstractKotlinInspection() {
         }
 
         private fun findBinaryExpression(nullCheckExpression: KtExpression): KtBinaryExpression? {
-            val parent = nullCheckExpression.parent as? KtExpression ?: return null
-            return (parent.getTopmostParenthesizedParent()?.parent ?: parent) as? KtBinaryExpression
+            return nullCheckExpression.parenthesize().parent as? KtBinaryExpression
         }
 
         private fun findContentCheckExpression(nullCheckExpression: KtExpression, binaryExpression: KtBinaryExpression): KtExpression? {

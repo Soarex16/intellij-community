@@ -686,7 +686,7 @@ public class JavaDocInfoGenerator {
       if (containingFile == null) return false;
       items = new PsiFileSystemItem[]{containingFile};
     }
-    ProjectFileIndex projectFileIndex = ProjectFileIndex.SERVICE.getInstance(myProject);
+    ProjectFileIndex projectFileIndex = ProjectFileIndex.getInstance(myProject);
     for (PsiFileSystemItem item : items) {
       VirtualFile file = item.getVirtualFile();
       if (file != null && projectFileIndex.isInSource(file)) return true;
@@ -831,11 +831,12 @@ public class JavaDocInfoGenerator {
 
   @NotNull
   private String generateOneParameterPresentableName(PsiNamedElement parameter) {
+    String value = Objects.requireNonNullElse(parameter.getName(), CommonBundle.getErrorTitle());
+    if (isRendered()) {
+      return value;
+    }
     StringBuilder paramName = new StringBuilder();
-    appendStyledSpan(
-      paramName,
-      getHighlightingManager().getParameterAttributes(),
-      Objects.requireNonNullElse(parameter.getName(), CommonBundle.getErrorTitle()));
+    appendStyledSpan(paramName, getHighlightingManager().getParameterAttributes(), value);
     return paramName.toString();
   }
 
@@ -1131,35 +1132,56 @@ public class JavaDocInfoGenerator {
 
   private void appendInitializer(StringBuilder buffer, PsiVariable variable, int variableSignatureLength) {
     PsiExpression initializer = variable.getInitializer();
-    if (initializer == null) return;
+    if (initializer != null) {
+      String initializerText = initializer.getText().trim();
+      if (variableSignatureLength + initializerText.length() < 80) {
+        // initializer should be printed on the same line
+        buffer.append(" ");
+      }
+      else {
+        // initializer should be printed on the new line
+        buffer.append("\n");
+        buffer.append(NBSP.repeat(CodeStyle.getIndentSize(variable.getContainingFile())));
+      }
+      appendStyledSpan(buffer, getHighlightingManager().getOperationSignAttributes(), "= ");
 
-    String initializerText = initializer.getText().trim();
-    if (variableSignatureLength + initializerText.length() < 80) {
-      // initializer should be printed on the same line
-      buffer.append(" ");
+      int index = newLineIndex(initializerText);
+      if (index < initializerText.length()) {
+        initializerText = initializerText.substring(0, index);
+        buffer.append(StringUtil.escapeXmlEntities(initializerText));
+        buffer.append("...");
+      }
+      else {
+        generateExpressionText(initializer, buffer);
+      }
+      PsiExpression constantInitializer = calcInitializerExpression(variable);
+      if (constantInitializer != null) {
+        buffer.append(DocumentationMarkup.GRAYED_START);
+        appendExpressionValue(buffer, constantInitializer);
+        buffer.append(DocumentationMarkup.GRAYED_END);
+      }
     }
-    else {
-      // initializer should be printed on the new line
-      buffer.append("\n");
-      buffer.append(NBSP.repeat(CodeStyle.getIndentSize(variable.getContainingFile())));
+    else if (variable instanceof PsiEnumConstant) {
+      PsiExpressionList list = ((PsiEnumConstant)variable).getArgumentList();
+      if (canComputeArguments(list)) {
+        generateExpressionText(list, buffer);
+      }
     }
-    appendStyledSpan(buffer, getHighlightingManager().getOperationSignAttributes(), "= ");
+  }
 
-    int index = newLineIndex(initializerText);
-    if (index < initializerText.length()) {
-      initializerText = initializerText.substring(0, index);
-      buffer.append(StringUtil.escapeXmlEntities(initializerText));
-      buffer.append("...");
+  public static boolean canComputeArguments(@Nullable PsiExpressionList list) {
+    if (list == null) return false;
+    PsiExpression[] args = list.getExpressions();
+    JavaPsiFacade instance = JavaPsiFacade.getInstance(list.getProject());
+    PsiConstantEvaluationHelper helper = instance.getConstantEvaluationHelper();
+    for (PsiExpression arg : args) {
+      if (helper.computeConstantExpression(arg) == null) return false;
     }
-    else {
-      initializer.accept(new MyVisitor(buffer));
-    }
-    PsiExpression constantInitializer = calcInitializerExpression(variable);
-    if (constantInitializer != null) {
-      buffer.append(DocumentationMarkup.GRAYED_START);
-      appendExpressionValue(buffer, constantInitializer);
-      buffer.append(DocumentationMarkup.GRAYED_END);
-    }
+    return true;
+  }
+
+  public void generateExpressionText(PsiElement initializer, StringBuilder buffer) {
+    initializer.accept(new MyVisitor(buffer));
   }
 
   private static int newLineIndex(String text) {
@@ -2958,7 +2980,7 @@ public class JavaDocInfoGenerator {
     }
 
     @Override
-    public void visitNewExpression(PsiNewExpression expression) {
+    public void visitNewExpression(@NotNull PsiNewExpression expression) {
       appendStyledSpan(myBuffer, getHighlightingManager().getKeywordAttributes(), "new ");
       PsiType type = expression.getType();
       if (type != null) {
@@ -2983,7 +3005,7 @@ public class JavaDocInfoGenerator {
     }
 
     @Override
-    public void visitExpressionList(PsiExpressionList list) {
+    public void visitExpressionList(@NotNull PsiExpressionList list) {
       appendStyledSpan(myBuffer, getHighlightingManager().getParenthesesAttributes(), "(");
       String separator = ", ";
       PsiExpression[] expressions = list.getExpressions();
@@ -2996,7 +3018,7 @@ public class JavaDocInfoGenerator {
     }
 
     @Override
-    public void visitMethodCallExpression(PsiMethodCallExpression expression) {
+    public void visitMethodCallExpression(@NotNull PsiMethodCallExpression expression) {
       appendStyledSpan(
         myBuffer,
         getHighlightingManager().getMethodCallAttributes(),
@@ -3005,13 +3027,13 @@ public class JavaDocInfoGenerator {
     }
 
     @Override
-    public void visitExpression(PsiExpression expression) {
+    public void visitExpression(@NotNull PsiExpression expression) {
       appendHighlightedByLexerAndEncodedAsHtmlCodeSnippet(
         doHighlightSignatures(), myBuffer, expression.getProject(), expression.getLanguage(), expression.getText());
     }
 
     @Override
-    public void visitReferenceExpression(PsiReferenceExpression expression) {
+    public void visitReferenceExpression(@NotNull PsiReferenceExpression expression) {
       appendHighlightedByLexerAndEncodedAsHtmlCodeSnippet(
         doHighlightSignatures(), myBuffer, expression.getProject(), expression.getLanguage(), expression.getText());
     }

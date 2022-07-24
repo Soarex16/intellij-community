@@ -15,13 +15,17 @@
  */
 package com.intellij.ide;
 
+import com.intellij.openapi.actionSystem.IdeActions;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.fileEditor.impl.EditorsSplitters;
+import com.intellij.openapi.keymap.KeymapUtil;
 import org.jetbrains.annotations.NotNull;
 import sun.awt.AppContext;
 
-import javax.swing.*;
 import javax.swing.FocusManager;
+import javax.swing.*;
 import java.awt.*;
+import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeListener;
 /**
  * We extend the obsolete {@link DefaultFocusManager} class here instead of {@link KeyboardFocusManager} to prevent unwanted overwriting of
@@ -57,6 +61,16 @@ class IdeKeyboardFocusManager extends DefaultFocusManager /* see javadoc above *
       }
       super.setDefaultFocusTraversalPolicy(defaultPolicy);
     }
+  }
+
+  @Override
+  public boolean postProcessKeyEvent(KeyEvent e) {
+    if (!e.isConsumed() &&
+        KeymapUtil.isEventForAction(e, IdeActions.ACTION_FOCUS_EDITOR) &&
+        EditorsSplitters.activateEditorComponentOnEscape(e.getComponent())) {
+      e.consume();
+    }
+    return super.postProcessKeyEvent(e);
   }
 
   @NotNull

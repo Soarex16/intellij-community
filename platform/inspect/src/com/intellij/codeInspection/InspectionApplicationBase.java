@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInspection;
 
 import com.intellij.ProjectTopics;
@@ -16,7 +16,6 @@ import com.intellij.ide.CommandLineInspectionProgressReporter;
 import com.intellij.ide.CommandLineInspectionProjectConfigurator;
 import com.intellij.ide.impl.PatchProjectUtil;
 import com.intellij.ide.impl.ProjectUtil;
-import com.intellij.ide.startup.StartupManagerEx;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.*;
 import com.intellij.openapi.application.ex.ApplicationInfoEx;
@@ -35,6 +34,7 @@ import com.intellij.openapi.project.ex.ProjectManagerEx;
 import com.intellij.openapi.roots.AdditionalLibraryRootsListener;
 import com.intellij.openapi.roots.ModuleRootEvent;
 import com.intellij.openapi.roots.ModuleRootListener;
+import com.intellij.openapi.startup.StartupManager;
 import com.intellij.openapi.util.Comparing;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Pair;
@@ -58,6 +58,7 @@ import com.intellij.psi.search.scope.packageSet.*;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.MultiMap;
 import com.intellij.util.messages.MessageBusConnection;
+import kotlinx.coroutines.future.FutureKt;
 import one.util.streamex.StreamEx;
 import org.jdom.JDOMException;
 import org.jetbrains.annotations.NotNull;
@@ -101,15 +102,16 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
   String myTargets;
   public boolean myErrorCodeRequired = true;
   String myScopePattern;
+
   public void startup() {
     if (myProjectPath == null) {
       reportError("Project to inspect is not defined");
-      printHelp();
+      printHelpAndExit();
     }
 
     if (myProfileName == null && myProfilePath == null && myStubProfile == null) {
       reportError("Profile to inspect with is not defined");
-      printHelp();
+      printHelpAndExit();
     }
 
     ApplicationManagerEx.getApplicationEx().setSaveAllowed(false);
@@ -134,7 +136,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     myPathProfiling = true;
   }
 
-  public void header(){}
+  public void header() { }
 
   public void execute() throws Exception {
     ApplicationInfoEx appInfo = (ApplicationInfoEx)ApplicationInfo.getInstance();
@@ -154,9 +156,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     }
   }
 
-  private void printHelp() {
-    assert myHelpProvider != null;
-
+  private void printHelpAndExit() {
     myHelpProvider.printHelpAndExit();
   }
 
@@ -186,12 +186,12 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
 
       @Override
       public @NotNull Predicate<Path> getFilesFilter() {
-        return __->true;
+        return __ -> true;
       }
 
       @Override
       public @NotNull Predicate<VirtualFile> getVirtualFilesFilter() {
-        return __->true;
+        return __ -> true;
       }
     };
   }
@@ -215,20 +215,22 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
   @Nullable
   protected Project openProject(@NotNull Path projectPath, @NotNull Disposable parentDisposable)
     throws InterruptedException, ExecutionException {
-    VirtualFile vfsProject = LocalFileSystem.getInstance().findFileByPath(FileUtil.toSystemIndependentName(projectPath.toString()));
+    VirtualFile vfsProject = LocalFileSystem.getInstance().refreshAndFindFileByPath(
+      FileUtil.toSystemIndependentName(projectPath.toString()));
     if (vfsProject == null) {
       reportError(InspectionsBundle.message("inspection.application.file.cannot.be.found", projectPath));
-      printHelp();
+      printHelpAndExit();
     }
 
     reportMessageNoLineBreak(1, InspectionsBundle.message("inspection.application.opening.project"));
     ConversionService conversionService = ConversionService.getInstance();
     StringBuilder convertErrorBuffer = new StringBuilder();
+    /* Temp disable QD-3558
     if (conversionService != null &&
         conversionService.convertSilently(projectPath, createConversionListener(convertErrorBuffer)).openingIsCanceled()) {
       onFailure(convertErrorBuffer.toString());
       return null;
-    }
+    }*/
 
     for (CommandLineInspectionProjectConfigurator configurator : CommandLineInspectionProjectConfigurator.EP_NAME.getExtensionList()) {
       CommandLineInspectionProjectConfigurator.ConfiguratorContext context = configuratorContext(projectPath, null);
@@ -247,7 +249,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     AtomicReference<Project> projectRef = new AtomicReference<>();
     ProgressManager.getInstance().runProcess(
       () -> projectRef.set(ProjectUtil.openOrImport(projectPath)),
-      createProcessIndicator()
+      createProgressIndicator()
     );
     Project project = projectRef.get();
     if (project == null) {
@@ -308,7 +310,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
         VirtualFile vfsDir = LocalFileSystem.getInstance().findFileByPath(mySourceDirectory);
         if (vfsDir == null) {
           reportError(InspectionsBundle.message("inspection.application.directory.cannot.be.found", mySourceDirectory));
-          printHelp();
+          printHelpAndExit();
         }
         scope = GlobalSearchScopesCore.directoriesScope(project, true, Objects.requireNonNull(vfsDir));
       }
@@ -360,7 +362,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
       try {
         List<VirtualFile> files = changeListManager.getAffectedFiles();
         for (VirtualFile file : files) {
-          reportMessage(0, "modified file" + file.getPath());
+          reportMessage(0, "modified file: " + file.getPath());
         }
         future.complete(files);
       }
@@ -377,7 +379,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     LOG.info("Waiting for startup activities");
     int timeout = Registry.intValue("batch.inspections.startup.activities.timeout", 180);
     try {
-      StartupManagerEx.getInstanceEx(project).getAllActivitiesPassedFuture().get(timeout, TimeUnit.MINUTES);
+      FutureKt.asCompletableFuture(StartupManager.getInstance(project).getAllActivitiesPassedFuture()).get(timeout, TimeUnit.MINUTES);
       LOG.info("Startup activities finished");
     }
     catch (TimeoutException e) {
@@ -435,7 +437,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
 
     for (CommandLineInspectionProjectConfigurator configurator : CommandLineInspectionProjectConfigurator.EP_NAME.getIterable()) {
       CommandLineInspectionProjectConfigurator.ConfiguratorContext context = configuratorContext(projectPath, scope);
-      configurator.preConfigureProject(project,context);
+      configurator.preConfigureProject(project, context);
     }
 
     for (CommandLineInspectionProjectConfigurator configurator : CommandLineInspectionProjectConfigurator.EP_NAME.getIterable()) {
@@ -448,7 +450,10 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
   }
 
   private static void waitForInvokeLaterActivities() {
-    ApplicationManager.getApplication().invokeAndWait(() -> { }, ModalityState.any());
+    ApplicationManager.getApplication().invokeAndWait(
+      () -> {
+      },
+      ModalityState.any());
   }
 
   private void runAnalysis(Project project,
@@ -485,7 +490,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     // convert report
     if (reportConverter != null) {
       try {
-        List<File> results = ContainerUtil.map2List(inspectionsResults, path -> path.toFile());
+        List<File> results = ContainerUtil.map2List(inspectionsResults, Path::toFile);
         reportConverter.convert(resultsDataPath.toString(), myOutPath, context.getTools(),
                                 results);
         InspectResultsConsumer.runConsumers(context.getTools(), results, project);
@@ -495,7 +500,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
       }
       catch (InspectionsReportConverter.ConversionException e) {
         reportError("\n" + e.getMessage());
-        printHelp();
+        printHelpAndExit();
       }
     }
   }
@@ -520,7 +525,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
     runAnalysisAfterShelvingSync(
       project,
       ChangeListManager.getInstance(project).getAffectedFiles(),
-      createProcessIndicator(),
+      createProgressIndicator(),
       () -> {
         syncProject(project, changes);
 
@@ -544,9 +549,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
   }
 
   private void setupFirstAnalysisHandler(GlobalInspectionContextEx context) {
-    if (myVerboseLevel > 0) {
-      reportMessage(1, "Running first analysis stage...");
-    }
+    reportMessage(1, "Running first analysis stage...");
     context.setGlobalReportedProblemFilter(
       (entity, description) -> {
         if (!(entity instanceof RefElement)) return false;
@@ -574,9 +577,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
   }
 
   public void setupSecondAnalysisHandler(Project project, GlobalInspectionContextEx context) {
-    if (myVerboseLevel > 0) {
-      reportMessage(1, "Running second analysis stage...");
-    }
+    reportMessage(1, "Running second analysis stage...");
     printBeforeSecondStageProblems();
     ChangeListManager changeListManager = ChangeListManager.getInstance(project);
     context.setGlobalReportedProblemFilter(
@@ -635,7 +636,7 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
   private void logNotFiltered(String text, VirtualFile file, int line, int position) {
     // unused asks shouldReport not only for warnings.
     if (text.contains("unused")) return;
-    reportMessage(3, "Not filtered: ");
+    reportMessage(3, "Not filtered:");
     reportMessage(3, file.getPath() + ":" + (line + 1) + " Original: " + (position + 1));
     reportMessage(3, "\t\t" + text);
   }
@@ -674,10 +675,10 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
       if (!myErrorCodeRequired) {
         closeProject(project);
       }
-    }, createProcessIndicator());
+    }, createProgressIndicator());
   }
 
-  private @NotNull ProgressIndicatorBase createProcessIndicator() {
+  private @NotNull ProgressIndicatorBase createProgressIndicator() {
     return new InspectionProgressIndicator();
   }
 
@@ -761,18 +762,13 @@ public class InspectionApplicationBase implements CommandLineInspectionProgressR
   }
 
   public @Nullable InspectionProfileImpl loadProfileByName(@NotNull Project project, @NotNull String profileName) {
-    InspectionProfileManager.getInstance().getProfiles(); //force init provided profiles
+    InspectionProfileManager.getInstance().getProfiles(); //  force init provided profiles
     InspectionProjectProfileManager profileManager = InspectionProjectProfileManager.getInstance(project);
     InspectionProfileImpl inspectionProfile = profileManager.getProfile(profileName, false);
-    if (inspectionProfile != null) {
-      reportMessage(1, "Loaded the '" + profileName +"' shared project profile");
-    }
-    else {
-      //check if ide profile is used for project
+    if (inspectionProfile == null) {  // check if the IDE profile is used for the project
       for (InspectionProfileImpl profile : profileManager.getProfiles()) {
         if (Comparing.strEqual(profile.getName(), profileName)) {
           inspectionProfile = profile;
-          reportMessage(1, "Loaded the '" + profileName + "' local profile");
           break;
         }
       }

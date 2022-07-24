@@ -12,12 +12,17 @@ The master branch contains the source code which will be used to create the next
 and build numbers for older releases of IntelliJ IDEA can be found on the page of
 [Build Number Ranges](https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html).
 
-_**Speed Tip:**_ If the complete repository history isn't needed then using a shallow clone (`git clone --depth 1`) will save significant time.
-
 These Git operations can also be done through the [IntelliJ IDEA user interface](https://www.jetbrains.com/help/idea/using-git-integration.html).
 
+_**Speed Tip:**_ If the complete repository history isn't needed then using a shallow clone (`git clone --depth 1`) will save significant time.
+
+_**On Windows:**_ Two git options are required to check out sources on Windows. Since it's a common source of Git issues on Windows anyway, those options could be set globally (execute those commands before cloning any of intellij-community/android repositories):
+
+* `git config --global core.longpaths true`
+* `git config --global core.autocrlf input`
+
 IntelliJ IDEA Community Edition requires additional Android modules from separate Git repositories. To clone these repositories,
-run one of the `getPlugins` scripts located in the `<IDEA_HOME>` directory. These scripts clone their respective *master* branches.
+run one of the `getPlugins` scripts located in the `<IDEA_HOME>` directory. These scripts clone their respective *master* branches. Make sure you are inside the `<IDEA_HOME>` directory when running those scripts, so the modules get cloned inside the `<IDEA_HOME>` directory.
 * `getPlugins.sh` for Linux or macOS.
 * `getPlugins.bat` for Windows.
 
@@ -70,8 +75,6 @@ To run tests on the build, apply these setting to the **Run | Edit Configuration
   * Working dir: `<IDEA_HOME>/bin`
   * VM options: 
     * `-ea` 
-    * `-Didea.config.path=../test-config`
-    * `-Didea.system.path=../test-system`
  
 You can find other helpful information at [https://www.jetbrains.com/opensource/idea](https://www.jetbrains.com/opensource/idea).
 The "Contribute Code" section of that site describes how you can contribute to IntelliJ IDEA.

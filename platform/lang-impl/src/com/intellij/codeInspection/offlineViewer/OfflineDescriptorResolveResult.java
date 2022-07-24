@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInspection.offlineViewer;
 
 import com.intellij.codeInsight.daemon.impl.CollectHighlightsUtil;
@@ -23,6 +23,7 @@ import com.intellij.openapi.progress.ProgressManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Pair;
 import com.intellij.openapi.util.TextRange;
+import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.light.LightElement;
@@ -97,7 +98,8 @@ public final class OfflineDescriptorResolveResult {
       return createRerunGlobalToolDescriptor((GlobalInspectionToolWrapper)toolWrapper, element, offlineDescriptor);
     }
     Project project = presentation.getContext().getProject();
-    if (toolWrapper instanceof LocalInspectionToolWrapper && !(toolWrapper.getTool() instanceof UnfairLocalInspectionTool)) {
+    if (Registry.is("offline.inspections.results.verify") && 
+        toolWrapper instanceof LocalInspectionToolWrapper && !(toolWrapper.getTool() instanceof UnfairLocalInspectionTool)) {
       if (element instanceof RefElement) {
         final PsiElement psiElement = ((RefElement)element).getPsiElement();
         if (psiElement != null) {
@@ -146,8 +148,10 @@ public final class OfflineDescriptorResolveResult {
     }
     else if (element instanceof RefModule) {
       return inspectionManager.createProblemDescriptor(offlineDescriptor.getDescription(), ((RefModule)element).getModule(), fixes);
-    } else {
-      return inspectionManager.createProblemDescriptor(offlineDescriptor.getDescription(), fixes);
+    }
+    else {
+      return inspectionManager.createProblemDescriptor(offlineDescriptor.getDescription(), 
+                                                       ContainerUtil.filter(fixes, f -> !(f instanceof LocalQuickFix)).toArray(QuickFix.EMPTY_ARRAY));
     }
   }
 

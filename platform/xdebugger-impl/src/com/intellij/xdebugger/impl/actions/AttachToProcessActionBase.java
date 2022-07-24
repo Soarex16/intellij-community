@@ -29,7 +29,6 @@ import com.intellij.util.containers.MultiMap;
 import com.intellij.util.ui.StatusText;
 import com.intellij.xdebugger.XDebuggerBundle;
 import com.intellij.xdebugger.attach.*;
-import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -38,7 +37,6 @@ import org.jetbrains.annotations.TestOnly;
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
-import java.awt.event.InputEvent;
 import java.util.*;
 import java.util.function.Supplier;
 
@@ -320,7 +318,7 @@ public abstract class AttachToProcessActionBase extends AnAction implements Dumb
     Map<XAttachHost, LinkedHashSet<RecentItem>> recentItems = project.getUserData(RECENT_ITEMS_KEY);
     return recentItems == null || !recentItems.containsKey(host)
            ? Collections.emptyList()
-           : Collections.unmodifiableList(new ArrayList<>(recentItems.get(host)));
+           : List.copyOf(recentItems.get(host));
   }
 
   public static class RecentItem {
@@ -699,13 +697,6 @@ public abstract class AttachToProcessActionBase extends AnAction implements Dumb
     @Override
     public boolean isFinal(AttachItem value) {
       return value instanceof AttachToProcessItem;
-    }
-
-    @Override
-    public PopupStep onChosen(AttachItem selectedValue,
-                              boolean finalChoice,
-                              @MagicConstant(flagsFromClass = InputEvent.class) int eventModifiers) {
-      return onChosen(selectedValue, finalChoice);
     }
 
     private class ActionListStep extends MyBasePopupStep<AttachToProcessItem> {

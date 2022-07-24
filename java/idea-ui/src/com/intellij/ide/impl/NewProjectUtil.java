@@ -1,8 +1,8 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.ide.impl;
 
-import com.intellij.feedback.state.projectCreation.ProjectCreationInfoService;
-import com.intellij.feedback.state.projectCreation.ProjectCreationInfoState;
+import com.intellij.feedback.npw.state.ProjectCreationInfoService;
+import com.intellij.feedback.npw.state.ProjectCreationInfoState;
 import com.intellij.ide.JavaUiBundle;
 import com.intellij.ide.SaveAndSyncHandler;
 import com.intellij.ide.projectWizard.NewProjectWizardCollector;
@@ -10,7 +10,6 @@ import com.intellij.ide.util.newProjectWizard.AbstractProjectWizard;
 import com.intellij.ide.util.projectWizard.AbstractModuleBuilder;
 import com.intellij.ide.util.projectWizard.ProjectBuilder;
 import com.intellij.ide.util.projectWizard.WizardContext;
-import com.intellij.internal.statistic.StructuredIdeActivity;
 import com.intellij.internal.statistic.service.fus.collectors.FUCounterUsageLogger;
 import com.intellij.internal.statistic.utils.PluginInfo;
 import com.intellij.internal.statistic.utils.PluginInfoDetectorKt;
@@ -37,8 +36,8 @@ import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.openapi.wm.ToolWindow;
 import com.intellij.openapi.wm.ToolWindowId;
 import com.intellij.openapi.wm.ToolWindowManager;
+import com.intellij.ui.AppUIUtil;
 import com.intellij.util.TimeoutUtil;
-import com.intellij.util.ui.UIUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -99,8 +98,9 @@ public final class NewProjectUtil {
       return newProject;
     }
     catch (IOException e) {
-      UIUtil.invokeLaterIfNeeded(() -> Messages.showErrorDialog(e.getMessage(),
-                                                                JavaUiBundle.message("dialog.title.project.initialization.failed")));
+      AppUIUtil.invokeOnEdt(() -> {
+        Messages.showErrorDialog(e.getMessage(), JavaUiBundle.message("dialog.title.project.initialization.failed"));
+      });
       return null;
     }
   }
@@ -138,7 +138,7 @@ public final class NewProjectUtil {
 
     ProjectManagerEx projectManager = ProjectManagerEx.getInstanceEx();
     try {
-      Path projectFile = Paths.get(projectFilePath);
+      Path projectFile = Path.of(projectFilePath);
       Path projectDir;
       if (wizard.getStorageScheme() == StorageScheme.DEFAULT) {
         projectDir = projectFile.getParent();

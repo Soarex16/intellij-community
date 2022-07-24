@@ -28,6 +28,8 @@ import java.util.function.Predicate;
  * Should be constructed using {@link #build()} method.
  */
 public class UrlClassLoader extends ClassLoader implements ClassPath.ClassDataConsumer {
+  private static final boolean isClassPathIndexEnabledGlobalValue = Boolean.parseBoolean(System.getProperty("idea.classpath.index.enabled", "true"));
+
   private static final boolean mimicJarUrlConnection = Boolean.parseBoolean(System.getProperty("idea.mimic.jar.url.connection", "false"));
 
   private static final boolean isParallelCapable = registerAsParallelCapable();
@@ -120,7 +122,7 @@ public class UrlClassLoader extends ClassLoader implements ClassPath.ClassDataCo
     configuration.isSystemClassLoader = true;
     configuration.parent = parent.getParent();
     configuration.useCache = true;
-    configuration.isClassPathIndexEnabled = true;
+    configuration.isClassPathIndexEnabled = isClassPathIndexEnabledGlobalValue;
     configuration.isBootstrapResourcesAllowed = Boolean.parseBoolean(System.getProperty("idea.allow.bootstrap.resources", "true"));
     return configuration;
   }
@@ -311,13 +313,13 @@ public class UrlClassLoader extends ClassLoader implements ClassPath.ClassDataCo
   }
 
   public final void processResources(@NotNull String dir,
-                                     @NotNull Predicate<String> fileNameFilter,
+                                     @NotNull Predicate<? super String> fileNameFilter,
                                      @NotNull BiConsumer<? super String, ? super InputStream> consumer) throws IOException {
     classPath.processResources(dir, fileNameFilter, consumer);
   }
 
   @Override
-  protected @NotNull Enumeration<URL> findResources(@NotNull String name) throws IOException {
+  public @NotNull Enumeration<URL> findResources(@NotNull String name) throws IOException {
     return classPath.getResources(name);
   }
 
@@ -545,8 +547,6 @@ public class UrlClassLoader extends ClassLoader implements ClassPath.ClassDataCo
   }
 
   public static final class Builder {
-    private static final boolean isClassPathIndexEnabledGlobalValue = Boolean.parseBoolean(System.getProperty("idea.classpath.index.enabled", "true"));
-
     List<Path> files = Collections.emptyList();
     ClassLoader parent;
     boolean lockJars = true;

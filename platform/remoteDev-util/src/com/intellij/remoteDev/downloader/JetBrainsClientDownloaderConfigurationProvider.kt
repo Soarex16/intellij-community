@@ -45,8 +45,10 @@ interface JetBrainsClientDownloaderConfigurationProvider {
 class RealJetBrainsClientDownloaderConfigurationProvider : JetBrainsClientDownloaderConfigurationProvider {
   override fun modifyClientCommandLine(clientCommandLine: GeneralCommandLine) { }
 
-  override val clientDownloadUrl: URI = RemoteDevSystemSettings.getClientDownloadUrl().value
-  override val jreDownloadUrl: URI = RemoteDevSystemSettings.getJreDownloadUrl().value
+  override val clientDownloadUrl: URI
+    get() = RemoteDevSystemSettings.getClientDownloadUrl().value
+  override val jreDownloadUrl: URI
+    get() = RemoteDevSystemSettings.getJreDownloadUrl().value
   override val clientCachesDir: Path get () {
     val downloadDestination = IntellijClientDownloaderSystemSettings.getDownloadDestination()
     if (downloadDestination.value != null) {
@@ -79,8 +81,8 @@ class TestJetBrainsClientDownloaderConfigurationProvider : JetBrainsClientDownlo
     }
   }
 
-  override var clientDownloadUrl: URI = URI("https://cache-redirector.jetbrains.com/download.jetbrains.com/idea/code-with-me/")
-  override var jreDownloadUrl: URI = URI("https://cache-redirector.jetbrains.com/download.jetbrains.com/idea/jbr/")
+  override var clientDownloadUrl: URI = URI("https://download.jetbrains.com/idea/code-with-me/")
+  override var jreDownloadUrl: URI = URI("https://download.jetbrains.com/idea/jbr/")
   override var clientCachesDir: Path = Files.createTempDirectory("")
   override var verifySignature: Boolean = true
 

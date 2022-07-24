@@ -53,7 +53,7 @@ public class Notification {
   public enum CollapseActionsDirection {KEEP_LEFTMOST, KEEP_RIGHTMOST}
 
   private static final Logger LOG = Logger.getInstance(Notification.class);
-  private static final DataKey<Notification> KEY = DataKey.create("Notification");
+  public static final DataKey<Notification> KEY = DataKey.create("Notification");
 
   public final @NotNull String id;
 
@@ -68,7 +68,7 @@ public class Notification {
   private @Nullable NotificationListener myListener;
   private @Nullable @LinkLabel String myDropDownText;
   private @Nullable List<@NotNull AnAction> myActions;
-  private @NotNull CollapseActionsDirection myCollapseDirection = CollapseActionsDirection.KEEP_RIGHTMOST;
+  private @NotNull CollapseActionsDirection myCollapseDirection = CollapseActionsDirection.KEEP_LEFTMOST;
   private @Nullable AnAction myContextHelpAction;
   private @Nullable List<@NotNull Runnable> myWhenExpired;
   private @Nullable Boolean myImportant;
@@ -77,6 +77,7 @@ public class Notification {
   private String myDoNotAskId;
   private @Nls String myDoNotAskDisplayName;
   private String myRemindLaterHandlerId;
+  private @Nullable String myToolWindowId;
 
   private final AtomicBoolean myExpired = new AtomicBoolean(false);
   private final AtomicReference<WeakReference<Balloon>> myBalloonRef = new AtomicReference<>();
@@ -152,6 +153,17 @@ public class Notification {
     return myGroupId;
   }
 
+  /**
+   * Unique ID for "Don’t show again" action for a specific notification. By default, used group ID and they title.
+   * Only for suggestion notifications.
+   *
+   * @param displayName tile for UI in Preferences | Appearance & Behavior | Notifications
+   */
+  public void configureDoNotAskOption(@NotNull String id, @NotNull @Nls String displayName) {
+    myDoNotAskId = id;
+    myDoNotAskDisplayName = displayName;
+  }
+
   @ApiStatus.Internal
   public boolean canShowFor(@Nullable Project project) {
     if (mySuggestionType) {
@@ -188,7 +200,12 @@ public class Notification {
     return myRemindLaterHandlerId;
   }
 
-  @ApiStatus.Internal
+  /**
+   * Unique ID for "Remind me tomorrow" action for a specific notification.
+   * Only for suggestion notifications.
+   *
+   * @see NotificationRemindLaterHandler
+   */
   public Notification setRemindLaterHandlerId(@NotNull String remindLaterHandlerId) {
     myRemindLaterHandlerId = remindLaterHandlerId;
     return this;
@@ -387,6 +404,18 @@ public class Notification {
 
   public boolean isImportant() {
     return myImportant != null ? myImportant : getListener() != null || myActions != null && !myActions.isEmpty();
+  }
+
+  /**
+   * Sets the tool window ID, overriding the ID specified in the notification group registration.
+   */
+  public @NotNull Notification setToolWindowId(@Nullable String toolWindowId) {
+    myToolWindowId = toolWindowId;
+    return this;
+  }
+
+  public @Nullable String getToolWindowId() {
+    return myToolWindowId;
   }
 
   public final void assertHasTitleOrContent() {

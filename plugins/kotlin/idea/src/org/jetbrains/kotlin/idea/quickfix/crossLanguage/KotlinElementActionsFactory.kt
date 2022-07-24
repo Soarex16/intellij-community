@@ -25,19 +25,21 @@ import org.jetbrains.kotlin.descriptors.CallableDescriptor
 import org.jetbrains.kotlin.descriptors.annotations.AnnotationUseSiteTarget
 import org.jetbrains.kotlin.descriptors.annotations.KotlinTarget
 import org.jetbrains.kotlin.descriptors.resolveClassByFqName
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.KotlinLanguage
+import org.jetbrains.kotlin.idea.base.projectStructure.RootKindFilter
+import org.jetbrains.kotlin.idea.base.projectStructure.matches
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.core.ShortenReferences
 import org.jetbrains.kotlin.idea.core.appendModifier
 import org.jetbrains.kotlin.idea.quickfix.AddModifierFixFE10
 import org.jetbrains.kotlin.idea.quickfix.MakeFieldPublicFix
+import org.jetbrains.kotlin.idea.quickfix.MakeMemberStaticFix
 import org.jetbrains.kotlin.idea.quickfix.RemoveModifierFixBase
 import org.jetbrains.kotlin.idea.quickfix.createFromUsage.callableBuilder.TypeInfo
 import org.jetbrains.kotlin.idea.resolve.ResolutionFacade
 import org.jetbrains.kotlin.idea.util.CommentSaver
 import org.jetbrains.kotlin.idea.util.IdeDescriptorRenderers
-import org.jetbrains.kotlin.idea.util.ProjectRootsUtil
 import org.jetbrains.kotlin.idea.util.resolveToKotlinType
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
 import org.jetbrains.kotlin.lexer.KtTokens
@@ -162,13 +164,16 @@ class KotlinElementActionsFactory : JvmElementActionsFactory() {
 
     override fun createChangeModifierActions(target: JvmModifiersOwner, request: ChangeModifierRequest): List<IntentionAction> {
         val kModifierOwner =
-            target.toKtElement<KtModifierListOwner>()?.takeIf { ProjectRootsUtil.isInProjectSource(it) } ?: return emptyList()
+            target.toKtElement<KtModifierListOwner>()?.takeIf { RootKindFilter.projectSources.matches(it) } ?: return emptyList()
 
         val modifier = request.modifier
         val shouldPresent = request.shouldBePresent()
 
         if (modifier == JvmModifier.PUBLIC && shouldPresent && kModifierOwner is KtProperty) {
             return listOf(MakeFieldPublicFix(kModifierOwner))
+        }
+        if (modifier == JvmModifier.STATIC && shouldPresent && kModifierOwner is KtNamedDeclaration) {
+            return listOf(MakeMemberStaticFix(kModifierOwner))
         }
 
         //TODO: make similar to `createAddMethodActions`
@@ -192,7 +197,7 @@ class KotlinElementActionsFactory : JvmElementActionsFactory() {
 
     override fun createAddConstructorActions(targetClass: JvmClass, request: CreateConstructorRequest): List<IntentionAction> {
         val targetKtClass =
-            targetClass.toKtClassOrFile().safeAs<KtClass>()?.takeIf { ProjectRootsUtil.isInProjectSource(it) } ?: return emptyList()
+            targetClass.toKtClassOrFile().safeAs<KtClass>()?.takeIf { RootKindFilter.projectSources.matches(it) } ?: return emptyList()
         val modifierBuilder = ModifierBuilder(targetKtClass).apply { addJvmModifiers(request.modifiers) }
         if (!modifierBuilder.isValid) return emptyList()
 
@@ -270,7 +275,7 @@ class KotlinElementActionsFactory : JvmElementActionsFactory() {
     }
 
     override fun createAddFieldActions(targetClass: JvmClass, request: CreateFieldRequest): List<IntentionAction> {
-        val targetContainer = targetClass.toKtClassOrFile()?.takeIf { ProjectRootsUtil.isInProjectSource(it) } ?: return emptyList()
+        val targetContainer = targetClass.toKtClassOrFile()?.takeIf { RootKindFilter.projectSources.matches(it) } ?: return emptyList()
 
         val writable = JvmModifier.FINAL !in request.modifiers && !request.isConstant
 
@@ -292,7 +297,7 @@ class KotlinElementActionsFactory : JvmElementActionsFactory() {
     }
 
     override fun createAddMethodActions(targetClass: JvmClass, request: CreateMethodRequest): List<IntentionAction> {
-        val targetContainer = targetClass.toKtClassOrFile()?.takeIf { ProjectRootsUtil.isInProjectSource(it) } ?: return emptyList()
+        val targetContainer = targetClass.toKtClassOrFile()?.takeIf { RootKindFilter.projectSources.matches(it) } ?: return emptyList()
 
         val modifierBuilder = ModifierBuilder(targetContainer).apply { addJvmModifiers(request.modifiers) }
         if (!modifierBuilder.isValid) return emptyList()
@@ -345,7 +350,7 @@ class KotlinElementActionsFactory : JvmElementActionsFactory() {
 
     override fun createAddAnnotationActions(target: JvmModifiersOwner, request: AnnotationRequest): List<IntentionAction> {
         val declaration = target.safeAs<KtLightElement<*, *>>()?.kotlinOrigin.safeAs<KtModifierListOwner>()?.takeIf {
-            it.language == KotlinLanguage.INSTANCE && ProjectRootsUtil.isInProjectSource(it)
+            it.language == KotlinLanguage.INSTANCE && RootKindFilter.projectSources.matches(it)
         }  ?: return emptyList()
         val annotationUseSiteTarget = when (target) {
             is JvmField -> AnnotationUseSiteTarget.FIELD
@@ -422,7 +427,7 @@ class KotlinElementActionsFactory : JvmElementActionsFactory() {
             if (!request.isValid) return
             val target = pointer.element ?: return
             val oldType = target.typeReference
-            val typeName = request.qualifiedName ?: target.typeName() ?: return
+            val typeName = primitiveTypeMapping.getOrDefault(request.qualifiedName, request.qualifiedName ?: target.typeName() ?: return)
             val psiFactory = KtPsiFactory(target)
             val annotations = request.annotations.joinToString(" ") { "@${renderAnnotation(target, it, psiFactory)}" }
             val newType = psiFactory.createType("$annotations $typeName".trim())
@@ -441,6 +446,28 @@ class KotlinElementActionsFactory : JvmElementActionsFactory() {
             val descriptor = this.resolveToDescriptorIfAny() as? CallableDescriptor ?: return null
             val returnType = descriptor.returnType ?: return null
             return IdeDescriptorRenderers.SOURCE_CODE.renderType(returnType)
+        }
+
+        companion object {
+            private val primitiveTypeMapping = mapOf(
+                PsiType.VOID.name to "kotlin.Unit",
+                PsiType.BOOLEAN.name to "kotlin.Boolean",
+                PsiType.BYTE.name to "kotlin.Byte",
+                PsiType.CHAR.name to "kotlin.Char",
+                PsiType.SHORT.name to "kotlin.Short",
+                PsiType.INT.name to "kotlin.Int",
+                PsiType.FLOAT.name to "kotlin.Float",
+                PsiType.LONG.name to "kotlin.Long",
+                PsiType.DOUBLE.name to "kotlin.Double",
+                "${PsiType.BOOLEAN.name}[]" to "kotlin.BooleanArray",
+                "${PsiType.BYTE.name}[]" to "kotlin.ByteArray",
+                "${PsiType.CHAR.name}[]" to "kotlin.CharArray",
+                "${PsiType.SHORT.name}[]" to "kotlin.ShortArray",
+                "${PsiType.INT.name}[]" to "kotlin.IntArray",
+                "${PsiType.FLOAT.name}[]" to "kotlin.FloatArray",
+                "${PsiType.LONG.name}[]" to "kotlin.LongArray",
+                "${PsiType.DOUBLE.name}[]" to "kotlin.DoubleArray"
+            )
         }
     }
 }

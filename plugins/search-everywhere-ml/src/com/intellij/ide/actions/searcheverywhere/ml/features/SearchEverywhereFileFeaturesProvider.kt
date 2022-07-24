@@ -5,54 +5,64 @@ import com.intellij.filePrediction.features.history.FileHistoryManagerWrapper
 import com.intellij.ide.actions.GotoFileItemProvider
 import com.intellij.ide.actions.searcheverywhere.FileSearchEverywhereContributor
 import com.intellij.ide.actions.searcheverywhere.RecentFilesSEContributor
-import com.intellij.ide.actions.searcheverywhere.statistics.SearchEverywhereUsageTriggerCollector
-import com.intellij.ide.favoritesTreeView.FavoritesManager
-import com.intellij.navigation.TargetPresentation
+import com.intellij.ide.bookmarks.BookmarkManager
+import com.intellij.internal.statistic.eventLog.events.EventField
+import com.intellij.internal.statistic.eventLog.events.EventFields
+import com.intellij.internal.statistic.eventLog.events.EventPair
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.impl.EditorHistoryManager
 import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.util.IntellijInternalApi
 import com.intellij.openapi.util.io.FileUtil
-import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFileSystemItem
 import com.intellij.util.PathUtil
 import com.intellij.util.Time.*
+import org.jetbrains.annotations.ApiStatus
 
-internal class SearchEverywhereFileFeaturesProvider
-  : SearchEverywhereClassOrFileFeaturesProvider(FileSearchEverywhereContributor::class.java, RecentFilesSEContributor::class.java) {
+@ApiStatus.Internal
+@IntellijInternalApi
+class SearchEverywhereFileFeaturesProvider
+  : SearchEverywhereElementFeaturesProvider(FileSearchEverywhereContributor::class.java, RecentFilesSEContributor::class.java) {
   companion object {
-    internal const val IS_DIRECTORY_DATA_KEY = "isDirectory"
-    internal const val FILETYPE_DATA_KEY = "fileType"
-    internal const val IS_FAVORITE_DATA_KEY = "isFavorite"
-    internal const val IS_OPENED_DATA_KEY = "isOpened"
-    internal const val RECENT_INDEX_DATA_KEY = "recentFilesIndex"
-    internal const val PREDICTION_SCORE_DATA_KEY = "predictionScore"
-    internal const val PRIORITY_DATA_KEY = "priority"
-    internal const val IS_EXACT_MATCH_DATA_KEY = "isExactMatch"
-    internal const val FILETYPE_MATCHES_QUERY_DATA_KEY = "fileTypeMatchesQuery"
-    internal const val IS_TOP_LEVEL_DATA_KEY = "isTopLevel"
+    val FILETYPE_DATA_KEY = EventFields.StringValidatedByCustomRule("fileType", "file_type")
+    val IS_BOOKMARK_DATA_KEY = EventFields.Boolean("isBookmark")
+    val IS_OPENED_DATA_KEY = EventFields.Boolean("isOpened")
 
-    internal const val TIME_SINCE_LAST_MODIFICATION_DATA_KEY = "timeSinceLastModification"
-    internal const val WAS_MODIFIED_IN_LAST_MINUTE_DATA_KEY = "wasModifiedInLastMinute"
-    internal const val WAS_MODIFIED_IN_LAST_HOUR_DATA_KEY = "wasModifiedInLastHour"
-    internal const val WAS_MODIFIED_IN_LAST_DAY_DATA_KEY = "wasModifiedInLastDay"
-    internal const val WAS_MODIFIED_IN_LAST_MONTH_DATA_KEY = "wasModifiedInLastMonth"
+    internal val IS_DIRECTORY_DATA_KEY = EventFields.Boolean("isDirectory")
+    internal val RECENT_INDEX_DATA_KEY = EventFields.Int("recentFilesIndex")
+    internal val PREDICTION_SCORE_DATA_KEY = EventFields.Double("predictionScore")
+    internal val IS_EXACT_MATCH_DATA_KEY = EventFields.Boolean("isExactMatch")
+    internal val FILETYPE_MATCHES_QUERY_DATA_KEY = EventFields.Boolean("fileTypeMatchesQuery")
+    internal val IS_TOP_LEVEL_DATA_KEY = EventFields.Boolean("isTopLevel")
+
+    internal val TIME_SINCE_LAST_MODIFICATION_DATA_KEY = EventFields.Long("timeSinceLastModification")
+    internal val WAS_MODIFIED_IN_LAST_MINUTE_DATA_KEY = EventFields.Boolean("wasModifiedInLastMinute")
+    internal val WAS_MODIFIED_IN_LAST_HOUR_DATA_KEY = EventFields.Boolean("wasModifiedInLastHour")
+    internal val WAS_MODIFIED_IN_LAST_DAY_DATA_KEY = EventFields.Boolean("wasModifiedInLastDay")
+    internal val WAS_MODIFIED_IN_LAST_MONTH_DATA_KEY = EventFields.Boolean("wasModifiedInLastMonth")
   }
 
-  override fun getElementFeatures(element: PsiElement,
-                                  presentation: TargetPresentation?,
+  override fun getFeaturesDeclarations(): List<EventField<*>> {
+    return arrayListOf<EventField<*>>(
+      IS_DIRECTORY_DATA_KEY, FILETYPE_DATA_KEY, IS_BOOKMARK_DATA_KEY, IS_OPENED_DATA_KEY, RECENT_INDEX_DATA_KEY,
+      PREDICTION_SCORE_DATA_KEY, IS_EXACT_MATCH_DATA_KEY, FILETYPE_MATCHES_QUERY_DATA_KEY,
+      TIME_SINCE_LAST_MODIFICATION_DATA_KEY, WAS_MODIFIED_IN_LAST_MINUTE_DATA_KEY, WAS_MODIFIED_IN_LAST_HOUR_DATA_KEY,
+      WAS_MODIFIED_IN_LAST_DAY_DATA_KEY, WAS_MODIFIED_IN_LAST_MONTH_DATA_KEY, IS_TOP_LEVEL_DATA_KEY
+    )
+  }
+
+  override fun getElementFeatures(element: Any,
                                   currentTime: Long,
                                   searchQuery: String,
                                   elementPriority: Int,
-                                  cache: Cache?): Map<String, Any> {
-    val item = (element as? PsiFileSystemItem) ?: return emptyMap()
+                                  cache: FeaturesProviderCache?): List<EventPair<*>> {
+    val item = (SearchEverywherePsiElementFeaturesProvider.getPsiElement(element) as? PsiFileSystemItem) ?: return emptyList()
 
-    val data = hashMapOf<String, Any>(
-      IS_FAVORITE_DATA_KEY to isFavorite(item),
-      IS_DIRECTORY_DATA_KEY to item.isDirectory,
-      PRIORITY_DATA_KEY to elementPriority,
-      IS_EXACT_MATCH_DATA_KEY to (elementPriority == GotoFileItemProvider.EXACT_MATCH_DEGREE),
-      SearchEverywhereUsageTriggerCollector.TOTAL_SYMBOLS_AMOUNT_DATA_KEY to searchQuery.length,
+    val data = arrayListOf<EventPair<*>>(
+      IS_BOOKMARK_DATA_KEY.with(isBookmark(item)),
+      IS_DIRECTORY_DATA_KEY.with(item.isDirectory),
+      IS_EXACT_MATCH_DATA_KEY.with(elementPriority == GotoFileItemProvider.EXACT_MATCH_DEGREE)
     )
 
     data.putIfValueNotNull(IS_TOP_LEVEL_DATA_KEY, isTopLevel(item))
@@ -60,26 +70,26 @@ internal class SearchEverywhereFileFeaturesProvider
     val nameOfItem = item.virtualFile.nameWithoutExtension
     // Remove the directory and the extension if they are present
     val fileNameFromQuery = FileUtil.getNameWithoutExtension(PathUtil.getFileName(searchQuery))
-    data.putAll(getNameMatchingFeatures(nameOfItem, fileNameFromQuery))
+    data.addAll(getNameMatchingFeatures(nameOfItem, fileNameFromQuery))
 
     if (item.isDirectory) {
       // Rest of the features are only applicable to files, not directories
       return data
     }
 
-    data[IS_OPENED_DATA_KEY] = isOpened(item)
-    data[FILETYPE_DATA_KEY] = item.virtualFile.fileType.name
+    data.add(IS_OPENED_DATA_KEY.with(isOpened(item)))
+    data.add(FILETYPE_DATA_KEY.with(item.virtualFile.fileType.name))
     data.putIfValueNotNull(FILETYPE_MATCHES_QUERY_DATA_KEY, matchesFileTypeInQuery(item, searchQuery))
-    data[RECENT_INDEX_DATA_KEY] = getRecentFilesIndex(item)
-    data[PREDICTION_SCORE_DATA_KEY] = getPredictionScore(item)
+    data.add(RECENT_INDEX_DATA_KEY.with(getRecentFilesIndex(item)))
+    data.add(PREDICTION_SCORE_DATA_KEY.with(getPredictionScore(item)))
 
-    data.putAll(getModificationTimeStats(item, currentTime))
+    data.addAll(getModificationTimeStats(item, currentTime))
     return data
   }
 
-  private fun isFavorite(item: PsiFileSystemItem): Boolean {
-    val favoritesManager = FavoritesManager.getInstance(item.project)
-    return ReadAction.compute<Boolean, Nothing> { favoritesManager.getFavoriteListName(null, item.virtualFile) != null }
+  private fun isBookmark(item: PsiFileSystemItem): Boolean {
+    val bookmarkManager = BookmarkManager.getInstance(item.project)
+    return ReadAction.compute<Boolean, Nothing> { item.virtualFile?.let { bookmarkManager.findFileBookmark(it) } != null }
   }
 
   private fun isTopLevel(item: PsiFileSystemItem): Boolean? {
@@ -117,15 +127,15 @@ internal class SearchEverywhereFileFeaturesProvider
     return recentFilesList.size - fileIndex
   }
 
-  private fun getModificationTimeStats(item: PsiFileSystemItem, currentTime: Long): Map<String, Any> {
+  private fun getModificationTimeStats(item: PsiFileSystemItem, currentTime: Long): List<EventPair<*>> {
     val timeSinceLastMod = currentTime - item.virtualFile.timeStamp
 
-    return hashMapOf(
-      TIME_SINCE_LAST_MODIFICATION_DATA_KEY to timeSinceLastMod,
-      WAS_MODIFIED_IN_LAST_MINUTE_DATA_KEY to (timeSinceLastMod <= MINUTE),
-      WAS_MODIFIED_IN_LAST_HOUR_DATA_KEY to (timeSinceLastMod <= HOUR),
-      WAS_MODIFIED_IN_LAST_DAY_DATA_KEY to (timeSinceLastMod <= DAY),
-      WAS_MODIFIED_IN_LAST_MONTH_DATA_KEY to (timeSinceLastMod <= (4 * WEEK.toLong()))
+    return arrayListOf<EventPair<*>>(
+      TIME_SINCE_LAST_MODIFICATION_DATA_KEY.with(timeSinceLastMod),
+      WAS_MODIFIED_IN_LAST_MINUTE_DATA_KEY.with((timeSinceLastMod <= MINUTE)),
+      WAS_MODIFIED_IN_LAST_HOUR_DATA_KEY.with((timeSinceLastMod <= HOUR)),
+      WAS_MODIFIED_IN_LAST_DAY_DATA_KEY.with((timeSinceLastMod <= DAY)),
+      WAS_MODIFIED_IN_LAST_MONTH_DATA_KEY.with((timeSinceLastMod <= (4 * WEEK.toLong())))
     )
   }
 

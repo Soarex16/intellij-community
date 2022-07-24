@@ -945,7 +945,8 @@ public final class ExpressionUtils {
    *
    * @param ref a reference expression to get an effective qualifier for
    * @return a qualifier or created (non-physical) {@link PsiThisExpression}.
-   *         May return null if reference points to local or member of anonymous class referred from inner class
+   * May return null if reference points to local or member of anonymous class referred from inner class
+   * or if reference points to non-static member of class from static context
    */
   @Nullable
   public static PsiExpression getEffectiveQualifier(@NotNull PsiReferenceExpression ref) {
@@ -966,9 +967,14 @@ public final class ExpressionUtils {
    * @param ref    a reference expression to get an effective qualifier for
    * @param member a member the reference is resolved to
    * @return a qualifier or created (non-physical) {@link PsiThisExpression}.
-   * May return null if reference points to member of anonymous class referred from inner class
+   * May return null if reference points to local or member of anonymous class referred from inner class
+   * or if reference points to non-static member of class from static context
    */
   public static PsiExpression getEffectiveQualifier(@NotNull PsiReferenceExpression ref, @NotNull PsiMember member) {
+    PsiMember containingMember = PsiTreeUtil.getParentOfType(ref, PsiMethod.class, PsiClassInitializer.class, PsiField.class);
+    if (!member.hasModifierProperty(PsiModifier.STATIC) && isStaticMember(containingMember)) {
+      return null;
+    }
     PsiElementFactory factory = JavaPsiFacade.getElementFactory(ref.getProject());
     PsiClass memberClass = member.getContainingClass();
     if (memberClass != null) {
@@ -980,8 +986,10 @@ public final class ExpressionUtils {
         containingClass = PsiTreeUtil.getContextOfType(ref, PsiClass.class);
       }
       if (!InheritanceUtil.isInheritorOrSelf(containingClass, memberClass, true)) {
+        if (!member.hasModifierProperty(PsiModifier.STATIC) && isStaticMember(containingClass)) return null;
         containingClass = ClassUtils.getContainingClass(containingClass);
         while (containingClass != null && !InheritanceUtil.isInheritorOrSelf(containingClass, memberClass, true)) {
+          if (!member.hasModifierProperty(PsiModifier.STATIC) && isStaticMember(containingClass)) return null;
           containingClass = ClassUtils.getContainingClass(containingClass);
         }
         if (containingClass != null) {
@@ -1000,6 +1008,10 @@ public final class ExpressionUtils {
       }
     }
     return factory.createExpressionFromText(PsiKeyword.THIS, ref);
+  }
+
+  private static boolean isStaticMember(@Nullable PsiMember member) {
+    return member != null && member.hasModifierProperty(PsiModifier.STATIC);
   }
 
   /**
@@ -1105,7 +1117,7 @@ public final class ExpressionUtils {
     AtomicBoolean result = new AtomicBoolean(false);
     root.accept(new JavaRecursiveElementWalkingVisitor() {
       @Override
-      public void visitExpression(PsiExpression expression) {
+      public void visitExpression(@NotNull PsiExpression expression) {
         super.visitExpression(expression);
         if (matcher.test(expression)) {
           result.set(true);
@@ -1114,7 +1126,7 @@ public final class ExpressionUtils {
       }
 
       @Override
-      public void visitConditionalExpression(PsiConditionalExpression expression) {
+      public void visitConditionalExpression(@NotNull PsiConditionalExpression expression) {
         if (isMatchingChildAlwaysExecuted(expression.getCondition(), matcher) ||
             (isMatchingChildAlwaysExecuted(expression.getThenExpression(), matcher) &&
              isMatchingChildAlwaysExecuted(expression.getElseExpression(), matcher))) {
@@ -1124,7 +1136,7 @@ public final class ExpressionUtils {
       }
 
       @Override
-      public void visitPolyadicExpression(PsiPolyadicExpression expression) {
+      public void visitPolyadicExpression(@NotNull PsiPolyadicExpression expression) {
         IElementType type = expression.getOperationTokenType();
         if (type.equals(JavaTokenType.OROR) || type.equals(JavaTokenType.ANDAND)) {
           PsiExpression firstOperand = ArrayUtil.getFirstElement(expression.getOperands());
@@ -1139,10 +1151,10 @@ public final class ExpressionUtils {
       }
 
       @Override
-      public void visitClass(PsiClass aClass) {}
+      public void visitClass(@NotNull PsiClass aClass) {}
 
       @Override
-      public void visitLambdaExpression(PsiLambdaExpression expression) {}
+      public void visitLambdaExpression(@NotNull PsiLambdaExpression expression) {}
     });
     return result.get();
   }
@@ -1183,8 +1195,8 @@ public final class ExpressionUtils {
     if (isZero(diff) && eq.expressionsAreEquivalent(to, from)) return true;
 
     if (to instanceof PsiPolyadicExpression && from instanceof PsiPolyadicExpression) {
-      final Pair<@NotNull PsiExpression, @NotNull PsiExpression> polyadicDiff = getPolyadicDiff(((PsiPolyadicExpression)from),
-                                                                                                ((PsiPolyadicExpression)to));
+      final Pair<@NotNull PsiExpression, @NotNull PsiExpression> polyadicDiff = getPolyadicDiff((PsiPolyadicExpression)from,
+                                                                                                (PsiPolyadicExpression)to);
       from = polyadicDiff.first;
       to = polyadicDiff.second;
     }
@@ -1205,7 +1217,7 @@ public final class ExpressionUtils {
     if (to instanceof PsiBinaryExpression && ((PsiBinaryExpression)to).getOperationTokenType().equals(JavaTokenType.PLUS)) {
       PsiExpression left = ((PsiBinaryExpression)to).getLOperand();
       PsiExpression right = ((PsiBinaryExpression)to).getROperand();
-      if (right != null && (eq.expressionsAreEquivalent(left, from) && eq.expressionsAreEquivalent(right, diff)) ||
+      if (right != null && eq.expressionsAreEquivalent(left, from) && eq.expressionsAreEquivalent(right, diff) ||
           (eq.expressionsAreEquivalent(right, from) && eq.expressionsAreEquivalent(left, diff))) {
         return true;
       }
@@ -1721,7 +1733,11 @@ public final class ExpressionUtils {
     return true;
   }
 
-  public static boolean isOnlyExpressionInMethod(PsiExpression expression) {
+  /**
+   * @param expression  the expression to check
+   * @return true, if the specified expression is the only expression in the method (it's value is returned by the method). False otherwise.
+   */
+  public static boolean isOnlyExpressionInMethod(@NotNull PsiExpression expression) {
     final PsiElement parent = expression.getParent();
     if (!(parent instanceof PsiReturnStatement)) {
       return false;

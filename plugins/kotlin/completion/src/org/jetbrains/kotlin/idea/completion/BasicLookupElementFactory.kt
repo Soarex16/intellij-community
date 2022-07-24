@@ -17,7 +17,7 @@ import org.jetbrains.kotlin.idea.completion.handlers.KotlinFunctionInsertHandler
 import org.jetbrains.kotlin.idea.core.completion.DeclarationLookupObject
 import org.jetbrains.kotlin.idea.core.completion.PackageLookupObject
 import org.jetbrains.kotlin.idea.core.unwrapIfFakeOverride
-import org.jetbrains.kotlin.idea.highlighter.dsl.DslHighlighterExtension
+import org.jetbrains.kotlin.idea.highlighter.dsl.DslKotlinHighlightingVisitorExtension
 import org.jetbrains.kotlin.load.java.JvmAbi
 import org.jetbrains.kotlin.load.java.descriptors.JavaClassDescriptor
 import org.jetbrains.kotlin.name.FqName
@@ -28,7 +28,6 @@ import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.resolve.descriptorUtil.isExtension
 import org.jetbrains.kotlin.synthetic.SamAdapterExtensionFunctionDescriptor
 import org.jetbrains.kotlin.synthetic.SyntheticJavaPropertyDescriptor
-import org.jetbrains.kotlin.util.firstNotNullResult
 import java.awt.Font
 import javax.swing.Icon
 
@@ -253,7 +252,7 @@ class BasicLookupElementFactory(
         if (descriptor is CallableDescriptor) {
             appendContainerAndReceiverInformation(descriptor) { element = element.appendTailText(it, true) }
 
-            val dslTextAttributes = DslHighlighterExtension.dslCustomTextStyle(descriptor)?.let {
+            val dslTextAttributes = DslKotlinHighlightingVisitorExtension.dslCustomTextStyle(descriptor)?.let {
                 EditorColorsManager.getInstance().globalScheme.getAttributes(it)
             }
             if (dslTextAttributes != null) {
@@ -287,7 +286,7 @@ class BasicLookupElementFactory(
     }
 
     fun appendContainerAndReceiverInformation(descriptor: CallableDescriptor, appendTailText: (String) -> Unit) {
-        val information = CompletionInformationProvider.EP_NAME.extensions.firstNotNullResult {
+        val information = CompletionInformationProvider.EP_NAME.extensions.firstNotNullOfOrNull {
             it.getContainerAndReceiverInformation(descriptor)
         }
 

@@ -14,6 +14,7 @@ import com.intellij.codeInspection.dataFlow.value.DfaVariableValue;
 import com.intellij.codeInspection.ui.InspectionOptionsPanel;
 import com.intellij.java.JavaBundle;
 import com.intellij.psi.*;
+import com.intellij.psi.augment.PsiAugmentProvider;
 import com.intellij.psi.controlFlow.AnalysisCanceledException;
 import com.intellij.psi.controlFlow.ControlFlow;
 import com.intellij.psi.controlFlow.ControlFlowUtil;
@@ -40,32 +41,28 @@ public class DefUseInspection extends AbstractBaseJavaLocalInspectionTool {
   public PsiElementVisitor buildVisitor(@NotNull final ProblemsHolder holder, final boolean isOnTheFly) {
     return new JavaElementVisitor() {
       @Override
-      public void visitMethod(PsiMethod method) {
-        checkCodeBlock(method.getBody(), holder);
+      public void visitMethod(@NotNull PsiMethod method) {
+        checkBody(method.getBody(), holder);
       }
 
       @Override
-      public void visitClassInitializer(PsiClassInitializer initializer) {
-        checkCodeBlock(initializer.getBody(), holder);
+      public void visitClassInitializer(@NotNull PsiClassInitializer initializer) {
+        checkBody(initializer.getBody(), holder);
       }
 
       @Override
-      public void visitLambdaExpression(PsiLambdaExpression expression) {
-        PsiElement body = expression.getBody();
-        if (body instanceof PsiCodeBlock) {
-          checkCodeBlock((PsiCodeBlock)body, holder);
-        }
+      public void visitLambdaExpression(@NotNull PsiLambdaExpression expression) {
+        checkBody(expression.getBody(), holder);
       }
 
       @Override
-      public void visitField(PsiField field) {
+      public void visitField(@NotNull PsiField field) {
         checkField(field, holder);
       }
     };
   }
 
-  private void checkCodeBlock(final PsiCodeBlock body,
-                              final ProblemsHolder holder) {
+  private void checkBody(PsiElement body, ProblemsHolder holder) {
     if (body == null) return;
     final Set<PsiVariable> usedVariables = new HashSet<>();
     List<DefUseUtil.Info> unusedDefs = DefUseUtil.getUnusedDefs(body, usedVariables);
@@ -88,7 +85,9 @@ public class DefUseInspection extends AbstractBaseJavaLocalInspectionTool {
         else if (context instanceof PsiAssignmentExpression) {
           PsiElement parent = PsiUtil.skipParenthesizedExprUp(context.getParent());
           if (parent == psiVariable) continue; // int x = x = 5; -- compilation error and reported as reassigned var
-          if (parent instanceof PsiAssignmentExpression && EquivalenceChecker.getCanonicalPsiEquivalence().expressionsAreEquivalent(
+          if (parent instanceof PsiAssignmentExpression &&
+              ((PsiAssignmentExpression)parent).getOperationTokenType() == JavaTokenType.EQ &&
+              EquivalenceChecker.getCanonicalPsiEquivalence().expressionsAreEquivalent(
             ((PsiAssignmentExpression)parent).getLExpression(), ((PsiAssignmentExpression)context).getLExpression())) {
             // x = x = 5; reported by "Variable is assigned to itself"
             continue;
@@ -107,7 +106,7 @@ public class DefUseInspection extends AbstractBaseJavaLocalInspectionTool {
     processFieldsViaDfa(body, holder);
   }
 
-  private void processFieldsViaDfa(PsiCodeBlock body, ProblemsHolder holder) {
+  private void processFieldsViaDfa(PsiElement body, ProblemsHolder holder) {
     DfaValueFactory factory = new DfaValueFactory(holder.getProject());
     var flow = ControlFlowAnalyzer.buildFlow(body, factory, true);
     if (flow != null) {
@@ -142,7 +141,6 @@ public class DefUseInspection extends AbstractBaseJavaLocalInspectionTool {
       isOnTheFlyOrNoSideEffects(holder.isOnTheFly(), psiVariable, psiVariable.getInitializer()) ? new RemoveInitializerFix() : null);
     holder.registerProblem(ObjectUtils.notNull(psiVariable.getInitializer(), psiVariable),
                            JavaBundle.message("inspection.unused.assignment.problem.descriptor2", psiVariable.getName()),
-                           ProblemHighlightType.LIKE_UNUSED_SYMBOL,
                            fixes.toArray(LocalQuickFix.EMPTY_ARRAY)
     );
   }
@@ -155,7 +153,7 @@ public class DefUseInspection extends AbstractBaseJavaLocalInspectionTool {
     holder.registerProblem(assignment.getLExpression(),
                            JavaBundle.message("inspection.unused.assignment.problem.descriptor3",
                                               Objects.requireNonNull(assignment.getRExpression()).getText()),
-                           ProblemHighlightType.LIKE_UNUSED_SYMBOL, fixes.toArray(LocalQuickFix.EMPTY_ARRAY)
+                           fixes.toArray(LocalQuickFix.EMPTY_ARRAY)
     );
   }
 
@@ -166,7 +164,7 @@ public class DefUseInspection extends AbstractBaseJavaLocalInspectionTool {
     final PsiClassInitializer[] classInitializers = psiClass.getInitializers();
     final boolean isStatic = field.hasModifierProperty(PsiModifier.STATIC);
     final PsiMethod[] constructors = !isStatic ? psiClass.getConstructors() : PsiMethod.EMPTY_ARRAY;
-    final boolean fieldHasInitializer = field.hasInitializer();
+    final boolean fieldHasInitializer = field.hasInitializer() && PsiAugmentProvider.canTrustFieldInitializer(field);
     final int maxPossibleWritesCount = classInitializers.length + (constructors.length != 0 ? 1 : 0) + (fieldHasInitializer ? 1 : 0);
     if (maxPossibleWritesCount <= 1) return;
 
@@ -253,7 +251,7 @@ public class DefUseInspection extends AbstractBaseJavaLocalInspectionTool {
     final List<PsiAssignmentExpression> assignmentExpressions = new ArrayList<>();
     classInitializer.accept(new JavaRecursiveElementWalkingVisitor() {
       @Override
-      public void visitAssignmentExpression(PsiAssignmentExpression expression) {
+      public void visitAssignmentExpression(@NotNull PsiAssignmentExpression expression) {
         final PsiExpression lExpression = expression.getLExpression();
         if (lExpression instanceof PsiJavaReference && ((PsiJavaReference)lExpression).isReferenceTo(field)) {
           final PsiExpression rExpression = expression.getRExpression();

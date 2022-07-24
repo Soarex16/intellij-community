@@ -52,6 +52,11 @@ public class FieldCanBeLocalInspection extends AbstractBaseJavaLocalInspectionTo
       if (!field.isPhysical() || AnnotationUtil.isAnnotated(field, excludeAnnos, 0)) {
         continue;
       }
+      if (field.hasModifierProperty(PsiModifier.VOLATILE)) {
+        // Assume that fields marked as volatile can be modified concurrently
+        // (e.g. if the only method where they are changed is called from several threads)
+        continue;
+      }
       if (field.hasModifierProperty(PsiModifier.PRIVATE) && !(field.hasModifierProperty(PsiModifier.STATIC) && field.hasModifierProperty(PsiModifier.FINAL))) {
         candidates.add(field);
       }
@@ -118,7 +123,7 @@ public class FieldCanBeLocalInspection extends AbstractBaseJavaLocalInspectionTo
   private static void removeFieldsReferencedFromInitializers(PsiElement aClass, PsiElement root, Set<PsiField> candidates) {
     root.accept(new JavaRecursiveElementWalkingVisitor() {
       @Override
-      public void visitMethod(PsiMethod method) {
+      public void visitMethod(@NotNull PsiMethod method) {
 
         if (method.isConstructor()) {
           final PsiCodeBlock body = method.getBody();
@@ -143,24 +148,24 @@ public class FieldCanBeLocalInspection extends AbstractBaseJavaLocalInspectionTo
       }
 
       @Override
-      public void visitClassInitializer(PsiClassInitializer initializer) {
+      public void visitClassInitializer(@NotNull PsiClassInitializer initializer) {
         //do not go inside class initializer
       }
 
       @Override
-      public void visitLambdaExpression(PsiLambdaExpression expression) {
+      public void visitLambdaExpression(@NotNull PsiLambdaExpression expression) {
         // do not go inside lambda
       }
 
       @Override
-      public void visitReferenceExpression(PsiReferenceExpression expression) {
+      public void visitReferenceExpression(@NotNull PsiReferenceExpression expression) {
         excludeFieldCandidate(expression);
 
         super.visitReferenceExpression(expression);
       }
 
       @Override
-      public void visitDocTagValue(PsiDocTagValue value) {
+      public void visitDocTagValue(@NotNull PsiDocTagValue value) {
         excludeFieldCandidate(value.getReference());
         super.visitDocTagValue(value);
       }
@@ -190,7 +195,7 @@ public class FieldCanBeLocalInspection extends AbstractBaseJavaLocalInspectionTo
       }
 
       @Override
-      public void visitMethod(PsiMethod method) {
+      public void visitMethod(@NotNull PsiMethod method) {
         super.visitMethod(method);
 
         final PsiCodeBlock body = method.getBody();
@@ -200,7 +205,7 @@ public class FieldCanBeLocalInspection extends AbstractBaseJavaLocalInspectionTo
       }
 
       @Override
-      public void visitLambdaExpression(PsiLambdaExpression expression) {
+      public void visitLambdaExpression(@NotNull PsiLambdaExpression expression) {
         super.visitLambdaExpression(expression);
         final PsiElement body = expression.getBody();
         if (body != null) {
@@ -209,7 +214,7 @@ public class FieldCanBeLocalInspection extends AbstractBaseJavaLocalInspectionTo
       }
 
       @Override
-      public void visitClassInitializer(PsiClassInitializer initializer) {
+      public void visitClassInitializer(@NotNull PsiClassInitializer initializer) {
         super.visitClassInitializer(initializer);
         checkCodeBlock(initializer.getBody(), candidates, usedFields, ignoreFieldsUsedInMultipleMethods, ignored);
       }
@@ -362,7 +367,7 @@ public class FieldCanBeLocalInspection extends AbstractBaseJavaLocalInspectionTo
   public PsiElementVisitor buildVisitor(@NotNull final ProblemsHolder holder, final boolean isOnTheFly) {
     return new JavaElementVisitor() {
       @Override
-      public void visitClass(PsiClass aClass) {
+      public void visitClass(@NotNull PsiClass aClass) {
         super.visitClass(aClass);
         doCheckClass(aClass, holder, EXCLUDE_ANNOS, IGNORE_FIELDS_USED_IN_MULTIPLE_METHODS);
       }

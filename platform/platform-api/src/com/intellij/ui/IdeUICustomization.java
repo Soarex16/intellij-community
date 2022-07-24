@@ -6,6 +6,8 @@ import com.intellij.ide.IdeBundle;
 import com.intellij.openapi.application.ApplicationManager;
 import org.jetbrains.annotations.*;
 
+import java.util.function.Supplier;
+
 /**
  * Allows to apply IDE-specific customizations to the terms used in platform UI features.
  */
@@ -15,46 +17,24 @@ public class IdeUICustomization {
   }
 
   /**
-   * @deprecated it's hard to properly localize 'project' term in the middle of a sentence; if you need to use a 'project' term,
-   * put the whole message to ProjectConceptBundle.properties and refer to it via {@link #projectMessage} instead
+   * Returns a message which mentions 'project' concept.
    */
-  @Deprecated(forRemoval = true)
-  @NotNull
-  public String getProjectConceptName() {
-    return "project";
+  public @NotNull @Nls String projectMessage(@NotNull @PropertyKey(resourceBundle = ProjectConceptBundle.BUNDLE) String key, Object @NotNull ... params) {
+    return ProjectConceptBundle.message(key, params);
   }
 
   /**
    * Returns a message which mentions 'project' concept.
    */
-  @NotNull
-  public @Nls String projectMessage(@NotNull @PropertyKey(resourceBundle = ProjectConceptBundle.BUNDLE) String key, Object @NotNull ... params) {
-    return ProjectConceptBundle.message(key, params);
-  }
-
-  /**
-   * @deprecated use {@code projectMessage("tab.title.project")} instead
-   */
-  @Deprecated(forRemoval = true)
-  @Nls(capitalization = Nls.Capitalization.Title)
-  public String getProjectDisplayName() {
-    return projectMessage("tab.title.project");
+  public @NotNull Supplier<@Nls String> projectMessagePointer(@NotNull @PropertyKey(resourceBundle = ProjectConceptBundle.BUNDLE) String key, Object @NotNull ... params) {
+    return ProjectConceptBundle.messagePointer(key, params);
   }
 
   /**
    * Returns the title of the Project view toolwindow.
    */
-  @Nls
-  public String getProjectViewTitle() {
+  public @Nls String getProjectViewTitle() {
     return projectMessage("toolwindow.title.project.view");
-  }
-
-  /**
-   * @deprecated use {@code projectMessage("select.in.item.project.view")} instead
-   */
-  @Deprecated(forRemoval = true)
-  public String getProjectViewSelectInTitle() {
-    return projectMessage("select.in.item.project.view");
   }
 
   public @Nls String getSelectAutopopupByCharsText() {
@@ -64,27 +44,24 @@ public class IdeUICustomization {
   /**
    * Allows to replace the text of the given action (only for the actions/groups that support this mechanism)
    */
-  @Nullable
-  public @Nls String getActionText(@NotNull String actionId) {
+  public @Nullable @Nls String getActionText(@NotNull String actionId) {
     return null;
   }
 
   /**
    * Returns the name of the Version Control tool window
    */
-  @NotNull
-  public String getVcsToolWindowName() {
+  public @NotNull String getVcsToolWindowName() {
     return UIBundle.message("tool.window.name.version.control");
   }
 }
-
 
 /**
  * This message bundle contains strings which somehow mention 'project' concept. Other IDEs may use a different term for that (e.g. Rider
  * use 'solution'). Don't use this class directly, use {@link IdeUICustomization#projectMessage} instead.
  */
 final class ProjectConceptBundle {
-  @NonNls public static final String BUNDLE = "messages.ProjectConceptBundle";
+  public static final @NonNls String BUNDLE = "messages.ProjectConceptBundle";
   private static final DynamicBundle INSTANCE = new DynamicBundle(ProjectConceptBundle.class, BUNDLE);
 
   private ProjectConceptBundle() {
@@ -92,5 +69,9 @@ final class ProjectConceptBundle {
 
   static @NotNull @Nls String message(@NotNull @PropertyKey(resourceBundle = BUNDLE) String key, Object @NotNull ... params) {
     return INSTANCE.getMessage(key, params);
+  }
+
+  static @NotNull Supplier<@Nls String> messagePointer(@NotNull @PropertyKey(resourceBundle = BUNDLE) String key, Object @NotNull ... params) {
+    return INSTANCE.getLazyMessage(key, params);
   }
 }

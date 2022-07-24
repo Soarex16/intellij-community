@@ -1,26 +1,28 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.core.overrideImplement
 
-import org.jetbrains.kotlin.descriptors.Modality
-import org.jetbrains.kotlin.idea.core.util.KotlinIdeaCoreBundle
+import org.jetbrains.kotlin.analysis.api.KtAllowAnalysisOnEdt
 import org.jetbrains.kotlin.analysis.api.KtAnalysisSession
-import org.jetbrains.kotlin.analysis.api.analyse
+import org.jetbrains.kotlin.analysis.api.analyze
+import org.jetbrains.kotlin.analysis.api.lifetime.KtLifetimeOwner
+import org.jetbrains.kotlin.analysis.api.lifetime.KtLifetimeToken
+import org.jetbrains.kotlin.analysis.api.lifetime.allowAnalysisOnEdt
 import org.jetbrains.kotlin.analysis.api.symbols.KtCallableSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KtClassKind
 import org.jetbrains.kotlin.analysis.api.symbols.KtClassOrObjectSymbol
-import org.jetbrains.kotlin.idea.KtIconProvider.getIcon
 import org.jetbrains.kotlin.analysis.api.symbols.markers.KtSymbolWithModality
-import org.jetbrains.kotlin.analysis.api.tokens.HackToForceAllowRunningAnalyzeOnEDT
-import org.jetbrains.kotlin.analysis.api.tokens.hackyAllowRunningOnEdt
+import org.jetbrains.kotlin.descriptors.Modality
+import org.jetbrains.kotlin.idea.KtIconProvider.getIcon
+import org.jetbrains.kotlin.idea.core.util.KotlinIdeaCoreBundle
 import org.jetbrains.kotlin.name.StandardClassIds
 import org.jetbrains.kotlin.psi.KtClassOrObject
 
-internal open class KtOverrideMembersHandler : KtGenerateMembersHandler() {
-    @OptIn(HackToForceAllowRunningAnalyzeOnEDT::class)
+internal open class KtOverrideMembersHandler : KtGenerateMembersHandler(false) {
+    @OptIn(KtAllowAnalysisOnEdt::class)
     override fun collectMembersToGenerate(classOrObject: KtClassOrObject): Collection<KtClassMember> {
-        return hackyAllowRunningOnEdt {
-            analyse(classOrObject) {
+        return allowAnalysisOnEdt {
+            analyze(classOrObject) {
                 collectMembers(classOrObject)
             }
         }
@@ -35,10 +37,10 @@ internal open class KtOverrideMembersHandler : KtGenerateMembersHandler() {
                     symbol.render(renderOption),
                     getIcon(symbol),
                     containingSymbol?.classIdIfNonLocal?.asSingleFqName()?.toString() ?: containingSymbol?.name?.asString(),
-                    containingSymbol?.let { getIcon(it) }
+                    containingSymbol?.let { getIcon(it) },
                 ),
                 bodyType,
-                preferConstructorParameter = false
+                preferConstructorParameter = false,
             )
         }
     }
@@ -89,13 +91,18 @@ internal open class KtOverrideMembersHandler : KtGenerateMembersHandler() {
                     // that doesn't work because this callback function is holding a read lock and `symbol.render(renderOption)` requires
                     // the write lock.
                     // Hence, we store the data in an intermediate `OverrideMember` data class and do the rendering later in the `map` call.
-                    add(OverrideMember(symbolToProcess, bodyType, containingSymbol))
+                    add(OverrideMember(symbolToProcess, bodyType, containingSymbol, token))
                 }
             }
         }
     }
 
-    private data class OverrideMember(val symbol: KtCallableSymbol, val bodyType: BodyType, val containingSymbol: KtClassOrObjectSymbol?)
+    private data class OverrideMember(
+        val symbol: KtCallableSymbol,
+        val bodyType: BodyType,
+        val containingSymbol: KtClassOrObjectSymbol?,
+        override val token: KtLifetimeToken
+    ) : KtLifetimeOwner
 
     override fun getChooserTitle() = KotlinIdeaCoreBundle.message("override.members.handler.title")
 

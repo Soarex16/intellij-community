@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package org.jetbrains.intellij.build.dependencies;
 
 import com.google.common.io.MoreFiles;
@@ -22,6 +22,7 @@ import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.channels.FileChannel;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,12 +32,13 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@SuppressWarnings("UnstableApiUsage")
 @ApiStatus.Internal
 public final class BuildDependenciesUtil {
-  static boolean isPosix = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
+  private static final boolean isPosix = FileSystems.getDefault().supportedFileAttributeViews().contains("posix");
 
   @SuppressWarnings("HttpUrlsUsage")
-  static DocumentBuilder createDocumentBuilder() {
+  private static DocumentBuilder createDocumentBuilder() {
     // from https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html#jaxp-documentbuilderfactory-saxparserfactory-and-dom4j
 
     DocumentBuilderFactory dbf = DocumentBuilderFactory.newDefaultInstance();
@@ -84,7 +86,7 @@ public final class BuildDependenciesUtil {
     }
   }
 
-  static Element getSingleChildElement(Element parent, String tagName) {
+  private static Element getSingleChildElement(Element parent, String tagName) {
     NodeList childNodes = parent.getChildNodes();
 
     ArrayList<Element> result = new ArrayList<>();
@@ -125,18 +127,33 @@ public final class BuildDependenciesUtil {
   }
 
   public static void extractZip(Path archiveFile, Path target, boolean stripRoot) throws Exception {
-    try (ZipFile zipFile = new ZipFile(archiveFile.toFile(), "UTF-8")) {
+    // avoid extra createDirectories calls
+    Set<Path> createdDirs = new HashSet<>();
+    try (ZipFile zipFile = new ZipFile(FileChannel.open(archiveFile))) {
       EntryNameConverter converter = new EntryNameConverter(archiveFile, target, stripRoot);
 
-      for (ZipArchiveEntry entry : Collections.list(zipFile.getEntries())) {
+      Enumeration<ZipArchiveEntry> entries = zipFile.getEntries();
+      while (entries.hasMoreElements()) {
+        ZipArchiveEntry entry = entries.nextElement();
+        if (entry.getName().equals("__index__")) {
+          // don't unpack a special index file for JetBrains ZIP
+          continue;
+        }
+
         Path entryPath = converter.getOutputPath(entry.getName(), entry.isDirectory());
-        if (entryPath == null) continue;
+        if (entryPath == null) {
+          continue;
+        }
 
         if (entry.isDirectory()) {
           Files.createDirectories(entryPath);
+          createdDirs.add(entryPath);
         }
         else {
-          Files.createDirectories(entryPath.getParent());
+          Path parent = entryPath.getParent();
+          if (createdDirs.add(parent)) {
+            Files.createDirectories(parent);
+          }
 
           try (InputStream is = zipFile.getInputStream(entry)) {
             Files.copy(is, entryPath);
@@ -152,7 +169,7 @@ public final class BuildDependenciesUtil {
     }
   }
 
-  public static void extractTarBz2(Path archiveFile, Path target, boolean stripRoot) throws Exception {
+  static void extractTarBz2(Path archiveFile, Path target, boolean stripRoot) throws Exception {
     extractTarBasedArchive(archiveFile, target, stripRoot, is -> {
       try {
         return new BZip2CompressorInputStream(is);
@@ -190,34 +207,36 @@ public final class BuildDependenciesUtil {
         }
         else {
           Files.createDirectories(entryPath.getParent());
-
-          Files.copy(archive, entryPath);
-
-          // 73 == 0111
-          if (isPosix && (entry.getMode() & 73) != 0) {
-            //noinspection SpellCheckingInspection
-            Files.setPosixFilePermissions(entryPath, PosixFilePermissions.fromString("rwxr-xr-x"));
+          if (entry.isSymbolicLink()) {
+            Files.createSymbolicLink(entryPath, Path.of(entry.getLinkName()));
+          }
+          else {
+            Files.copy(archive, entryPath);
+            // 73 == 0111
+            if (isPosix && (entry.getMode() & 73) != 0) {
+              //noinspection SpellCheckingInspection
+              Files.setPosixFilePermissions(entryPath, PosixFilePermissions.fromString("rwxr-xr-x"));
+            }
           }
         }
       }
     }
   }
 
-  private static class EntryNameConverter {
+  private static final class EntryNameConverter {
     private final Path target;
     private final Path archiveFile;
     private final boolean stripRoot;
 
     private String leadingComponentPrefix = null;
 
-    EntryNameConverter(Path archiveFile, Path target, boolean stripRoot) {
+    private EntryNameConverter(Path archiveFile, Path target, boolean stripRoot) {
       this.archiveFile = archiveFile;
       this.stripRoot = stripRoot;
       this.target = target;
     }
 
-    @Nullable
-    Path getOutputPath(String entryName, boolean isDirectory) {
+    private @Nullable Path getOutputPath(String entryName, boolean isDirectory) {
       String normalizedName = normalizeEntryName(entryName);
       if (!stripRoot) {
         return target.resolve(normalizedName);

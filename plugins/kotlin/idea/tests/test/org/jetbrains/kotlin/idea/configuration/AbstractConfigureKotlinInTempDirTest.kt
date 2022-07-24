@@ -5,7 +5,7 @@ package org.jetbrains.kotlin.idea.configuration
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.Ref
 import com.intellij.util.ThrowableRunnable
-import org.jetbrains.kotlin.idea.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts
 import org.jetbrains.kotlin.idea.test.IDEA_TEST_DATA_DIR
 import org.jetbrains.kotlin.idea.test.KotlinTestUtils
 import org.jetbrains.kotlin.idea.test.runAll
@@ -16,7 +16,7 @@ import java.nio.file.Path
 abstract class AbstractConfigureKotlinInTempDirTest : AbstractConfigureKotlinTest() {
     private lateinit var vfsDisposable: Ref<Disposable>
 
-    override fun createProjectRoot(): File = KotlinTestUtils.tmpDirForReusableFolder("configure")
+    override fun createProjectRoot(): File = KotlinTestUtils.tmpDirForReusableFolder("configure_$projectName")
 
     override fun setUp() {
         super.setUp()
@@ -36,7 +36,7 @@ abstract class AbstractConfigureKotlinInTempDirTest : AbstractConfigureKotlinTes
 
         val testName = getTestName(true).toLowerCase()
         val originalStdlibFile = if (testName.contains("latestruntime") || testName.endsWith("withstdlib"))
-            KotlinArtifacts.instance.kotlinStdlib
+            KotlinArtifacts.kotlinStdlib
         else
             null
 

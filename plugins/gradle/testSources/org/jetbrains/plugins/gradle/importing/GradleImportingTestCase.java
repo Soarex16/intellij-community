@@ -183,6 +183,10 @@ public abstract class GradleImportingTestCase extends JavaExternalSystemImportin
     return GradleVersion.version(gradleVersion).getBaseVersion();
   }
 
+  public @NotNull VirtualFile getProjectRoot() {
+    return myProjectRoot;
+  }
+
   protected void assumeTestJavaRuntime(@NotNull JavaVersion javaRuntimeVersion) {
     int javaVer = javaRuntimeVersion.feature;
     GradleVersion gradleBaseVersion = getCurrentGradleBaseVersion();
@@ -197,7 +201,7 @@ public abstract class GradleImportingTestCase extends JavaExternalSystemImportin
     }
     JavaVersion javaRuntimeVersion = JavaVersion.current();
     assumeTestJavaRuntime(javaRuntimeVersion);
-    return requireJdkHome(getCurrentGradleBaseVersion());
+    return findJdkPath();
   }
 
   private static String requireWslJdkHome(@NotNull WSLDistribution distribution) {
@@ -227,6 +231,10 @@ public abstract class GradleImportingTestCase extends JavaExternalSystemImportin
     }
     fail("Cannot find JDK for Gradle, checked paths: " + paths);
     return null;
+  }
+
+  public String findJdkPath() {
+    return requireJdkHome(getCurrentGradleVersion());
   }
 
   protected void collectAllowedRoots(final List<String> roots, PathAssembler.LocalDistribution distribution) {
@@ -329,7 +337,7 @@ public abstract class GradleImportingTestCase extends JavaExternalSystemImportin
     super.importProject(config, skipIndexing);
   }
 
-  protected void importProject(@NonNls @Language("Groovy") String config) throws IOException {
+  public void importProject(@NonNls @Language("Groovy") String config) throws IOException {
     importProject(config, null);
   }
 
@@ -338,8 +346,10 @@ public abstract class GradleImportingTestCase extends JavaExternalSystemImportin
       .addPrefix(MAVEN_REPOSITORY_PATCH_PLACE, "");
   }
 
-  protected @NotNull String script(@NotNull Consumer<TestGradleBuildScriptBuilder> configure) {
-    return TestGradleBuildScriptBuilder.Companion.buildscript(this, configure);
+  public @NotNull String script(@NotNull Consumer<TestGradleBuildScriptBuilder> configure) {
+    var builder = createBuildScriptBuilder();
+    configure.accept(builder);
+    return builder.generate();
   }
 
   protected @NotNull String getJUnitTestAnnotationClass() {

@@ -1,6 +1,7 @@
 // Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package com.intellij.debugger.engine.dfaassist;
 
+import com.intellij.codeInsight.daemon.impl.HighlightInfoType;
 import com.intellij.codeInsight.hints.presentation.MenuOnClickPresentation;
 import com.intellij.codeInsight.hints.presentation.PresentationFactory;
 import com.intellij.codeInsight.hints.presentation.PresentationRenderer;
@@ -29,15 +30,19 @@ import com.intellij.openapi.editor.Inlay;
 import com.intellij.openapi.editor.InlayModel;
 import com.intellij.openapi.editor.event.DocumentEvent;
 import com.intellij.openapi.editor.event.DocumentListener;
+import com.intellij.openapi.editor.ex.MarkupModelEx;
 import com.intellij.openapi.editor.impl.EditorImpl;
+import com.intellij.openapi.editor.markup.HighlighterLayer;
+import com.intellij.openapi.editor.markup.HighlighterTargetArea;
+import com.intellij.openapi.editor.markup.RangeHighlighter;
 import com.intellij.openapi.fileEditor.FileEditorManager;
-import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.Segment;
+import com.intellij.openapi.util.TextRange;
+import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiElement;
-import com.intellij.psi.PsiFile;
 import com.intellij.psi.SmartPointerManager;
 import com.intellij.psi.SmartPsiElementPointer;
 import com.intellij.util.ObjectUtils;
@@ -51,10 +56,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.concurrency.CancellablePromise;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -63,6 +65,7 @@ public final class DfaAssist implements DebuggerContextListener, Disposable {
   private static final int CLEANUP_DELAY_MILLIS = 300;
   private final @NotNull Project myProject;
   private InlaySet myInlays = new InlaySet(null, Collections.emptyList()); // modified from EDT only
+  private List<RangeHighlighter> myRanges = null; // modified from EDT only
   private volatile CancellablePromise<?> myComputation;
   private volatile ScheduledFuture<?> myScheduledCleanup;
   private final DebuggerStateManager myManager;
@@ -136,28 +139,19 @@ public final class DfaAssist implements DebuggerContextListener, Disposable {
           cleanUp();
           return;
         }
-        DebuggerDfaRunner runner = createRunner(proxy);
-        if (runner == null) {
+        DebuggerDfaRunner.Pupa runnerPupa = makePupa(proxy, pointer);
+        if (runnerPupa == null) {
           cleanUp();
           return;
         }
-        myComputation = ReadAction.nonBlocking(() -> computeHints(runner)).withDocumentsCommitted(myProject)
+        myComputation = ReadAction.nonBlocking(() -> {
+            DebuggerDfaRunner runner = runnerPupa.transform();
+            return runner == null ? DebuggerDfaRunner.DfaResult.EMPTY : runner.computeHints();
+          })
+          .withDocumentsCommitted(myProject)
           .coalesceBy(DfaAssist.this)
           .finishOnUiThread(ModalityState.NON_MODAL, hints -> DfaAssist.this.displayInlays(hints))
           .submit(AppExecutorUtil.getAppExecutorService());
-      }
-
-      private @Nullable DebuggerDfaRunner createRunner(StackFrameProxyImpl proxy) {
-        Callable<DebuggerDfaRunner> action = () -> {
-          try {
-            return createDfaRunner(proxy, pointer.getElement());
-          }
-          catch (VMDisconnectedException | VMOutOfMemoryException | InternalException |
-            EvaluateException | InconsistentDebugInfoException | InvalidStackFrameException ignore) {
-            return null;
-          }
-        };
-        return ReadAction.nonBlocking(action).withDocumentsCommitted(myProject).executeSynchronously();
       }
     });
   }
@@ -195,60 +189,88 @@ public final class DfaAssist implements DebuggerContextListener, Disposable {
 
   private void cleanUp() {
     cancelComputation();
-    UIUtil.invokeLaterIfNeeded(() -> Disposer.dispose(myInlays));
+    UIUtil.invokeLaterIfNeeded(() -> {
+      Disposer.dispose(myInlays);
+      List<RangeHighlighter> ranges = myRanges;
+      if (ranges != null) {
+        myRanges = null;
+        for (RangeHighlighter range : ranges) {
+          range.dispose();
+        }
+      }
+    });
   }
 
-  private void displayInlays(Map<PsiElement, DfaHint> hints) {
+  private void displayInlays(DebuggerDfaRunner.DfaResult result) {
     ApplicationManager.getApplication().assertIsDispatchThread();
     cleanUp();
-    if (hints.isEmpty()) return;
+    Map<PsiElement, DfaHint> hints = result.hints;
+    Collection<TextRange> unreachable = result.unreachable;
+    if (result.file == null) return;
     EditorImpl editor = ObjectUtils.tryCast(FileEditorManager.getInstance(myProject).getSelectedTextEditor(), EditorImpl.class);
     if (editor == null) return;
-    PsiFile psiFile = hints.keySet().iterator().next().getContainingFile();
-    if (psiFile == null) return;
-    VirtualFile expectedFile = psiFile.getVirtualFile();
+    VirtualFile expectedFile = result.file.getVirtualFile();
     if (expectedFile == null || !expectedFile.equals(editor.getVirtualFile())) return;
-    InlayModel model = editor.getInlayModel();
-    List<Inlay<?>> newInlays = new ArrayList<>();
-    AnAction turnOffDfaProcessor = new TurnOffDfaProcessorAction();
-    hints.forEach((expr, hint) -> {
-      Segment range = expr.getTextRange();
-      if (range == null) return;
-      PresentationFactory factory = new PresentationFactory(editor);
-      MenuOnClickPresentation presentation = new MenuOnClickPresentation(
-        factory.roundWithBackground(factory.smallText(hint.getTitle())), myProject,
-        () -> Collections.singletonList(turnOffDfaProcessor));
-      newInlays.add(model.addInlineElement(range.getEndOffset(), new PresentationRenderer(presentation)));
-    });
-    if (!newInlays.isEmpty()) {
-      myInlays = new InlaySet(editor, newInlays);
+    if (!hints.isEmpty()) {
+      InlayModel model = editor.getInlayModel();
+      List<Inlay<?>> newInlays = new ArrayList<>();
+      AnAction turnOffDfaProcessor = new TurnOffDfaProcessorAction();
+      hints.forEach((expr, hint) -> {
+        Segment range = expr.getTextRange();
+        if (range == null) return;
+        PresentationFactory factory = new PresentationFactory(editor);
+        MenuOnClickPresentation presentation = new MenuOnClickPresentation(
+          factory.roundWithBackground(factory.smallText(hint.getTitle())), myProject,
+          () -> Collections.singletonList(turnOffDfaProcessor));
+        newInlays.add(model.addInlineElement(range.getEndOffset(), new PresentationRenderer(presentation)));
+      });
+      if (!newInlays.isEmpty()) {
+        myInlays = new InlaySet(editor, newInlays);
+      }
+    }
+    if (!unreachable.isEmpty() && Registry.is("jvm.debugger.gray.out")) {
+      MarkupModelEx model = editor.getMarkupModel();
+      List<RangeHighlighter> ranges = new ArrayList<>();
+      for (TextRange range : unreachable) {
+        RangeHighlighter highlighter = model.addRangeHighlighter(HighlightInfoType.UNUSED_SYMBOL.getAttributesKey(),
+                                                                 range.getStartOffset(), range.getEndOffset(), HighlighterLayer.ERROR + 1,
+                                                                 HighlighterTargetArea.EXACT_RANGE);
+        ranges.add(highlighter);
+      }
+      myRanges = ranges;
     }
   }
 
-  private static @NotNull Map<PsiElement, DfaHint> computeHints(@NotNull DebuggerDfaRunner runner) {
-    DebuggerDfaListener interceptor = runner.interpret();
-    if (interceptor == null) return Collections.emptyMap();
-    return interceptor.computeHints();
+  public static @Nullable DebuggerDfaRunner createDfaRunner(@NotNull StackFrameProxyEx proxy,
+                                                            @NotNull SmartPsiElementPointer<PsiElement> pointer) {
+    DebuggerDfaRunner.Pupa pupa = makePupa(proxy, pointer);
+    if (pupa == null) return null;
+    return ReadAction.nonBlocking(pupa::transform).withDocumentsCommitted(pointer.getProject()).executeSynchronously();
   }
 
-  public static @Nullable DebuggerDfaRunner createDfaRunner(@NotNull StackFrameProxyEx proxy, @Nullable PsiElement element)
-    throws EvaluateException {
-    if (element == null || !element.isValid() || DumbService.isDumb(element.getProject())) return null;
-
-    DfaAssistProvider provider = DfaAssistProvider.EP_NAME.forLanguage(element.getLanguage());
-    if (provider == null) return null;
+  @Nullable
+  private static DebuggerDfaRunner.Pupa makePupa(@NotNull StackFrameProxyEx proxy, @NotNull SmartPsiElementPointer<PsiElement> pointer) {
+    Callable<DebuggerDfaRunner.Larva> action = () -> {
+      try {
+        return DebuggerDfaRunner.Larva.hatch(proxy, pointer.getElement());
+      }
+      catch (VMDisconnectedException | VMOutOfMemoryException | InternalException |
+             EvaluateException | InconsistentDebugInfoException | InvalidStackFrameException ignore) {
+        return null;
+      }
+    };
+    Project project = pointer.getProject();
+    DebuggerDfaRunner.Larva larva = ReadAction.nonBlocking(action).withDocumentsCommitted(project).executeSynchronously();
+    if (larva == null) return null;
+    DebuggerDfaRunner.Pupa pupa;
     try {
-      if (!provider.locationMatches(element, proxy.location())) return null;
+      pupa = larva.pupate();
     }
-    catch (IllegalArgumentException iea) {
-      throw new EvaluateException(iea.getMessage(), iea);
+    catch (VMDisconnectedException | VMOutOfMemoryException | InternalException |
+           EvaluateException | InconsistentDebugInfoException | InvalidStackFrameException ignore) {
+      return null;
     }
-    PsiElement anchor = provider.getAnchor(element);
-    if (anchor == null) return null;
-    PsiElement body = provider.getCodeBlock(anchor);
-    if (body == null) return null;
-    DebuggerDfaRunner runner = new DebuggerDfaRunner(provider, body, anchor, proxy);
-    return runner.isValid() ? runner : null;
+    return pupa;
   }
 
   private final class TurnOffDfaProcessorAction extends AnAction {

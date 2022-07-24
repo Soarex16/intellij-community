@@ -1,5 +1,4 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("TestOnlyProblems") // KTIJ-19938
 
 package com.intellij.lang.documentation.ide.ui
 
@@ -26,12 +25,16 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.text.HtmlChunk
 import com.intellij.ui.FontSizeModel
 import com.intellij.ui.PopupHandler
+import com.intellij.util.flow.collectLatestUndispatched
 import com.intellij.util.ui.EDT
 import com.intellij.util.ui.UIUtil
 import com.intellij.util.ui.accessibility.ScreenReader
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.collect
 import org.jetbrains.annotations.Nls
 import java.awt.Color
 import java.awt.Rectangle
@@ -51,14 +54,8 @@ internal class DocumentationUI(
   private var imageResolver: DocumentationImageResolver? = null
   private val linkHandler: DocumentationLinkHandler
   private val cs = CoroutineScope(Dispatchers.EDT)
-  private val myContentUpdates = MutableSharedFlow<ContentUpdateKind>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
-  val contentUpdates: Flow<Unit> = myContentUpdates.map {}
-
-  private enum class ContentUpdateKind {
-    FETCHING,
-    EMPTY,
-    CONTENT,
-  }
+  private val myContentUpdates = MutableSharedFlow<Unit>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+  val contentUpdates: SharedFlow<Unit> = myContentUpdates.asSharedFlow()
 
   init {
     scrollPane = DocumentationScrollPane()
@@ -67,7 +64,7 @@ internal class DocumentationUI(
     }, { icons[it] })
     scrollPane.setViewportView(editorPane)
     scrollPane.addMouseWheelListener(FontSizeMouseWheelListener(fontSize))
-    linkHandler = DocumentationLinkHandler.createAndRegister(editorPane, this, browser::navigateByLink)
+    linkHandler = DocumentationLinkHandler.createAndRegister(editorPane, this, ::linkActivated)
 
     browser.ui = this
     Disposer.register(this, browser)
@@ -86,8 +83,9 @@ internal class DocumentationUI(
 
     DataManager.registerDataProvider(editorPane, this)
 
-    cs.launch(CoroutineName("DocumentationUI content update")) {
-      browser.pageFlow.collectLatest { page ->
+    fetchingMessage()
+    cs.launch(CoroutineName("DocumentationUI content update"), start = CoroutineStart.UNDISPATCHED) {
+      browser.pageFlow.collectLatestUndispatched { page ->
         handlePage(page)
       }
     }
@@ -119,19 +117,6 @@ internal class DocumentationUI(
     }
   }
 
-  /**
-   * Waits until UI has something to show. One of possible results:
-   * - content was not loaded after [DEFAULT_UI_RESPONSE_TIMEOUT] => "Fetching..." is shown;
-   * - content was loaded and it's empty => "No documentation" is shown;
-   * - content was loaded => content is shown.
-   *
-   * @return `true` if the loaded content is empty,
-   * or `false` if the content is not yet loaded or if the content is not empty
-   */
-  suspend fun waitForContentUpdate(): Boolean {
-    return myContentUpdates.first() == ContentUpdateKind.EMPTY
-  }
-
   private fun clearImages() {
     icons.clear()
     imageResolver = null
@@ -139,7 +124,7 @@ internal class DocumentationUI(
 
   private suspend fun handlePage(page: DocumentationPage) {
     val presentation = page.request.presentation
-    page.contentFlow.collectLatest {
+    page.contentFlow.collectLatestUndispatched {
       handleContent(presentation, it)
     }
   }
@@ -150,11 +135,13 @@ internal class DocumentationUI(
         // to avoid flickering: don't show ""Fetching..." message right away, give a chance for documentation to load
         delay(DEFAULT_UI_RESPONSE_TIMEOUT) // this call will be immediately cancelled once a new emission happens
         clearImages()
-        showMessage(ContentUpdateKind.FETCHING, CodeInsightBundle.message("javadoc.fetching.progress"))
+        fetchingMessage()
+        applyUIState(UIState.Reset)
       }
       DocumentationPageContent.Empty -> {
         clearImages()
-        showMessage(ContentUpdateKind.EMPTY, CodeInsightBundle.message("no.documentation.found"))
+        noDocumentationMessage()
+        applyUIState(UIState.Reset)
       }
       is DocumentationPageContent.Content -> {
         clearImages()
@@ -169,7 +156,14 @@ internal class DocumentationUI(
     val locationChunk = getDefaultLocationChunk(presentation)
     val linkChunk = linkChunk(presentation.presentableText, pageContent.links)
     val decorated = decorate(content.html, locationChunk, linkChunk)
-    update(ContentUpdateKind.CONTENT, decorated, pageContent.uiState)
+    if (!updateContent(decorated)) {
+      return
+    }
+    val uiState = pageContent.uiState
+    if (uiState != null) {
+      yield()
+      applyUIState(uiState)
+    }
   }
 
   private fun getDefaultLocationChunk(presentation: TargetPresentation): HtmlChunk? {
@@ -191,27 +185,31 @@ internal class DocumentationUI(
     return key
   }
 
-  private suspend fun showMessage(kind: ContentUpdateKind, message: @Nls String) {
-    val element = HtmlChunk.div()
+  private fun fetchingMessage() {
+    updateContent(message(CodeInsightBundle.message("javadoc.fetching.progress")))
+  }
+
+  private fun noDocumentationMessage() {
+    updateContent(message(CodeInsightBundle.message("no.documentation.found")))
+  }
+
+  private fun message(message: @Nls String): @Nls String {
+    return HtmlChunk.div()
       .setClass("content-only")
       .addText(message)
       .wrapWith("body")
       .wrapWith("html")
-    update(kind, element.toString(), UIState.Reset)
+      .toString()
   }
 
-  private suspend fun update(kind: ContentUpdateKind, text: @Nls String, uiState: UIState?) {
+  private fun updateContent(text: @Nls String): Boolean {
     EDT.assertIsEdt()
     if (editorPane.text == text) {
-      return
+      return false
     }
     editorPane.text = text
-    myContentUpdates.emit(kind)
-    if (uiState == null) {
-      return
-    }
-    yield()
-    applyUIState(uiState)
+    check(myContentUpdates.tryEmit(Unit))
+    return true
   }
 
   private fun applyUIState(uiState: UIState) {
@@ -228,6 +226,15 @@ internal class DocumentationUI(
       is UIState.RestoreFromSnapshot -> {
         uiState.snapshot.invoke()
       }
+    }
+  }
+
+  private fun linkActivated(href: String) {
+    if (href.startsWith("#")) {
+      UIUtil.scrollToReference(editorPane, href.removePrefix("#"))
+    }
+    else {
+      browser.navigateByLink(href)
     }
   }
 

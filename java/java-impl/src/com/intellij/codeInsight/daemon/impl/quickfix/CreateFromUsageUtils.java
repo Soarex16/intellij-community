@@ -18,6 +18,7 @@ import com.intellij.ide.fileTemplates.FileTemplate;
 import com.intellij.ide.fileTemplates.FileTemplateManager;
 import com.intellij.ide.fileTemplates.FileTemplateUtil;
 import com.intellij.ide.fileTemplates.JavaTemplateUtil;
+import com.intellij.ide.scratch.ScratchUtil;
 import com.intellij.lang.java.JavaLanguage;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.application.ReadAction;
@@ -345,7 +346,8 @@ public final class CreateFromUsageUtils {
       qualifierName = aPackage.getQualifiedName();
     }
     final PsiDirectory targetDirectory;
-    if (!ApplicationManager.getApplication().isUnitTestMode()) {
+    if (!ApplicationManager.getApplication().isUnitTestMode() &&
+        !ScratchUtil.isScratch(referenceElement.getContainingFile().getVirtualFile())) {
       Project project = manager.getProject();
       String title = CommonQuickFixBundle.message("fix.create.title", StringUtil.capitalize(classKind.getDescriptionAccusative()));
 
@@ -443,6 +445,9 @@ public final class CreateFromUsageUtils {
           else { //tests
             PsiClass aClass = classKind.create(factory, name);
             targetClass = (PsiClass)sourceFile.add(aClass);
+            if (ScratchUtil.isScratch(sourceFile.getVirtualFile())) {
+              PsiUtil.setModifierProperty(targetClass, PsiModifier.PACKAGE_LOCAL, true);
+            }
           }
 
           if (StringUtil.isNotEmpty(superClassName)  &&
@@ -487,7 +492,7 @@ public final class CreateFromUsageUtils {
 
     final List<PsiReferenceExpression> result = new ArrayList<>();
     JavaRecursiveElementWalkingVisitor visitor = new JavaRecursiveElementWalkingVisitor() {
-      @Override public void visitReferenceExpression(PsiReferenceExpression expr) {
+      @Override public void visitReferenceExpression(@NotNull PsiReferenceExpression expr) {
         if (expression instanceof PsiReferenceExpression &&
             (expr.getParent() instanceof PsiMethodCallExpression == expression.getParent() instanceof PsiMethodCallExpression)) {
           if (Objects.equals(expr.getReferenceName(), ((PsiReferenceExpression)expression).getReferenceName()) && !isValidReference(expr, false)) {
@@ -497,7 +502,7 @@ public final class CreateFromUsageUtils {
         visitElement(expr);
       }
 
-      @Override public void visitMethodCallExpression(PsiMethodCallExpression expr) {
+      @Override public void visitMethodCallExpression(@NotNull PsiMethodCallExpression expr) {
         if (expression instanceof PsiMethodCallExpression) {
           PsiReferenceExpression methodExpression = expr.getMethodExpression();
           if (Objects.equals(methodExpression.getReferenceName(),

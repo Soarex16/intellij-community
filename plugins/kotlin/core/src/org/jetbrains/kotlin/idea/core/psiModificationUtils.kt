@@ -17,13 +17,14 @@ import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.diagnostics.Severity
 import org.jetbrains.kotlin.extensions.DeclarationAttributeAltererExtension
 import org.jetbrains.kotlin.idea.FrontendInternals
+import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
+import org.jetbrains.kotlin.idea.base.psi.replaced
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.caches.resolve.safeAnalyzeNonSourceRootCode
-import org.jetbrains.kotlin.idea.project.languageVersionSettings
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.idea.resolve.frontendService
-import org.jetbrains.kotlin.idea.resolve.getLanguageVersionSettings
+import org.jetbrains.kotlin.idea.resolve.languageVersionSettings
 import org.jetbrains.kotlin.idea.util.IdeDescriptorRenderers
 import org.jetbrains.kotlin.idea.util.application.withPsiAttachment
 import org.jetbrains.kotlin.idea.util.hasJvmFieldAnnotation
@@ -138,7 +139,7 @@ fun KtCallExpression.canMoveLambdaOutsideParentheses(): Boolean {
         val resolutionFacade = getResolutionFacade()
         val samConversionTransformer = resolutionFacade.frontendService<SamConversionResolver>()
         val samConversionOracle = resolutionFacade.frontendService<SamConversionOracle>()
-        val languageVersionSettings = resolutionFacade.getLanguageVersionSettings()
+        val languageVersionSettings = resolutionFacade.languageVersionSettings
         val newInferenceEnabled = languageVersionSettings.supportsFeature(LanguageFeature.NewInference)
 
         val bindingContext = safeAnalyzeNonSourceRootCode(resolutionFacade, BodyResolveMode.PARTIAL_WITH_DIAGNOSTICS)
@@ -650,20 +651,4 @@ fun KtModifierList.normalize(): KtModifierList {
         modifiers.sortBy { MODIFIERS_ORDER.indexOf(it.node.elementType) }
         modifiers.forEach { newList.add(it) }
     }
-}
-
-fun KtBlockStringTemplateEntry.canDropBraces(): Boolean {
-    val expression = this.expression
-    return (expression is KtNameReferenceExpression || (expression is KtThisExpression && expression.labelQualifier == null))
-            && canPlaceAfterSimpleNameEntry(nextSibling)
-}
-
-fun KtBlockStringTemplateEntry.dropBraces(): KtSimpleNameStringTemplateEntry {
-    val name = if (expression is KtThisExpression) {
-        KtTokens.THIS_KEYWORD.value
-    } else {
-        (expression as KtNameReferenceExpression).getReferencedNameElement().text
-    }
-    val newEntry = KtPsiFactory(this).createSimpleNameStringTemplateEntry(name)
-    return replaced(newEntry)
 }

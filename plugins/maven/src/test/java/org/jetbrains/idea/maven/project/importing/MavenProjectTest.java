@@ -934,13 +934,13 @@ public class MavenProjectTest extends MavenMultiVersionImportingTestCase {
 
     importProjects(m1, m2);
 
-    List<MavenRemoteRepository> result = myProjectsTree.getRootProjects().get(0).getRemoteRepositories();
+    List<MavenRemoteRepository> result = getProjectsTree().getRootProjects().get(0).getRemoteRepositories();
     assertEquals(3, result.size());
     assertEquals("one", result.get(0).getId());
     assertEquals("two", result.get(1).getId());
     assertEquals("central", result.get(2).getId());
 
-    result = myProjectsTree.getRootProjects().get(1).getRemoteRepositories();
+    result = getProjectsTree().getRootProjects().get(1).getRemoteRepositories();
     assertEquals(3, result.size());
     assertEquals("one", result.get(0).getId());
     assertEquals("two", result.get(1).getId());
@@ -1083,9 +1083,10 @@ public class MavenProjectTest extends MavenMultiVersionImportingTestCase {
                                      "</dependencies>");
 
     importProjects(m1, m2);
-    resolveDependenciesAndImport();
-
-    assertDependenciesNodes(myProjectsTree.getRootProjects().get(0).getDependencyTree(),
+    if(!isNewImportingProcess) {
+      resolveDependenciesAndImport();
+    }
+    assertDependenciesNodes(getProjectsTree().getRootProjects().get(0).getDependencyTree(),
                             "test:m2:jar:1->(junit:junit:jar:4.0->(),test:lib2:jar:1->()),test:lib1:jar:1->()");
   }
 
@@ -1120,9 +1121,11 @@ public class MavenProjectTest extends MavenMultiVersionImportingTestCase {
                                      "</dependencies>");
 
     importProjects(m1, m2);
-    resolveDependenciesAndImport();
+    if(!isNewImportingProcess) {
+      resolveDependenciesAndImport();
+    }
 
-    assertDependenciesNodes(myProjectsTree.getRootProjects().get(0).getDependencyTree(),
+    assertDependenciesNodes(getProjectsTree().getRootProjects().get(0).getDependencyTree(),
                             "test:m2:pom:test:1->(test:lib:jar:1->())");
   }
 
@@ -1160,9 +1163,10 @@ public class MavenProjectTest extends MavenMultiVersionImportingTestCase {
                                      "</dependencies>");
 
     importProjects(m1, m2);
-    resolveDependenciesAndImport();
-
-    List<MavenArtifactNode> nodes = myProjectsTree.getRootProjects().get(0).getDependencyTree();
+    if(!isNewImportingProcess) {
+      resolveDependenciesAndImport();
+    }
+    List<MavenArtifactNode> nodes = getProjectsTree().getRootProjects().get(0).getDependencyTree();
     assertDependenciesNodes(nodes,
                             "test:m2:jar:1->(test:lib:jar:2[CONFLICT:test:lib:jar:1]->())," +
                             "test:lib:jar:1->()");
@@ -1217,9 +1221,10 @@ public class MavenProjectTest extends MavenMultiVersionImportingTestCase {
                                      "</dependencies>");
 
     importProjects(m1, m2, m3);
-    resolveDependenciesAndImport();
-
-    List<MavenArtifactNode> nodes = myProjectsTree.findProject(m1).getDependencyTree();
+    if(!isNewImportingProcess) {
+      resolveDependenciesAndImport();
+    }
+    List<MavenArtifactNode> nodes = getProjectsTree().findProject(m1).getDependencyTree();
     assertDependenciesNodes(nodes, "test:m2:jar:1->(test:lib:jar:1->()),test:m3:jar:1->(test:lib:jar:1[DUPLICATE:test:lib:jar:1]->())");
 
     assertSame(nodes.get(0).getDependencies().get(0).getArtifact(),
@@ -1259,7 +1264,7 @@ public class MavenProjectTest extends MavenMultiVersionImportingTestCase {
   }
 
   private MavenProject getMavenProject() {
-    return myProjectsTree.getRootProjects().get(0);
+    return getProjectsTree().getRootProjects().get(0);
   }
 
   private static PluginInfo p(String groupId, String artifactId) {

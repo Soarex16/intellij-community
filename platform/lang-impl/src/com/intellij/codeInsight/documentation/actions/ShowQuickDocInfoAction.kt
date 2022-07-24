@@ -1,5 +1,4 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("TestOnlyProblems") // KTIJ-19938
 
 package com.intellij.codeInsight.documentation.actions
 
@@ -20,7 +19,6 @@ open class ShowQuickDocInfoAction : AnAction(),
                                     ActionToIgnore,
                                     DumbAware,
                                     PopupAction,
-                                    UpdateInBackground,
                                     PerformWithDocumentsCommitted {
 
   init {
@@ -28,6 +26,8 @@ open class ShowQuickDocInfoAction : AnAction(),
     @Suppress("LeakingThis")
     setInjectedContext(true)
   }
+
+  override fun getActionUpdateThread() = ActionUpdateThread.BGT
 
   override fun update(e: AnActionEvent) {
     if (isDocumentationV2Enabled()) {

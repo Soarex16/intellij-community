@@ -134,7 +134,7 @@ internal abstract class CustomHeader(private val window: Window) : JPanel(), Dis
     setCustomFrameTopBorder()
   }
 
-  open protected fun getHeaderBackground(active: Boolean = true) = JBUI.CurrentTheme.CustomFrameDecorations.titlePaneBackground(active)
+  protected open fun getHeaderBackground(active: Boolean = true) = JBUI.CurrentTheme.CustomFrameDecorations.titlePaneBackground(active)
 
   protected fun setCustomFrameTopBorder(isTopNeeded: () -> Boolean = { true }, isBottomNeeded: () -> Boolean = { false }) {
     customFrameTopBorder = CustomFrameTopBorder(isTopNeeded, isBottomNeeded)
@@ -148,7 +148,7 @@ internal abstract class CustomHeader(private val window: Window) : JPanel(), Dis
     updateCustomDecorationHitTestSpots()
   }
 
-  private var added = false
+  protected var added = false
 
   override fun addNotify() {
     super.addNotify()
@@ -200,7 +200,7 @@ internal abstract class CustomHeader(private val window: Window) : JPanel(), Dis
   /**
    * Pairs of rectangles and integer constants from {@link com.jetbrains.CustomWindowDecoration} describing type of the spot
    */
-  abstract fun getHitTestSpots(): List<Pair<RelativeRectangle, Int>>
+  abstract fun getHitTestSpots(): Sequence<Pair<RelativeRectangle, Int>>
 
   private fun setActive(value: Boolean) {
     myActive = value

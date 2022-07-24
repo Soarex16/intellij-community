@@ -1,37 +1,53 @@
 package com.intellij.ide.actions.searcheverywhere.ml.features
 
 import com.intellij.ide.actions.searcheverywhere.ml.features.statistician.SearchEverywhereStatisticianService
+import com.intellij.internal.statistic.eventLog.events.EventField
+import com.intellij.internal.statistic.eventLog.events.EventFields
+import com.intellij.internal.statistic.eventLog.events.EventPair
 import com.intellij.openapi.components.service
 
-class SearchEverywhereCommonFeaturesProvider
-  : SearchEverywhereElementFeaturesProvider() {
+internal class SearchEverywhereCommonFeaturesProvider : SearchEverywhereElementFeaturesProvider() {
   companion object {
-    internal const val STATISTICIAN_USE_COUNT_DATA_KEY = "statUseCount"
-    internal const val STATISTICIAN_IS_MOST_POPULAR_DATA_KEY = "statIsMostPopular"
-    internal const val STATISTICIAN_RECENCY_DATA_KEY = "statRecency"
-    internal const val STATISTICIAN_IS_MOST_RECENT_DATA_KEY = "statIsMostRecent"
+    internal val PRIORITY_DATA_KEY = EventFields.Int("priority")
+    internal val TOTAL_SYMBOLS_AMOUNT_DATA_KEY = EventFields.Int("totalSymbolsAmount")
+
+    internal val STATISTICIAN_USE_COUNT_DATA_KEY = EventFields.Int("statUseCount")
+    internal val STATISTICIAN_IS_MOST_POPULAR_DATA_KEY = EventFields.Boolean("statIsMostPopular")
+    internal val STATISTICIAN_RECENCY_DATA_KEY = EventFields.Int("statRecency")
+    internal val STATISTICIAN_IS_MOST_RECENT_DATA_KEY = EventFields.Boolean("statIsMostRecent")
   }
 
-  override val isApplicableToEveryContributor: Boolean = true
+  override fun isContributorSupported(contributorId: String): Boolean = true
+
+  override fun getFeaturesDeclarations(): List<EventField<*>> {
+    return listOf(
+      PRIORITY_DATA_KEY, TOTAL_SYMBOLS_AMOUNT_DATA_KEY,
+      STATISTICIAN_USE_COUNT_DATA_KEY, STATISTICIAN_IS_MOST_POPULAR_DATA_KEY,
+      STATISTICIAN_RECENCY_DATA_KEY, STATISTICIAN_IS_MOST_RECENT_DATA_KEY,
+    )
+  }
 
   override fun getElementFeatures(element: Any,
                                   currentTime: Long,
                                   searchQuery: String,
                                   elementPriority: Int,
-                                  cache: Any?): Map<String, Any> {
-    return getStatisticianFeatures(element)
+                                  cache: FeaturesProviderCache?): List<EventPair<*>> {
+    val features = arrayListOf<EventPair<*>>(
+      PRIORITY_DATA_KEY.with(elementPriority),
+      TOTAL_SYMBOLS_AMOUNT_DATA_KEY.with(searchQuery.length),
+    )
+    addStatisticianFeatures(element, features)
+    return features
   }
 
-  private fun getStatisticianFeatures(element: Any): Map<String, Any> {
+  private fun addStatisticianFeatures(element: Any, features: MutableList<EventPair<*>>) {
     val statisticianService = service<SearchEverywhereStatisticianService>()
 
-    return statisticianService.getCombinedStats(element)?.let { stats ->
-      mapOf<String, Any>(
-        STATISTICIAN_USE_COUNT_DATA_KEY to stats.useCount,
-        STATISTICIAN_IS_MOST_POPULAR_DATA_KEY to stats.isMostPopular,
-        STATISTICIAN_RECENCY_DATA_KEY to stats.recency,
-        STATISTICIAN_IS_MOST_RECENT_DATA_KEY to stats.isMostRecent,
-      )
-    } ?: emptyMap()
+    statisticianService.getCombinedStats(element)?.let { stats ->
+      features.add(STATISTICIAN_USE_COUNT_DATA_KEY.with(stats.useCount))
+      features.add(STATISTICIAN_IS_MOST_POPULAR_DATA_KEY.with(stats.isMostPopular))
+      features.add(STATISTICIAN_RECENCY_DATA_KEY.with(stats.recency))
+      features.add(STATISTICIAN_IS_MOST_RECENT_DATA_KEY.with(stats.isMostRecent))
+    }
   }
 }

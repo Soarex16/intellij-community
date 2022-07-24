@@ -80,7 +80,7 @@ public class LookupImpl extends LightweightHint implements LookupEx, Disposable,
   private final Project myProject;
   private final Editor myEditor;
   private final Object myUiLock = new Object();
-  private final JBList<LookupElement> myList = new JBList<LookupElement>(new CollectionListModel<>()) {
+  private final JBList<LookupElement> myList = new JBList<LookupElement>(new CollectionListModelWithBatchUpdate<>()) {
     // 'myList' is focused when "Screen Reader" mode is enabled
     @Override
     protected void processKeyEvent(@NotNull final KeyEvent e) {
@@ -173,8 +173,8 @@ public class LookupImpl extends LightweightHint implements LookupEx, Disposable,
     myCreatedTimestamp = System.currentTimeMillis();
   }
 
-  private CollectionListModel<LookupElement> getListModel() {
-    return (CollectionListModel<LookupElement>)myList.getModel();
+  private CollectionListModelWithBatchUpdate<LookupElement> getListModel() {
+    return (CollectionListModelWithBatchUpdate<LookupElement>)myList.getModel();
   }
 
   @SuppressWarnings("unused") // used plugins
@@ -251,17 +251,15 @@ public class LookupImpl extends LightweightHint implements LookupEx, Disposable,
     return myDummyItem;
   }
 
-  public void repaintLookup(boolean onExplicitAction, boolean reused, boolean selectionVisible, boolean itemsChanged) {
-    myUi.refreshUi(selectionVisible, itemsChanged, reused, onExplicitAction);
-  }
-
   public void resort(boolean addAgain) {
     final List<LookupElement> items = getItems();
 
     myPresentableArranger.prefixChanged(this);
-    synchronized (myUiLock) {
-      getListModel().removeAll();
-    }
+    getListModel().performBatchUpdate(model -> {
+      synchronized (myUiLock) {
+        model.removeAll();
+      }
+    });
 
     if (addAgain) {
       for (final LookupElement item : items) {
@@ -286,6 +284,8 @@ public class LookupImpl extends LightweightHint implements LookupEx, Disposable,
     return true;
   }
 
+  // Used by external plugins
+  @SuppressWarnings("unused")
   public void scheduleItemUpdate(@NotNull LookupElement item) {
     LOG.assertTrue(getItems().contains(item), "Item isn't present in lookup");
     myCellRenderer.updateItemPresentation(item);
@@ -321,7 +321,7 @@ public class LookupImpl extends LightweightHint implements LookupEx, Disposable,
     return consumer.getResult();
   }
 
-  public JList getList() {
+  public JList<LookupElement> getList() {
     return myList;
   }
 
@@ -426,7 +426,7 @@ public class LookupImpl extends LightweightHint implements LookupEx, Disposable,
     }
     checkValid();
 
-    CollectionListModel<LookupElement> listModel = getListModel();
+    CollectionListModelWithBatchUpdate<LookupElement> listModel = getListModel();
 
     Pair<List<LookupElement>, Integer> pair = myPresentableArranger.arrangeItems(this, onExplicitAction || reused);
     List<LookupElement> items = pair.first;
@@ -439,16 +439,18 @@ public class LookupImpl extends LightweightHint implements LookupEx, Disposable,
     myOffsets.checkMinPrefixLengthChanges(items, this);
     List<LookupElement> oldModel = listModel.toList();
 
-    synchronized (myUiLock) {
-      listModel.removeAll();
-      if (!items.isEmpty()) {
-        listModel.add(items);
-        addDummyItems(myDummyItemCount.get());
+    listModel.performBatchUpdate(model -> {
+      synchronized (myUiLock) {
+        model.removeAll();
+        if (!items.isEmpty()) {
+          model.add(items);
+          addDummyItems(myDummyItemCount.get());
+        }
+        else {
+          addEmptyItem(model);
+        }
       }
-      else {
-        addEmptyItem(listModel);
-      }
-    }
+    });
 
     updateListHeight(listModel);
 

@@ -72,7 +72,6 @@ import com.sun.jdi.event.EventSet;
 import one.util.streamex.StreamEx;
 import org.jdom.Attribute;
 import org.jdom.Element;
-import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -226,16 +225,17 @@ public abstract class DebuggerUtilsEx extends DebuggerUtils {
       return ClassFilter.EMPTY_ARRAY;
     }
 
-    ClassFilter[] filters = new ClassFilter[children.size()];
-    for (int i = 0, size = children.size(); i < size; i++) {
+    //do not leave null elements in the resulting array in case of read errors
+    List<ClassFilter> filters = new ArrayList<>(children.size());
+    for (Element child : children) {
       try {
-        filters[i] = create(children.get(i));
+        filters.add(create(child));
       }
       catch (InvalidDataException e) {
         LOG.error(e);
       }
     }
-    return filters;
+    return filters.toArray(ClassFilter.EMPTY_ARRAY);
   }
 
   public static void writeFilters(@NotNull Element parentNode, @NonNls String tagName, ClassFilter[] filters) throws WriteExternalException {
@@ -992,7 +992,7 @@ public abstract class DebuggerUtilsEx extends DebuggerUtils {
     final List<PsiLambdaExpression> lambdas = new SmartList<>();
     final PsiElementVisitor lambdaCollector = new JavaRecursiveElementVisitor() {
       @Override
-      public void visitLambdaExpression(PsiLambdaExpression expression) {
+      public void visitLambdaExpression(@NotNull PsiLambdaExpression expression) {
         super.visitLambdaExpression(expression);
         if (!onlyOnTheLine || getFirstElementOnTheLine(expression, document, line) != null) {
           lambdas.add(expression);

@@ -1,6 +1,7 @@
 package com.intellij.ide.actions.searcheverywhere.ml
 
 import com.intellij.ide.actions.searcheverywhere.FoundItemDescriptor
+import com.intellij.ide.actions.searcheverywhere.ml.features.FeaturesProviderCache
 import com.intellij.ide.actions.searcheverywhere.ml.features.SearchEverywhereElementFeaturesProvider
 import com.intellij.ide.actions.searcheverywhere.ml.features.SearchEverywhereFileFeaturesProvider
 import com.intellij.ide.actions.searcheverywhere.ml.model.SearchEverywhereModelProvider
@@ -21,11 +22,13 @@ internal abstract class SearchEverywhereRankingModelTest
 
   protected abstract fun filterElements(searchQuery: String): List<FoundItemDescriptor<*>>
 
-  protected fun performSearchFor(searchQuery: String, featuresProviderCache: Any? = null): RankingAssertion {
+  protected fun performSearchFor(searchQuery: String, featuresProviderCache: FeaturesProviderCache? = null): RankingAssertion {
     VirtualFileManager.getInstance().syncRefresh()
     val rankedElements: List<FoundItemDescriptor<*>> = filterElements(searchQuery)
-      .map { it.withMlWeight(getMlWeight(it, searchQuery, featuresProviderCache)) }
-      .sortedByDescending { it.mlWeight }
+      .associateWith { getMlWeight(it, searchQuery, featuresProviderCache) }
+      .entries
+      .sortedByDescending { it.value }
+      .map { it.key }
 
     assert(rankedElements.size > 1) { "Found ${rankedElements.size} which is unsuitable for ranking assertions" }
 
@@ -34,17 +37,23 @@ internal abstract class SearchEverywhereRankingModelTest
 
   private fun getMlWeight(item: FoundItemDescriptor<*>,
                           searchQuery: String,
-                          featuresProviderCache: Any?) = model.predict(getElementFeatures(item, searchQuery, featuresProviderCache))
+                          featuresProviderCache: FeaturesProviderCache?): Double {
+    return model.predict(getElementFeatures(item, searchQuery, featuresProviderCache))
+  }
 
   private fun getElementFeatures(foundItem: FoundItemDescriptor<*>,
                                  searchQuery: String,
-                                 featuresProviderCache: Any?): Map<String, Any> {
+                                 featuresProviderCache: FeaturesProviderCache?): Map<String, Any?> {
     return featuresProviders.map {
-      it.getElementFeatures(foundItem.item, System.currentTimeMillis(), searchQuery, foundItem.weight, featuresProviderCache)
+      val features = it.getElementFeatures(foundItem.item, System.currentTimeMillis(), searchQuery, foundItem.weight,
+                                           featuresProviderCache)
+      val featuresAsMap = hashMapOf<String, Any?>()
+      for (feature in features) {
+        featuresAsMap[feature.field.name] = feature.data
+      }
+      featuresAsMap
     }.fold(emptyMap()) { acc, value -> acc + value }
   }
-
-  private fun FoundItemDescriptor<*>.withMlWeight(mlWeight: Double) = FoundItemDescriptor(this.item, this.weight, mlWeight)
 
   protected class RankingAssertion(private val results: List<FoundItemDescriptor<*>>) {
     fun thenAssertElement(element: FoundItemDescriptor<*>) = ElementAssertion(element)

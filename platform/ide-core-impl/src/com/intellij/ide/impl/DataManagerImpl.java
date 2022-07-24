@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.ide.impl;
 
 import com.intellij.ide.DataManager;
@@ -79,7 +79,10 @@ public class DataManagerImpl extends DataManager {
     try {
       depth[0]++;
       Object data = provider.getData(dataId);
-      if (data != null) return DataValidators.validOrNull(data, dataId, provider);
+      if (data != null) {
+        return data == CustomizedDataContext.EXPLICIT_NULL ? data :
+               DataValidators.validOrNull(data, dataId, provider);
+      }
       return ruleType == null ? null : getDataFromRulesInner(dataId, ruleType, alreadyComputedIds, provider);
     }
     finally {
@@ -104,10 +107,16 @@ public class DataManagerImpl extends DataManager {
                                                 @NotNull DataProvider provider) {
     int[] depth = ourGetDataLevel.get();
     try {
+      depth[0]++;
       Set<String> ids = alreadyComputedIds == null ? new HashSet<>() : alreadyComputedIds;
       ids.add(dataId);
-      Object data = rule.getData(id -> getDataFromProviderInner(id, ruleType, ids, provider));
-      return data == null ? null : DataValidators.validOrNull(data, dataId, rule);
+      Object data = rule.getData(id -> {
+        Object o = getDataFromProviderInner(id, ruleType, ids, provider);
+        return o == CustomizedDataContext.EXPLICIT_NULL ? null : o;
+      });
+      return data == null ? null :
+             data == CustomizedDataContext.EXPLICIT_NULL ? data :
+             DataValidators.validOrNull(data, dataId, rule);
     }
     finally {
       depth[0]--;
@@ -118,9 +127,6 @@ public class DataManagerImpl extends DataManager {
     DataProvider dataProvider = null;
     if (component instanceof DataProvider) {
       dataProvider = (DataProvider)component;
-    }
-    else if (component instanceof TypeSafeDataProvider) {
-      dataProvider = new TypeSafeDataProviderAdapter((TypeSafeDataProvider) component);
     }
     else if (component instanceof JComponent) {
       dataProvider = getDataProvider((JComponent)component);
@@ -143,15 +149,14 @@ public class DataManagerImpl extends DataManager {
     }
   }
 
-  @ApiStatus.Internal
-  public @Nullable Object getDataSimple(@NotNull String dataId, @NotNull DataProvider provider) {
-    Object result = getDataFromProviderAndRules(dataId, GetDataRuleType.PROVIDER, provider);
-    if (result != null) return result;
-    GetDataRule rule = myRulesCache.get(Pair.create(dataId, GetDataRuleType.CONTEXT));
-    if (rule == null) return null;
-    Set<String> computedIds = new HashSet<>();
-    return getDataFromRuleInner(rule, dataId, GetDataRuleType.CONTEXT, computedIds, id ->
-      getDataFromProviderInner(id, GetDataRuleType.PROVIDER, computedIds, provider));
+  @Override
+  public @Nullable Object getCustomizedData(@NotNull String dataId, @NotNull DataContext dataContext, @NotNull DataProvider provider) {
+    Object data = getDataFromProviderAndRules(dataId, GetDataRuleType.CONTEXT, id -> {
+      Object o = getDataFromProviderAndRules(id, GetDataRuleType.PROVIDER, provider);
+      if (o != null) return o;
+      return dataContext.getData(id);
+    });
+    return data == CustomizedDataContext.EXPLICIT_NULL ? null : data;
   }
 
   private static @Nullable GetDataRule getDataRule(@NotNull String dataId, @NotNull GetDataRuleType ruleType) {
@@ -169,7 +174,8 @@ public class DataManagerImpl extends DataManager {
 
   private static @Nullable GetDataRule getDataRuleInner(@NotNull String dataId, @NotNull GetDataRuleType ruleType) {
     String uninjectedId = InjectedDataKeys.uninjectedId(dataId);
-    GetDataRule slowRule = ruleType == GetDataRuleType.PROVIDER ? dataProvider -> getSlowData(dataId, dataProvider) : null;
+    GetDataRule slowRule = ruleType == GetDataRuleType.PROVIDER && !PlatformCoreDataKeys.SLOW_DATA_PROVIDERS.is(dataId) ?
+                           dataProvider -> getSlowData(dataId, dataProvider) : null;
     List<GetDataRule> rules1 = rulesForKey(dataId, ruleType);
     List<GetDataRule> rules2 = uninjectedId == null ? null : rulesForKey(uninjectedId, ruleType);
     if (rules1 == null && rules2 == null) return slowRule;
@@ -203,7 +209,10 @@ public class DataManagerImpl extends DataManager {
     for (GetDataRule rule : rules) {
       try {
         Object data = rule.getData(provider);
-        if (data != null) return DataValidators.validOrNull(data, dataId, rule);
+        if (data != null) {
+          return data == CustomizedDataContext.EXPLICIT_NULL ? data :
+                 DataValidators.validOrNull(data, dataId, rule);
+        }
       }
       catch (IndexNotReadyException ignore) {
       }
@@ -218,7 +227,8 @@ public class DataManagerImpl extends DataManager {
       try {
         Object data = provider.getData(dataId);
         if (data != null) {
-          return DataValidators.validOrNull(data, dataId, provider);
+          return data == CustomizedDataContext.EXPLICIT_NULL ? data :
+                 DataValidators.validOrNull(data, dataId, provider);
         }
       }
       catch (IndexNotReadyException ignore) {
@@ -233,7 +243,13 @@ public class DataManagerImpl extends DataManager {
     if (ourGetDataLevel.get()[0] > 0) {
       LOG.error("DataContext shall not be created and queried inside another getData() call.");
     }
-    return IdeUiService.getInstance().createUiDataContext(component);
+    Component current = component;
+    while (current instanceof DelegatingDataProvider) {
+      Component delegated = ((DelegatingDataProvider)current).getDelegatedDataProviderComponent();
+      if (delegated == null) break;
+      else current = delegated;
+    }
+    return IdeUiService.getInstance().createUiDataContext(current);
   }
 
   @Override
@@ -267,7 +283,7 @@ public class DataManagerImpl extends DataManager {
   public @NotNull Promise<DataContext> getDataContextFromFocusAsync() {
     AsyncPromise<DataContext> result = new AsyncPromise<>();
     IdeFocusManager.getGlobalInstance()
-                   .doWhenFocusSettlesDown(() -> result.setResult(getDataContext()), ModalityState.any());
+                   .doWhenFocusSettlesDown(() -> result.setResult(getDataContext()), ModalityState.defaultModalityState());
     return result;
   }
 
@@ -317,10 +333,12 @@ public class DataManagerImpl extends DataManager {
 
   @Override
   public <T> void saveInDataContext(DataContext dataContext, @NotNull Key<T> dataKey, @Nullable T data) {
-    if (dataContext instanceof UserDataHolder &&
-        !((dataContext instanceof FreezingDataContext) && ((FreezingDataContext)dataContext).isFrozenDataContext())) {
-      ((UserDataHolder)dataContext).putUserData(dataKey, data);
+    if (!(dataContext instanceof UserDataHolder)) return;
+    for (DataContext cur = dataContext; cur != null; ) {
+      if (cur instanceof FreezingDataContext && ((FreezingDataContext)cur).isFrozenDataContext()) return;
+      cur = cur instanceof CustomizedDataContext ? ((CustomizedDataContext)cur).getParent() : null;
     }
+    ((UserDataHolder)dataContext).putUserData(dataKey, data);
   }
 
   @Override

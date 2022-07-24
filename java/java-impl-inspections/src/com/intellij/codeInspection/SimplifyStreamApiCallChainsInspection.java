@@ -157,7 +157,7 @@ public class SimplifyStreamApiCallChainsInspection extends AbstractBaseJavaLocal
 
     return new JavaElementVisitor() {
       @Override
-      public void visitMethodCallExpression(PsiMethodCallExpression methodCall) {
+      public void visitMethodCallExpression(@NotNull PsiMethodCallExpression methodCall) {
         PsiElement nameElement = methodCall.getMethodExpression().getReferenceNameElement();
         if (nameElement == null) return;
         CALL_TO_FIX_MAPPER.mapAll(methodCall)
@@ -1685,6 +1685,12 @@ public class SimplifyStreamApiCallChainsInspection extends AbstractBaseJavaLocal
 
     AnyMatchContainsFix(@NotNull PsiExpression value) {
       myValuePointer = SmartPointerManager.createPointer(value);
+    }
+
+    @Override
+    public @Nullable FileModifier getFileModifierForPreview(@NotNull PsiFile target) {
+      PsiExpression expression = myValuePointer.getElement();
+      return expression == null ? null : new AnyMatchContainsFix(expression);
     }
 
     @Override

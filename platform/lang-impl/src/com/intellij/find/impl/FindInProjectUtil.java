@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package com.intellij.find.impl;
 
@@ -221,7 +221,7 @@ public final class FindInProjectUtil {
   public static void findUsages(@NotNull FindModel findModel,
                                 @NotNull Project project,
                                 @NotNull FindUsagesProcessPresentation processPresentation,
-                                @NotNull Set<? extends VirtualFile> filesToStart,
+                                @NotNull Set<? extends @NotNull VirtualFile> filesToStart,
                                 @NotNull Processor<? super UsageInfo> consumer) {
     Runnable runnable = () -> new FindInProjectTask(findModel, project, filesToStart, true).findUsages(processPresentation, consumer);
     if (ProgressIndicatorProvider.getGlobalProgressIndicator() == null) {
@@ -236,7 +236,7 @@ public final class FindInProjectUtil {
                                 @NotNull Project project,
                                 @NotNull ProgressIndicator progressIndicator,
                                 @NotNull FindUsagesProcessPresentation processPresentation,
-                                @NotNull Set<? extends VirtualFile> filesToStart,
+                                @NotNull Set<? extends @NotNull VirtualFile> filesToStart,
                                 @NotNull Processor<? super UsageInfo> consumer) {
     Runnable runnable = () -> new FindInProjectTask(findModel, project, filesToStart, false).findUsages(processPresentation, consumer);
     ProgressManager.getInstance().executeProcessUnderProgress(runnable, progressIndicator);
@@ -261,8 +261,7 @@ public final class FindInProjectUtil {
     do {
       tooManyUsagesStatus.pauseProcessingIfTooManyUsages(); // wait for user out of read action
       before = offsetRef[0];
-      boolean success = ReadAction.compute(() ->
-                                             !psiFile.isValid() ||
+      boolean success = ReadAction.compute(() -> !psiFile.isValid() ||
                                              processSomeOccurrencesInFile(document, findModel, psiFile, offsetRef, consumer));
       if (!success) {
         return false;
@@ -563,7 +562,7 @@ public final class FindInProjectUtil {
   private static void addSourceDirectoriesFromLibraries(@NotNull Project project,
                                                         @NotNull VirtualFile directory,
                                                         @NotNull Collection<? super VirtualFile> outSourceRoots) {
-    ProjectFileIndex index = ProjectFileIndex.SERVICE.getInstance(project);
+    ProjectFileIndex index = ProjectFileIndex.getInstance(project);
     // if we already are in the sources, search just in this directory only
     if (!index.isInLibraryClasses(directory)) return;
     VirtualFile classRoot = index.getClassRootForFile(directory);

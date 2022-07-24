@@ -237,6 +237,7 @@ public class MavenImportingSettings implements Cloneable {
     this.autoDetectCompiler = autoDetectCompiler;
   }
 
+  @Deprecated //tree import will be replaced with WorkpsaceModel import
   public boolean isImportToTreeStructure() {
     return importToTreeStructure;
   }
@@ -277,6 +278,10 @@ public class MavenImportingSettings implements Cloneable {
     this.jdkForImporter = jdkForImporter;
   }
 
+
+  public void copyListeners(MavenImportingSettings another) {
+    myListeners.addAll(another.myListeners);
+  }
   @Override
   public boolean equals(Object o) {
     if (this == o) return true;

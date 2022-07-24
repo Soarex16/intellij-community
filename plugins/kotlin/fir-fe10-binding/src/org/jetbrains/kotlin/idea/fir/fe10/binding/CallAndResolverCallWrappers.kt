@@ -3,215 +3,25 @@
 package org.jetbrains.kotlin.idea.fir.fe10.binding
 
 import com.intellij.lang.ASTNode
-import org.jetbrains.kotlin.descriptors.*
-import org.jetbrains.kotlin.fir.declarations.FirClassLikeDeclaration
-import org.jetbrains.kotlin.fir.declarations.FirValueParameter
-import org.jetbrains.kotlin.fir.expressions.*
-import org.jetbrains.kotlin.fir.expressions.impl.FirNoReceiverExpression
-import org.jetbrains.kotlin.fir.realPsi
-import org.jetbrains.kotlin.fir.references.FirErrorNamedReference
-import org.jetbrains.kotlin.fir.references.FirResolvedNamedReference
-import org.jetbrains.kotlin.fir.symbols.SymbolInternals
-import org.jetbrains.kotlin.fir.types.FirTypeProjectionWithVariance
-import org.jetbrains.kotlin.idea.fir.fe10.*
-import org.jetbrains.kotlin.idea.fir.fe10.FirWeakReference
-import org.jetbrains.kotlin.analysis.low.level.api.fir.api.getOrBuildFir
-import org.jetbrains.kotlin.analysis.api.symbols.KtFunctionLikeSymbol
+import org.jetbrains.kotlin.analysis.api.calls.*
+import org.jetbrains.kotlin.analysis.api.diagnostics.KtDiagnostic
+import org.jetbrains.kotlin.descriptors.ConstructorDescriptor
+import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
+import org.jetbrains.kotlin.idea.fir.fe10.Fe10WrapperContext
+import org.jetbrains.kotlin.idea.fir.fe10.KtSymbolBasedConstructorDescriptor
+import org.jetbrains.kotlin.idea.fir.fe10.toDeclarationDescriptor
+import org.jetbrains.kotlin.idea.fir.fe10.toKotlinType
 import org.jetbrains.kotlin.idea.references.mainReference
+import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.calls.model.*
-import org.jetbrains.kotlin.resolve.calls.results.ResolutionStatus
-import org.jetbrains.kotlin.resolve.calls.tasks.ExplicitReceiverKind
-import org.jetbrains.kotlin.resolve.scopes.receivers.*
-import org.jetbrains.kotlin.types.KotlinType
+import org.jetbrains.kotlin.resolve.calls.model.ResolvedCall
+import org.jetbrains.kotlin.resolve.calls.util.CallMaker
+import org.jetbrains.kotlin.resolve.scopes.receivers.ExpressionReceiver
+import org.jetbrains.kotlin.resolve.scopes.receivers.Receiver
+import org.jetbrains.kotlin.types.expressions.ControlStructureTypingUtils
 import org.jetbrains.kotlin.utils.addToStdlib.safeAs
-import java.util.*
 
-@OptIn(SymbolInternals::class)
-private fun FirExpression?.toExpressionReceiverValue(context: FE10BindingContext): ReceiverValue? {
-    if (this == null) return null
-
-    if (this is FirThisReceiverExpression) {
-        val ktClassSymbol =
-            context.ktAnalysisSessionFacade.buildClassLikeSymbol(calleeReference.boundSymbol?.fir as FirClassLikeDeclaration)
-        return ImplicitClassReceiver(ktClassSymbol.toDeclarationDescriptor(context) as ClassDescriptor)
-    }
-    val expression = realPsi.safeAs<KtExpression>() ?: context.implementationPostponed()
-    return ExpressionReceiver.create(
-        expression,
-        context.ktAnalysisSessionFacade.buildKtType(typeRef).toKotlinType(context),
-        context.incorrectImplementation { BindingContext.EMPTY }
-    )
-}
-
-internal class FirSimpleWrapperCall(
-    val ktCall: KtCallExpression,
-    val firCall: FirWeakReference<FirFunctionCall>,
-    val context: FE10BindingContext
-) : Call {
-    override fun getCallOperationNode(): ASTNode = ktCall.node
-
-    @OptIn(SymbolInternals::class)
-    override fun getExplicitReceiver(): Receiver? = firCall.withFir { it.explicitReceiver.toExpressionReceiverValue(context) }
-
-    override fun getDispatchReceiver(): ReceiverValue? = null
-
-    override fun getCalleeExpression(): KtExpression? = ktCall.calleeExpression
-
-    override fun getValueArgumentList(): KtValueArgumentList? = ktCall.valueArgumentList
-
-    override fun getValueArguments(): List<ValueArgument> = ktCall.valueArguments
-
-    override fun getFunctionLiteralArguments(): List<LambdaArgument> = ktCall.lambdaArguments
-
-    override fun getTypeArguments(): List<KtTypeProjection> = ktCall.typeArguments
-
-    override fun getTypeArgumentList(): KtTypeArgumentList? = ktCall.typeArgumentList
-
-    override fun getCallElement(): KtElement = ktCall
-
-    override fun getCallType(): Call.CallType = Call.CallType.DEFAULT
-}
-
-internal class FirWrapperResolvedCall(val firSimpleWrapperCall: FirSimpleWrapperCall) : ResolvedCall<CallableDescriptor> {
-    private val firCall get() = firSimpleWrapperCall.firCall
-    private val context get() = firSimpleWrapperCall.context
-
-    @OptIn(SymbolInternals::class)
-    private val ktFunctionSymbol: KtFunctionLikeSymbol = firCall.withFir {
-        when (val calleeReference = it.calleeReference) {
-            is FirResolvedNamedReference -> context.ktAnalysisSessionFacade.buildSymbol(calleeReference.resolvedSymbol.fir) as KtFunctionLikeSymbol
-            is FirErrorNamedReference -> context.ktAnalysisSessionFacade.buildSymbol(calleeReference.candidateSymbol!!.fir) as KtFunctionLikeSymbol
-            else -> context.noImplementation("calleeReferenceType: ${calleeReference::class.java}")
-        }
-    }
-
-    private val _typeArguments: Map<TypeParameterDescriptor, KotlinType> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-
-        if (firCall.getFir().typeArguments.isEmpty()) return@lazy emptyMap()
-
-        val typeArguments = linkedMapOf<TypeParameterDescriptor, KotlinType>()
-        for ((index, parameter) in candidateDescriptor.typeParameters.withIndex()) {
-            val firTypeProjectionWithVariance = firCall.getFir().typeArguments[index] as FirTypeProjectionWithVariance
-            val kotlinType = context.ktAnalysisSessionFacade.buildKtType(firTypeProjectionWithVariance.typeRef).toKotlinType(context)
-            typeArguments[parameter] = kotlinType
-        }
-        typeArguments
-    }
-
-    @OptIn(SymbolInternals::class)
-    private val arguments: Map<ValueParameterDescriptor, ResolvedValueArgument> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-        val firArguments = firCall.withFir { it.argumentMapping } ?: context.implementationPostponed()
-
-        val firParameterToResolvedValueArgument = hashMapOf<FirValueParameter, ResolvedValueArgument>()
-        val allArguments = firSimpleWrapperCall.valueArguments + firSimpleWrapperCall.functionLiteralArguments
-        var argumentIndex = 0
-        for ((firExpression, firValueParameter) in firArguments.entries) {
-            if (firExpression is FirVarargArgumentsExpression) {
-                val varargArguments = mutableListOf<ValueArgument>()
-                for (subExpression in firExpression.arguments) {
-                    val currentArgument = allArguments[argumentIndex]; argumentIndex++
-                    check(currentArgument.getArgumentExpression() === subExpression.realPsi) {
-                        "Different psi: ${currentArgument.getArgumentExpression()} !== ${subExpression.realPsi}"
-                    }
-                    varargArguments.add(currentArgument)
-                }
-                firParameterToResolvedValueArgument[firValueParameter] = VarargValueArgument(varargArguments)
-            } else {
-                val currentArgument = allArguments[argumentIndex]; argumentIndex++
-                check(currentArgument.getArgumentExpression() === firExpression.realPsi) {
-                    "Different psi: ${currentArgument.getArgumentExpression()} !== ${firExpression.realPsi}"
-                }
-                firParameterToResolvedValueArgument[firValueParameter] = ExpressionValueArgument(currentArgument)
-            }
-        }
-
-        val arguments = linkedMapOf<ValueParameterDescriptor, ResolvedValueArgument>()
-        for ((parameterIndex, parameter) in ktFunctionSymbol.valueParameters.withIndex()) {
-            val resolvedValueArgument = context.ktAnalysisSessionFacade.withFir(parameter) { it: FirValueParameter ->
-                firParameterToResolvedValueArgument[it]
-            } ?: DefaultValueArgument.DEFAULT
-            arguments[candidateDescriptor.valueParameters[parameterIndex]] = resolvedValueArgument
-        }
-        arguments
-    }
-
-    override fun getStatus(): ResolutionStatus =
-        if (firCall.getFir().calleeReference is FirResolvedNamedReference) ResolutionStatus.SUCCESS else ResolutionStatus.OTHER_ERROR
-
-    override fun getCall(): Call = firSimpleWrapperCall
-
-    @OptIn(SymbolInternals::class)
-    override fun getCandidateDescriptor(): CallableDescriptor {
-        return ktFunctionSymbol.toDeclarationDescriptor(context)
-    }
-
-    override fun getResultingDescriptor(): CallableDescriptor = context.incorrectImplementation { candidateDescriptor }
-
-    @OptIn(SymbolInternals::class)
-    override fun getExtensionReceiver(): ReceiverValue? {
-        if (firCall.getFir().extensionReceiver === FirNoReceiverExpression) return null
-
-        return firCall.getFir().extensionReceiver.toExpressionReceiverValue(context)
-    }
-
-    @OptIn(SymbolInternals::class)
-    override fun getDispatchReceiver(): ReceiverValue? {
-        if (firCall.getFir().dispatchReceiver === FirNoReceiverExpression) return null
-
-        return firCall.getFir().dispatchReceiver.toExpressionReceiverValue(context)
-    }
-
-    override fun getContextReceivers(): List<ReceiverValue> = context.implementationPlanned()
-
-    override fun getExplicitReceiverKind(): ExplicitReceiverKind {
-        if (firCall.getFir().explicitReceiver === null) return ExplicitReceiverKind.NO_EXPLICIT_RECEIVER
-        if (firCall.getFir().explicitReceiver === firCall.getFir().extensionReceiver) return ExplicitReceiverKind.EXTENSION_RECEIVER
-        return ExplicitReceiverKind.DISPATCH_RECEIVER
-    }
-
-    @OptIn(SymbolInternals::class)
-    override fun getValueArguments(): Map<ValueParameterDescriptor, ResolvedValueArgument> = arguments
-
-    override fun getValueArgumentsByIndex(): List<ResolvedValueArgument> = valueArguments.values.toList()
-
-    @OptIn(SymbolInternals::class)
-    override fun getArgumentMapping(valueArgument: ValueArgument): ArgumentMapping {
-        val firArguments = firCall.withFir { it.argumentMapping } ?: context.implementationPostponed()
-        val argumentExpression = valueArgument.getArgumentExpression() ?: context.implementationPostponed()
-
-        fun FirExpression.isMyArgument() = realPsi === valueArgument || realPsi === argumentExpression
-
-        var targetFirParameter: FirValueParameter? = null
-        outer@ for ((firExpression, firValueParameter) in firArguments.entries) {
-            if (firExpression is FirVarargArgumentsExpression) {
-                for (subExpression in firExpression.arguments)
-                    if (subExpression.isMyArgument()) {
-                        targetFirParameter = firValueParameter
-                        break@outer
-                    }
-            } else if (firExpression.isMyArgument()) {
-                targetFirParameter = firValueParameter
-                break@outer
-            }
-        }
-        if (targetFirParameter == null) return ArgumentUnmapped
-
-        val parameterIndex = ktFunctionSymbol.valueParameters.indexOfFirst {
-            context.ktAnalysisSessionFacade.withFir(it) { it: FirValueParameter -> it === targetFirParameter }
-        }
-        if (parameterIndex == -1) error("Fir parameter not found :(")
-
-        val parameterDescriptor = candidateDescriptor.valueParameters[parameterIndex]
-        return ArgumentMatchImpl(parameterDescriptor)
-    }
-
-    override fun getTypeArguments(): Map<TypeParameterDescriptor, KotlinType> = _typeArguments
-
-    override fun getDataFlowInfoForArguments(): DataFlowInfoForArguments = context.noImplementation()
-    override fun getSmartCastDispatchReceiverType(): KotlinType? = context.noImplementation()
-}
 
 class CallAndResolverCallWrappers(bindingContext: KtSymbolBasedBindingContext) {
     private val context = bindingContext.context
@@ -219,28 +29,135 @@ class CallAndResolverCallWrappers(bindingContext: KtSymbolBasedBindingContext) {
     init {
         bindingContext.registerGetterByKey(BindingContext.CALL, this::getCall)
         bindingContext.registerGetterByKey(BindingContext.RESOLVED_CALL, this::getResolvedCall)
+        bindingContext.registerGetterByKey(BindingContext.CONSTRUCTOR_RESOLVED_DELEGATION_CALL, this::getConstructorResolvedDelegationCall)
         bindingContext.registerGetterByKey(BindingContext.REFERENCE_TARGET, this::getReferenceTarget)
     }
 
-    private fun getCall(element: KtElement): Call {
-        val ktCall = element.parent.safeAs<KtCallExpression>() ?: context.implementationPostponed()
-        val firCall = when (val fir = ktCall.getOrBuildFir(context.ktAnalysisSessionFacade.firResolveState)) {
-            is FirFunctionCall -> fir
-            is FirSafeCallExpression -> fir.selector as? FirFunctionCall
-            else -> null
+    private fun getCall(element: KtElement): Call? {
+        val call = createCall(element) ?: return null
+
+        /**
+         * In FE10 [org.jetbrains.kotlin.resolve.calls.tasks.TracingStrategyImpl.bindCall] happening to the calleeExpression
+         */
+        check(call.calleeExpression == element) {
+            "${call.calleeExpression} != $element"
         }
-
-        if (firCall != null) return FirSimpleWrapperCall(ktCall, FirWeakReference(firCall, context.ktAnalysisSessionFacade.analysisSession.token), context)
-
-        // Call for property
-        context.implementationPostponed()
+        return call
     }
 
-    private fun getResolvedCall(call: Call): ResolvedCall<*> {
-        check(call is FirSimpleWrapperCall) {
-            "Incorrect Call type: $call"
+    private fun createCall(element: KtElement): Call? {
+        val parent = element.parent
+        if (parent is KtCallElement) {
+            val callParent = parent.parent
+            val callOperationNode: ASTNode?
+            val receiver: Receiver?
+            if (callParent is KtQualifiedExpression) {
+                callOperationNode = callParent.operationTokenNode
+                receiver = callParent.receiverExpression.toExpressionReceiverValue(context)
+            } else {
+                callOperationNode = null
+                receiver = null
+            }
+
+            return CallMaker.makeCall(receiver, callOperationNode, parent)
         }
-        return FirWrapperResolvedCall(call)
+
+        if (element is KtSimpleNameExpression && element !is KtOperationReferenceExpression) {
+            if (parent is KtQualifiedExpression) {
+                val receiver = parent.receiverExpression.toExpressionReceiverValue(context)
+                return CallMaker.makePropertyCall(receiver, parent.operationTokenNode, element)
+            }
+
+            return CallMaker.makePropertyCall(null, null, element)
+        }
+
+        when (parent) {
+            is KtBinaryExpression -> {
+                val receiver = parent.left?.toExpressionReceiverValue(context) ?: context.errorHandling()
+                return CallMaker.makeCall(receiver, parent)
+            }
+            is KtUnaryExpression -> {
+                if (element is KtOperationReferenceExpression && element.getReferencedNameElementType() == KtTokens.EXCLEXCL) {
+                    return ControlStructureTypingUtils.createCallForSpecialConstruction(parent, element, listOf(parent.baseExpression))
+                }
+
+                val receiver = parent.baseExpression?.toExpressionReceiverValue(context) ?: context.errorHandling()
+                return CallMaker.makeCall(receiver, parent)
+            }
+        }
+
+        // todo support array get/set calls
+        return null
+    }
+
+    internal fun KtExpression.toExpressionReceiverValue(context: Fe10WrapperContext): ExpressionReceiver {
+        val ktType = context.withAnalysisSession {
+            this@toExpressionReceiverValue.getKtType() ?: context.implementationPostponed()
+        }
+
+        // TODO: implement THIS_TYPE_FOR_SUPER_EXPRESSION Binding slice
+        return ExpressionReceiver.create(this, ktType.toKotlinType(context), context.bindingContext)
+    }
+
+    private fun getResolvedCall(call: Call): ResolvedCall<*>? {
+        val ktElement = call.calleeExpression ?: call.callElement
+
+        val ktCallInfo = context.withAnalysisSession { ktElement.resolveCall() }
+        val diagnostic: KtDiagnostic?
+        val ktCall: KtCall = when (ktCallInfo) {
+            null -> return null
+            is KtSuccessCallInfo -> {
+                diagnostic = null
+                ktCallInfo.call
+            }
+            is KtErrorCallInfo -> {
+                diagnostic = ktCallInfo.diagnostic
+                ktCallInfo.candidateCalls.singleOrNull() ?: return null
+            }
+        }
+
+        when (ktCall) {
+            is KtFunctionCall<*> -> {
+                if (ktCall.safeAs<KtSimpleFunctionCall>()?.isImplicitInvoke == true) {
+                    context.implementationPostponed("Variable + invoke resolved call")
+                }
+                return FunctionFe10WrapperResolvedCall(call, ktCall, diagnostic, context)
+            }
+            is KtVariableAccessCall -> {
+                return VariableFe10WrapperResolvedCall(call, ktCall, diagnostic, context)
+            }
+            is KtCheckNotNullCall -> {
+                val kotlinType = context.withAnalysisSession { ktCall.baseExpression.getKtType() }?.toKotlinType(context)
+                return Fe10BindingSpecialConstructionResolvedCall(
+                    call,
+                    kotlinType,
+                    context.fe10BindingSpecialConstructionFunctions.EXCL_EXCL,
+                    context
+                )
+            }
+
+            else -> context.implementationPostponed(ktCall.javaClass.canonicalName)
+        }
+    }
+
+    private fun getConstructorResolvedDelegationCall(constructor: ConstructorDescriptor): ResolvedCall<ConstructorDescriptor>? {
+        val constructorPSI = constructor.safeAs<KtSymbolBasedConstructorDescriptor>()?.ktSymbol?.psi
+        when (constructorPSI) {
+            is KtSecondaryConstructor -> {
+                val delegationCall = constructorPSI.getDelegationCall()
+                val ktCallInfo = context.withAnalysisSession { delegationCall.resolveCall() }
+                val diagnostic = ktCallInfo.safeAs<KtErrorCallInfo>()?.diagnostic
+                val constructorCall = ktCallInfo.calls.singleOrNull() ?: return null
+
+                if (constructorCall !is KtFunctionCall<*>) context.errorHandling(constructorCall::class.toString())
+                val psiCall = CallMaker.makeCall(null, null, delegationCall)
+
+                @Suppress("UNCHECKED_CAST")
+                return FunctionFe10WrapperResolvedCall(psiCall, constructorCall, diagnostic, context) as ResolvedCall<ConstructorDescriptor>
+            }
+            null -> return null
+            else -> context.implementationPlanned() // todo: Primary Constructor delegated call
+        }
     }
 
     private fun getReferenceTarget(key: KtReferenceExpression): DeclarationDescriptor? {

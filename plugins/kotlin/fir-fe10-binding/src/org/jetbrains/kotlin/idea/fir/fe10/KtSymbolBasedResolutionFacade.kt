@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.fir.fe10
 
@@ -10,6 +10,7 @@ import org.jetbrains.kotlin.analyzer.ModuleInfo
 import org.jetbrains.kotlin.analyzer.ResolverForProject
 import org.jetbrains.kotlin.caches.resolve.KotlinCacheService
 import org.jetbrains.kotlin.caches.resolve.PlatformAnalysisSettings
+import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.diagnostics.DiagnosticSink
@@ -29,15 +30,15 @@ import org.jetbrains.kotlin.utils.addToStdlib.safeAs
 
 class KtSymbolBasedResolutionFacade(
     override val project: Project,
-    val context: FE10BindingContext
+    val context: Fe10WrapperContext
 ) : ResolutionFacade {
-    override fun analyze(element: KtElement, bodyResolveMode: BodyResolveMode): BindingContext = KtSymbolBasedBindingContext(context)
+    override fun analyze(element: KtElement, bodyResolveMode: BodyResolveMode): BindingContext = context.bindingContext
 
     override fun analyze(elements: Collection<KtElement>, bodyResolveMode: BodyResolveMode): BindingContext =
-        KtSymbolBasedBindingContext(context)
+        context.bindingContext
 
     override fun analyzeWithAllCompilerChecks(elements: Collection<KtElement>, callback: DiagnosticSink.DiagnosticsCallback?): AnalysisResult {
-        return AnalysisResult.success(KtSymbolBasedBindingContext(context), context.moduleDescriptor)
+        return AnalysisResult.success(context.bindingContext, context.moduleDescriptor)
     }
 
     override fun resolveToDescriptor(declaration: KtDeclaration, bodyResolveMode: BodyResolveMode): DeclarationDescriptor {
@@ -52,6 +53,9 @@ class KtSymbolBasedResolutionFacade(
 
     @FrontendInternals
     override fun <T : Any> getFrontendService(serviceClass: Class<T>): T {
+        if (serviceClass == LanguageVersionSettings::class.java) {
+            return context.languageVersionSettings as T
+        }
         TODO("Not yet implemented")
     }
 
@@ -90,16 +94,16 @@ class KtSymbolBasedKotlinCacheServiceImpl(val project: Project) : KotlinCacheSer
     }
 
     override fun getResolutionFacade(elements: List<KtElement>): ResolutionFacade =
-        KtSymbolBasedResolutionFacade(project, FE10BindingContextImpl(project, elements.first()))
+        KtSymbolBasedResolutionFacade(project, Fe10WrapperContextImpl(project, elements.first()))
 
     override fun getResolutionFacadeByFile(file: PsiFile, platform: TargetPlatform): ResolutionFacade? =
-        file.safeAs<KtFile>()?.let { KtSymbolBasedResolutionFacade(project, FE10BindingContextImpl(project, it)) }
+        file.safeAs<KtFile>()?.let { KtSymbolBasedResolutionFacade(project, Fe10WrapperContextImpl(project, it)) }
 
     override fun getSuppressionCache(): KotlinSuppressCache {
         return BindingContextSuppressCache(BindingContext.EMPTY)
     }
 
-    override fun getResolutionFacadeByModuleInfo(moduleInfo: ModuleInfo, platform: TargetPlatform): ResolutionFacade? =
+    override fun getResolutionFacadeByModuleInfo(moduleInfo: ModuleInfo, platform: TargetPlatform): ResolutionFacade =
         TODO("Not yet implemented")
 
     override fun getResolutionFacadeByModuleInfo(moduleInfo: ModuleInfo, settings: PlatformAnalysisSettings): ResolutionFacade? {

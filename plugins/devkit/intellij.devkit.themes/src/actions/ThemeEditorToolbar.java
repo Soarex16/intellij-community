@@ -38,11 +38,12 @@ public final class ThemeEditorToolbar extends EditorNotifications.Provider<Edito
   @Override
   public EditorNotificationPanel createNotificationPanel(@NotNull VirtualFile file, @NotNull FileEditor fileEditor, @NotNull Project project) {
     if (ThemeJsonUtil.isThemeFilename(file.getName())) {
-      JBColor bg = JBColor.lazy(() -> ExperimentalUI.isNewEditorTabs()
+      JBColor bg = JBColor.lazy(() -> ExperimentalUI.isNewUI()
                                         ? EditorColorsManager.getInstance().getGlobalScheme().getDefaultBackground()
                                         : JBColor.PanelBackground);
       EditorNotificationPanel panel = new EditorNotificationPanel(bg);
       panel.removeAll();
+      panel.setBorder(null);
       DefaultActionGroup group = (DefaultActionGroup)ActionManager.getInstance().getAction("DevKit.ThemeEditorToolbar");
       ActionToolbar actionToolbar = ActionManager.getInstance().createActionToolbar("ThemeEditor", group, true);
       actionToolbar.setTargetComponent(panel);

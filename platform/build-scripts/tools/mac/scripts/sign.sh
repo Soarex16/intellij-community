@@ -60,7 +60,7 @@ find "$APP_DIRECTORY" -name '*.jar' \
     rm -rf jarfolder jar.jar
     mkdir jarfolder
     filename="${jar##*/}"
-    log "Filename: $filename"
+    log "Jarname: $filename"
     cp "$jar" jarfolder && (cd jarfolder && jar xf "$filename" && rm "$filename")
 
     while read -r file; do
@@ -85,7 +85,7 @@ for f in \
   "Contents/MacOS" "Contents/bin"; do
   if [ -d "$APP_DIRECTORY/$f" ]; then
     while read -r file; do
-      echo "$file"
+      log "Filename: $file"
       ./codesign.sh --timestamp \
             --verbose \
             --sign "$JB_CERT" \
@@ -116,6 +116,7 @@ log "Signing whole app..."
   --entitlements "$ENTITLEMENTS" "$SIT_FILE"
 
 ditto -xk "$SIT_FILE" "$(dirname "$APP_DIRECTORY")"
+rm -rf "$SIT_FILE"
 codesign --verify --verbose "$APP_DIRECTORY"
 
 log "Verifying java is not broken"

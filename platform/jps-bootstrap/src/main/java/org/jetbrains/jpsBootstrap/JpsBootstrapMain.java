@@ -1,15 +1,15 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.jpsBootstrap;
 
+import com.google.common.hash.Hashing;
 import com.intellij.execution.CommandLineWrapperUtil;
 import com.intellij.openapi.diagnostic.IdeaLogRecordFormatter;
-import com.intellij.openapi.util.text.StringUtil;
+import com.intellij.openapi.util.text.Strings;
 import com.intellij.util.ExceptionUtil;
 import jetbrains.buildServer.messages.serviceMessages.MessageWithAttributes;
 import jetbrains.buildServer.messages.serviceMessages.ServiceMessageTypes;
 import org.apache.commons.cli.*;
-import org.apache.commons.codec.digest.DigestUtils;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.intellij.build.dependencies.BuildDependenciesCommunityRoot;
@@ -58,12 +58,24 @@ public class JpsBootstrapMain {
   }
 
   public static void main(String[] args) {
+    Path jpsBootstrapWorkDir = null;
+
     try {
-      new JpsBootstrapMain(args).main();
+      JpsBootstrapMain mainInstance = new JpsBootstrapMain(args);
+      jpsBootstrapWorkDir = mainInstance.jpsBootstrapWorkDir;
+      mainInstance.main();
       System.exit(0);
     }
     catch (Throwable t) {
       fatal(ExceptionUtil.getThrowableText(t));
+
+      // Better diagnostics for local users
+      if (!underTeamCity) {
+        System.err.println("\n###### ERROR EXIT due to FATAL error: " + t.getMessage() + "\n");
+        String work = jpsBootstrapWorkDir == null ? "PROJECT_HOME/build/jps-bootstrap-work" : jpsBootstrapWorkDir.toString();
+        System.err.println("###### You may try to delete caches at " + work + " and retry");
+      }
+
       System.exit(1);
     }
   }
@@ -179,7 +191,7 @@ public class JpsBootstrapMain {
     args.addAll(convertPropertiesToCommandLineArgs(systemProperties));
 
     args.add("-classpath");
-    args.add(StringUtil.join(moduleRuntimeClasspath, File.pathSeparator));
+    args.add(Strings.join(moduleRuntimeClasspath, File.pathSeparator));
 
     args.add("-Dbuild.script.launcher.main.class=" + classNameToRun);
     args.add("org.jetbrains.intellij.build.impl.BuildScriptLauncher");
@@ -248,7 +260,7 @@ public class JpsBootstrapMain {
         }
         else {
           long length = attributes.size();
-          String sha256 = DigestUtils.sha256Hex(Files.readAllBytes(file.toPath()));
+          String sha256 = Hashing.sha256().hashBytes(Files.readAllBytes(file.toPath())).toString();
           return file + " file length " + length + " sha256 " + sha256;
         }
       }

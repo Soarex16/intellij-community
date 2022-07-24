@@ -75,7 +75,7 @@ class KtVariableDescriptor(val variable: KtCallableDeclaration) : JvmVariableDes
 
     override fun getPsiElement(): KtCallableDeclaration = variable
 
-    override fun getDfType(qualifier: DfaVariableValue?): DfType = variable.type().toDfType(variable)
+    override fun getDfType(qualifier: DfaVariableValue?): DfType = variable.type().toDfType()
 
     override fun equals(other: Any?): Boolean = other is KtVariableDescriptor && other.variable == variable
 
@@ -118,13 +118,21 @@ class KtVariableDescriptor(val variable: KtCallableDeclaration) : JvmVariableDes
                     if (isTrackableProperty(target)) {
                         val parent = expr.parent
                         var qualifier: DfaVariableValue? = null
+                        if (target.parent is KtClassBody && target.parent.parent is KtObjectDeclaration) {
+                            // property in object: singleton, can track
+                            return varFactory.createVariableValue(KtVariableDescriptor(target), null)
+                        }
                         if (parent is KtQualifiedExpression && parent.selectorExpression == expr) {
                             val receiver = parent.receiverExpression
                             qualifier = createFromSimpleName(factory, receiver)
                         } else {
+                            if (target.parent is KtFile) {
+                                // top-level declaration
+                                return varFactory.createVariableValue(KtVariableDescriptor(target), null)
+                            }
                             val classOrObject = target.containingClassOrObject?.resolveToDescriptorIfAny()
                             if (classOrObject != null) {
-                                val dfType = classOrObject.defaultType.toDfType(expr)
+                                val dfType = classOrObject.defaultType.toDfType()
                                 qualifier = varFactory.createVariableValue(KtThisDescriptor(classOrObject, dfType))
                             }
                         }
@@ -157,7 +165,7 @@ class KtVariableDescriptor(val variable: KtCallableDeclaration) : JvmVariableDes
     }
 }
 class KtItVariableDescriptor(val lambda: KtElement, val type: KotlinType): JvmVariableDescriptor() {
-    override fun getDfType(qualifier: DfaVariableValue?): DfType = type.toDfType(lambda)
+    override fun getDfType(qualifier: DfaVariableValue?): DfType = type.toDfType()
     override fun isStable(): Boolean = true
     override fun equals(other: Any?): Boolean = other is KtItVariableDescriptor && other.lambda == lambda
     override fun hashCode(): Int = lambda.hashCode()

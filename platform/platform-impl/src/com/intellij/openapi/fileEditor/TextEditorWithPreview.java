@@ -11,10 +11,7 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.impl.EditorComponentImpl;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.util.Disposer;
-import com.intellij.openapi.util.Key;
-import com.intellij.openapi.util.Pair;
-import com.intellij.openapi.util.UserDataHolderBase;
+import com.intellij.openapi.util.*;
 import com.intellij.openapi.util.registry.Registry;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.wm.IdeFocusManager;
@@ -179,7 +176,7 @@ public class TextEditorWithPreview extends UserDataHolderBase implements TextEdi
       final var editorKeyListener = new KeyAdapter() {
         @Override
         public void keyPressed(KeyEvent event) {
-          toolbar.getVisibilityController().scheduleHide();
+          toolbar.scheduleHide();
         }
       };
       actualEditor.getEditor().getContentComponent().addKeyListener(editorKeyListener);
@@ -500,8 +497,12 @@ public class TextEditorWithPreview extends UserDataHolderBase implements TextEdi
     public Icon getIcon(@Nullable TextEditorWithPreview editor) {
       if (this == SHOW_EDITOR) return AllIcons.General.LayoutEditorOnly;
       if (this == SHOW_PREVIEW) return AllIcons.General.LayoutPreviewOnly;
-      if (ExperimentalUI.isNewUI()) return AllIcons.General.LayoutEditorPreview; //todo[kb] add icon for horizontal split
-      return editor != null && editor.myIsVerticalSplit ? AllIcons.Actions.PreviewDetailsVertically : AllIcons.Actions.PreviewDetails;
+      boolean isVerticalSplit = editor != null && editor.myIsVerticalSplit;
+      if (ExperimentalUI.isNewUI()) {
+        return isVerticalSplit ? IconLoader.getIcon("expui/general/editorPreviewVertical.svg", AllIcons.class)
+                               : IconLoader.getIcon("expui/general/editorPreview.svg", AllIcons.class);
+      }
+      return isVerticalSplit ? AllIcons.Actions.PreviewDetailsVertically : AllIcons.Actions.PreviewDetails;
     }
   }
 
@@ -633,18 +634,21 @@ public class TextEditorWithPreview extends UserDataHolderBase implements TextEdi
 
     @Override
     public void eventDispatched(AWTEvent event) {
-      var isMouseOutsideToolbar = toolbar.getMousePosition() == null;
-      if (myComponent.getMousePosition() != null) {
-        alarm.cancelAllRequests();
-        toolbar.getVisibilityController().scheduleShow();
-        if (isMouseOutsideToolbar) {
-          alarm.addRequest(() -> {
-            toolbar.getVisibilityController().scheduleHide();
-          }, 1400);
+      try {
+        var isMouseOutsideToolbar = toolbar.getMousePosition() == null;
+        if (myComponent.getMousePosition() != null) {
+          alarm.cancelAllRequests();
+          toolbar.scheduleShow();
+          if (isMouseOutsideToolbar) {
+            alarm.addRequest(() -> {
+              toolbar.scheduleHide();
+            }, 1400);
+          }
         }
-      }
-      else if (isMouseOutsideToolbar) {
-        toolbar.getVisibilityController().scheduleHide();
+        else if (isMouseOutsideToolbar) {
+          toolbar.scheduleHide();
+        }
+      } catch (NullPointerException ignore) { //EA-356093 problem inside OpenJDK
       }
     }
   }

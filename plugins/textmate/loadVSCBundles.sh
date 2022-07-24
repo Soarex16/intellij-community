@@ -62,17 +62,17 @@ cp -r "syntaxes" "$ROOT/lib/bundles/mdx/"
 
 cd ..
 
-# kotlin
-git clone https://github.com/sargunv/kotlin-textmate-bundle.git
-cd kotlin-textmate-bundle/Kotlin.tmbundle
-mv "Snippets" "snippets"
-mv "Syntaxes" "syntaxes"
+#twig
+echo "Adding twig"
+git clone https://github.com/mblode/vscode-twig-language-2
+cd vscode-twig-language-2
 
-echo "Adding kotlin"
-mkdir -p "$ROOT/lib/bundles/kotlin"
-cp -r "info.plist" "$ROOT/lib/bundles/kotlin/"
-cp -r "snippets" "$ROOT/lib/bundles/kotlin/"
-cp -r "syntaxes" "$ROOT/lib/bundles/kotlin/"
+mkdir -p "$ROOT/lib/bundles/twig"
+cp -r "LICENSE.md" "$ROOT/lib/bundles/twig"
+cp -r "package.json" "$ROOT/lib/bundles/twig"
+cp -r "README.md" "$ROOT/lib/bundles/twig"
+cp -r "src" "$ROOT/lib/bundles/twig"
+cp -r "src/snippets" "$ROOT/lib/bundles/twig" # TODO: remove after updating to the next version
 
 cd ..
 
@@ -87,6 +87,14 @@ cp -r "package.json" "$ROOT/lib/bundles/jsp"
 cp -r "jsp-configuration.json" "$ROOT/lib/bundles/jsp"
 cp -r "README.md" "$ROOT/lib/bundles/jsp"
 cp -r "syntaxes" "$ROOT/lib/bundles/jsp"
+
+cd ..
+
+echo "Adding erlang"
+mkdir -p "$ROOT/lib/bundles/erlang/grammar"
+wget -q https://raw.githubusercontent.com/erlang-ls/vscode/main/language-configuration.json -O "$ROOT/lib/bundles/erlang/language-configuration.json"
+wget -q https://raw.githubusercontent.com/erlang-ls/vscode/main/package.json -O "$ROOT/lib/bundles/erlang/package.json"
+wget -q https://raw.githubusercontent.com/erlang-ls/grammar/main/Erlang.plist -O "$ROOT/lib/bundles/erlang/grammar/Erlang.plist"
 
 cd $ROOT
 

@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.project;
 
 import com.intellij.codeWithMe.ClientId;
@@ -11,10 +11,7 @@ import com.intellij.ide.plugins.cl.PluginAwareClassLoader;
 import com.intellij.internal.statistic.StructuredIdeActivity;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.actionSystem.AnActionEvent;
-import com.intellij.openapi.application.Application;
-import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.WriteAction;
+import com.intellij.openapi.application.*;
 import com.intellij.openapi.application.impl.ApplicationImpl;
 import com.intellij.openapi.diagnostic.Attachment;
 import com.intellij.openapi.diagnostic.Logger;
@@ -42,6 +39,7 @@ import com.intellij.openapi.wm.IdeFrame;
 import com.intellij.openapi.wm.WindowManager;
 import com.intellij.openapi.wm.ex.ProgressIndicatorEx;
 import com.intellij.openapi.wm.ex.StatusBarEx;
+import com.intellij.util.ArrayUtil;
 import com.intellij.util.SystemProperties;
 import com.intellij.util.indexing.IndexingBundle;
 import com.intellij.util.ui.DeprecationStripePanel;
@@ -188,12 +186,6 @@ public class DumbServiceImpl extends DumbService implements Disposable, Modifica
   }
 
   @Override
-  public boolean isSuspendedDumbMode() {
-    boolean suspended = myHeavyActivities.isSuspended();
-    return isDumb() && suspended;
-  }
-
-  @Override
   public void setAlternativeResolveEnabled(boolean enabled) {
     myAlternativeResolveTracker.setAlternativeResolveEnabled(enabled);
   }
@@ -279,7 +271,7 @@ public class DumbServiceImpl extends DumbService implements Disposable, Modifica
       runnable.run();
     }
     else {
-      app.invokeLater(() -> unsafeRunWhenSmart(runnable), ModalityState.NON_MODAL, myProject.getDisposed());
+      app.invokeLater(() -> unsafeRunWhenSmart(runnable), myProject.getDisposed());
     }
   }
 
@@ -457,7 +449,7 @@ public class DumbServiceImpl extends DumbService implements Disposable, Modifica
         return;
       }
       switched = new CountDownLatch(1);
-      myRunWhenSmartQueue.addLast(() -> switched.countDown());
+      myRunWhenSmartQueue.addLast(switched::countDown);
     }
 
     while (myState.get() != State.SMART && !myProject.isDisposed()) {
@@ -564,17 +556,16 @@ public class DumbServiceImpl extends DumbService implements Disposable, Modifica
     }
   }
 
-  private void assertState(State... expected) {
+  private void assertState(@NotNull State @NotNull ... expected) {
     State state = myState.get();
-    List<State> expectedList = Arrays.asList(expected);
-    if (!expectedList.contains(state)) {
+    if (!ArrayUtil.contains(state, expected)) {
       List<Attachment> attachments = new ArrayList<>();
       if (myDumbEnterTrace != null) {
         attachments.add(new Attachment("indexingStart", myDumbEnterTrace));
       }
       attachments.add(new Attachment("threadDump.txt", ThreadDumper.dumpThreadsToString()));
       throw new RuntimeExceptionWithAttachments("Internal error, please include thread dump attachment. " +
-                                                "Expected " + expectedList + ", but was " + state.toString(),
+                                                "Expected " + Arrays.asList(expected) + ", but was " + state.toString(),
                                                 attachments.toArray(Attachment.EMPTY_ARRAY));
     }
   }
@@ -644,14 +635,14 @@ public class DumbServiceImpl extends DumbService implements Disposable, Modifica
   }
 
   @Override
-  public void runWithWaitForSmartModeDisabled(@NotNull Runnable runnable) {
-    try {
-      myWaitIntolerantThread = Thread.currentThread();
-      runnable.run();
-    }
-    finally {
-      myWaitIntolerantThread = null;
-    }
+  public AccessToken runWithWaitForSmartModeDisabled() {
+    myWaitIntolerantThread = Thread.currentThread();
+    return new AccessToken() {
+      @Override
+      public void finish() {
+        myWaitIntolerantThread = null;
+      }
+    };
   }
 
   @Override

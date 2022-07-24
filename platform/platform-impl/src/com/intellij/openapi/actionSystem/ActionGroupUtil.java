@@ -40,12 +40,10 @@ public final class ActionGroupUtil {
 
   @ApiStatus.Experimental
   public static @NotNull ActionGroup forceRecursiveUpdateInBackground(@NotNull ActionGroup actionGroup) {
-    class MyGroup extends ActionGroup implements UpdateInBackground.Recursive {
-      @Override
-      public boolean isPopup() {
-        return false;
+    class MyGroup extends ActionGroup implements ActionUpdateThreadAware.Recursive {
+      {
+        setPopup(false);
       }
-
       @Override
       public AnAction @NotNull [] getChildren(@Nullable AnActionEvent e) {
         return new AnAction[] { actionGroup };

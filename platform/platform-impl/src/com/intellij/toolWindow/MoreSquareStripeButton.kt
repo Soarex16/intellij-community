@@ -18,6 +18,7 @@ import com.intellij.ui.UIBundle
 import com.intellij.ui.awt.RelativePoint
 import java.awt.Dimension
 import java.awt.Point
+import java.awt.event.MouseEvent
 import java.util.function.Predicate
 
 internal class MoreSquareStripeButton(toolWindowToolbar: ToolWindowLeftToolbar) :
@@ -35,6 +36,8 @@ internal class MoreSquareStripeButton(toolWindowToolbar: ToolWindowLeftToolbar) 
       .installOn(this)
   }
 
+  override fun checkSkipPressForEvent(e: MouseEvent) = e.button != MouseEvent.BUTTON1
+
   companion object {
     private val notVisibleOnStripePredicate: Predicate<ToolWindow> = Predicate { !it.isShowStripeButton }
 
@@ -50,7 +53,7 @@ internal class MoreSquareStripeButton(toolWindowToolbar: ToolWindowLeftToolbar) 
         override fun actionPerformed(e: AnActionEvent) {
           val moreSquareStripeButton = toolWindowToolbar.moreButton
           ToolwindowSwitcher.invokePopup(e.project!!, Comparator.comparing { it.stripeTitle },
-                                         notVisibleOnStripePredicate,
+                                         e.dataContext, notVisibleOnStripePredicate,
                                          RelativePoint(toolWindowToolbar, Point(toolWindowToolbar.width, moreSquareStripeButton.y)))
         }
 

@@ -112,12 +112,12 @@ abstract class AbstractCommitWorkflowHandler<W : AbstractCommitWorkflow, U : Com
   override fun executionEnded() = Unit
 
   override fun beforeCommitChecksStarted() = ui.startBeforeCommitChecks()
-  override fun beforeCommitChecksEnded(isDefaultCommit: Boolean, result: CheckinHandler.ReturnResult) = ui.endBeforeCommitChecks(result)
+  override fun beforeCommitChecksEnded(isDefaultCommit: Boolean, result: CommitChecksResult) = ui.endBeforeCommitChecks(result)
 
   private fun executeDefault(executor: CommitExecutor?): Boolean {
     val proceed = checkCommit(executor) &&
                   addUnversionedFiles() &&
-                  saveCommitOptions()
+                  saveCommitOptionsOnCommit()
     if (!proceed) return false
 
     saveCommitMessage(true)
@@ -135,7 +135,7 @@ abstract class AbstractCommitWorkflowHandler<W : AbstractCommitWorkflow, U : Com
   private fun executeCustom(executor: CommitExecutor, session: CommitSession): Boolean {
     val proceed = checkCommit(executor) &&
                   canExecute(executor) &&
-                  saveCommitOptions()
+                  saveCommitOptionsOnCommit()
     if (!proceed) return false
 
     saveCommitMessage(true)
@@ -162,10 +162,12 @@ abstract class AbstractCommitWorkflowHandler<W : AbstractCommitWorkflow, U : Com
 
   protected abstract fun addUnversionedFiles(): Boolean
 
-  protected fun addUnversionedFiles(changeList: LocalChangeList): Boolean =
-    workflow.addUnversionedFiles(changeList, getIncludedUnversionedFiles().mapNotNull { it.virtualFile }) { changes ->
-      ui.includeIntoCommit(changes)
+  protected fun addUnversionedFiles(changeList: LocalChangeList, inclusionModel: InclusionModel): Boolean {
+    val unversionedFiles = getIncludedUnversionedFiles().mapNotNull { it.virtualFile }
+    return workflow.addUnversionedFiles(changeList, unversionedFiles) { newChanges ->
+      inclusionModel.addInclusion(newChanges)
     }
+  }
 
   protected open fun doExecuteDefault(executor: CommitExecutor?): Boolean {
     return workflow.executeDefault(executor)
@@ -176,18 +178,22 @@ abstract class AbstractCommitWorkflowHandler<W : AbstractCommitWorkflow, U : Com
     return workflow.executeCustom(executor, session)
   }
 
-  protected open fun saveCommitOptions(): Boolean {
+  protected open fun saveCommitOptionsOnCommit(): Boolean {
     commitOptions.saveState()
     return true
   }
 
   protected abstract fun saveCommitMessage(success: Boolean)
 
-  private fun getVcsOptions(commitPanel: CheckinProjectPanel, vcses: Collection<AbstractVcs>, commitContext: CommitContext) =
+  private fun getVcsOptions(commitPanel: CheckinProjectPanel,
+                            vcses: Collection<AbstractVcs>,
+                            commitContext: CommitContext): Map<AbstractVcs, RefreshableOnComponent> =
     vcses.sortedWith(VCS_COMPARATOR)
-      .associateWith { it.checkinEnvironment?.createCommitOptions(commitPanel, commitContext) }
-      .filterValues { it != null }
-      .mapValues { it.value!! }
+      .mapNotNull { vcs ->
+        val optionsPanel = vcs.checkinEnvironment?.createCommitOptions(commitPanel, commitContext) ?: return@mapNotNull null
+        Pair(vcs, optionsPanel)
+      }
+      .toMap()
 
   private fun getBeforeOptions(handlers: Collection<CheckinHandler>): List<RefreshableOnComponent> =
     handlers.mapNotNullLoggingErrors(LOG) { it.beforeCheckinConfigurationPanel }

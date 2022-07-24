@@ -56,7 +56,7 @@ interface ClassLoadingAdapter {
                 }
             }
 
-            val methodToRun = classNode.methods.single { it.name == GENERATED_FUNCTION_NAME }
+            val methodToRun = classNode.methods.single { it.isEvaluationEntryPoint }
 
             val visitedLabels = hashSetOf<Label>()
 
@@ -74,6 +74,11 @@ interface ClassLoadingAdapter {
                     is InsnNode -> {
                         if (insn.opcode == Opcodes.MONITORENTER || insn.opcode == Opcodes.MONITOREXIT) {
                             return info.copy(containsCodeUnsupportedInEval4J = true)
+                        }
+                    }
+                    is MethodInsnNode -> {
+                        if (insn.opcode == Opcodes.INVOKESTATIC && insn.owner == classToLoad.className) {
+                                return info.copy(containsCodeUnsupportedInEval4J = true)
                         }
                     }
                 }

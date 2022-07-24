@@ -13,14 +13,12 @@ import java.awt.datatransfer.StringSelection
 class CopyProjectPathAction : RecentProjectsWelcomeScreenActionBase() {
   override fun update(event: AnActionEvent) {
     val item = getSelectedItem(event)
-    val enabled = item != null && !hasGroupSelected(event)
-
-    event.presentation.isEnabled = enabled
+    event.presentation.isEnabled = item is RecentProjectItem
   }
 
   override fun actionPerformed(event: AnActionEvent) {
     val item = getSelectedItem(event) ?: return
-    val copiedText = when (item)  {
+    val copiedText = when (item) {
       is RecentProjectItem -> FileUtil.toSystemDependentName(item.projectPath)
       else -> item.displayName()
     }

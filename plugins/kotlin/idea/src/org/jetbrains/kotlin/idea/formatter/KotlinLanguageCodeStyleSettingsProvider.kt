@@ -11,7 +11,7 @@ import com.intellij.application.options.codeStyle.properties.CodeStylePropertyAc
 import com.intellij.lang.Language
 import com.intellij.openapi.application.ApplicationBundle
 import com.intellij.psi.codeStyle.*
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.idea.core.formatter.KotlinCodeStyleSettings
 import org.jetbrains.kotlin.idea.core.formatter.KotlinPackageEntryTable
@@ -34,7 +34,7 @@ class KotlinLanguageCodeStyleSettingsProvider : LanguageCodeStyleSettingsProvide
         initIndentOptions()
     }
 
-    override fun createCustomSettings(settings: CodeStyleSettings?): CustomCodeStyleSettings = KotlinCodeStyleSettings(settings)
+    override fun createCustomSettings(settings: CodeStyleSettings): CustomCodeStyleSettings = KotlinCodeStyleSettings(settings)
 
     override fun getAccessor(codeStyleObject: Any, field: Field): CodeStyleFieldAccessor<*, *>? {
         if (codeStyleObject is KotlinCodeStyleSettings && KotlinPackageEntryTable::class.java.isAssignableFrom(field.type)) {

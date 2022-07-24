@@ -10,10 +10,10 @@ import com.intellij.openapi.roots.LibraryOrderEntry
 import com.intellij.openapi.roots.OrderRootType
 import com.intellij.openapi.util.SystemInfoRt.*
 import com.intellij.openapi.util.io.FileUtil
-import org.jetbrains.kotlin.ide.konan.NativeLibraryKind
-import org.jetbrains.kotlin.idea.caches.project.isMPPModule
+import org.jetbrains.kotlin.idea.base.facet.isMultiPlatformModule
+import org.jetbrains.kotlin.idea.base.platforms.KotlinNativeLibraryKind
+import org.jetbrains.kotlin.idea.base.platforms.detectLibraryKind
 import org.jetbrains.kotlin.idea.facet.KotlinFacet
-import org.jetbrains.kotlin.idea.framework.detectLibraryKind
 import org.jetbrains.kotlin.idea.gradle.configuration.klib.KotlinNativeLibraryNameUtil.parseIDELibraryName
 import org.jetbrains.kotlin.idea.gradle.configuration.readGradleProperty
 import org.jetbrains.kotlin.idea.testFramework.Stats
@@ -288,14 +288,10 @@ class PerformanceNativeProjectsTest : AbstractPerformanceProjectsTest() {
     // goal: make sure that the project imported from Gradle is valid
     private fun runProjectSanityChecks(project: Project) {
 
-        val isNativeDependencyPropagationEnabled by lazy {
-            readGradleProperty(project, "kotlin.native.enableDependencyPropagation")?.toBoolean() == true
-        }
-
         val nativeModules: Map<Module, Set<String>> = runReadAction {
             project.allModules().mapNotNull { module ->
                 val facetSettings = KotlinFacet.get(module)?.configuration?.settings ?: return@mapNotNull null
-                if (!facetSettings.isMPPModule || !facetSettings.targetPlatform.isNative()) return@mapNotNull null
+                if (!facetSettings.isMultiPlatformModule || !facetSettings.targetPlatform.isNative()) return@mapNotNull null
 
                 // ex: "myProject.commonTest" -> "commonTest"
                 val moduleName = module.name.removePrefix(project.name).removePrefix(".")
@@ -308,18 +304,13 @@ class PerformanceNativeProjectsTest : AbstractPerformanceProjectsTest() {
                     .asSequence()
                     .filterIsInstance<LibraryOrderEntry>()
                     .mapNotNull { it.library }
-                    .filter { detectLibraryKind(it.getFiles(OrderRootType.CLASSES)) == NativeLibraryKind }
+                    .filter { detectLibraryKind(it.getFiles(OrderRootType.CLASSES)) == KotlinNativeLibraryKind }
                     .mapNotNull inner@{ library ->
                         val libraryNameParts = parseIDELibraryName(library.name.orEmpty()) ?: return@inner null
                         val (_, pureLibraryName, platformPart) = libraryNameParts
                         pureLibraryName + if (platformPart != null) " [$platformPart]" else ""
                     }
                     .toSet()
-
-                // workaround to skip common Linux modules in "enabled dependency propagation" mode that do not
-                // get any Kotlin/Native KLIB libraries
-                if (nativeLibraries.isEmpty() && moduleName.startsWith("linux") && isNativeDependencyPropagationEnabled)
-                    return@mapNotNull null
 
                 module to nativeLibraries
             }.toMap()

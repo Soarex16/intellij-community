@@ -5,9 +5,11 @@ import com.intellij.codeInsight.lookup.impl.LookupCellRenderer.REGULAR_MATCHED_A
 import com.intellij.execution.util.setEmptyState
 import com.intellij.execution.util.setVisibleRowCount
 import com.intellij.icons.AllIcons
+import com.intellij.ide.projectWizard.NewProjectWizardCollector.BuildSystem.logVersionChanged
+import com.intellij.ide.projectWizard.NewProjectWizardConstants.BuildSystem.MAVEN
+import com.intellij.ide.projectWizard.NewProjectWizardConstants.Language.JAVA
 import com.intellij.ide.projectWizard.generators.AssetsNewProjectWizardStep
 import com.intellij.ide.projectWizard.generators.BuildSystemJavaNewProjectWizardData.Companion.buildSystem
-import com.intellij.ide.projectWizard.generators.JavaNewProjectWizard
 import com.intellij.ide.starters.local.StandardAssetsProvider
 import com.intellij.ide.util.projectWizard.WizardContext
 import com.intellij.ide.wizard.*
@@ -27,6 +29,7 @@ import com.intellij.openapi.externalSystem.service.ui.completion.TextCompletionR
 import com.intellij.openapi.externalSystem.service.ui.properties.PropertiesTable
 import com.intellij.openapi.externalSystem.util.ExternalSystemBundle
 import com.intellij.openapi.observable.util.transform
+import com.intellij.openapi.observable.util.trim
 import com.intellij.openapi.progress.util.BackgroundTaskUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
@@ -55,7 +58,6 @@ import org.jetbrains.idea.maven.indices.archetype.MavenCatalogManager
 import org.jetbrains.idea.maven.model.MavenArchetype
 import org.jetbrains.idea.maven.model.MavenId
 import org.jetbrains.idea.maven.wizards.InternalMavenModuleBuilder
-import org.jetbrains.idea.maven.wizards.MavenJavaNewProjectWizard
 import org.jetbrains.idea.maven.wizards.MavenNewProjectWizardStep
 import org.jetbrains.idea.maven.wizards.MavenWizardBundle
 import java.awt.Component
@@ -63,7 +65,7 @@ import javax.swing.Icon
 import javax.swing.JList
 
 class MavenArchetypeNewProjectWizard : GeneratorNewProjectWizard {
-  override val id: String = javaClass.name
+  override val id: String = "MavenArchetype"
 
   override val name: String = MavenWizardBundle.message("maven.new.project.wizard.archetype.generator.name")
 
@@ -83,8 +85,8 @@ class MavenArchetypeNewProjectWizard : GeneratorNewProjectWizard {
     }
 
     override fun onStepSelected(step: NewProjectWizardStep) {
-      step.language = JavaNewProjectWizard.JAVA
-      step.buildSystem = MavenJavaNewProjectWizard.MAVEN
+      step.language = JAVA
+      step.buildSystem = MAVEN
     }
   }
 
@@ -181,9 +183,10 @@ class MavenArchetypeNewProjectWizard : GeneratorNewProjectWizard {
       with(builder) {
         row(ExternalSystemBundle.message("external.system.mavenized.structure.wizard.version.label")) {
           textField()
-            .bindText(versionProperty)
+            .bindText(versionProperty.trim())
             .columns(COLUMNS_MEDIUM)
-            .textValidation(CHECK_NON_EMPTY)
+            .trimmedTextValidation(CHECK_NON_EMPTY)
+            .whenTextChangedFromUi { logVersionChanged() }
         }.bottomGap(BottomGap.SMALL)
       }
     }
@@ -322,6 +325,8 @@ class MavenArchetypeNewProjectWizard : GeneratorNewProjectWizard {
     }
 
     override fun setupProject(project: Project) {
+      super.setupProject(project)
+
       val builder = InternalMavenModuleBuilder().apply {
         moduleJdk = sdk
         name = parentStep.name

@@ -116,7 +116,7 @@ public final class MavenServerManager implements Disposable {
       public void onProjectTrusted(@NotNull Project project) {
         MavenProjectsManager manager = MavenProjectsManager.getInstance(project);
         if (manager.isMavenizedProject()) {
-          MavenUtil.restartMavenConnectors(project);
+          MavenUtil.restartMavenConnectors(project, true);
         }
       }
 
@@ -270,11 +270,16 @@ public final class MavenServerManager implements Disposable {
     return true;
   }
 
+  /**
+   *
+   * use MavenUtil.restartMavenConnectors
+   */
   public void shutdown(boolean wait) {
     Collection<MavenServerConnector> values;
     synchronized (myMultimoduleDirToConnectorMap) {
       values = new ArrayList<>(myMultimoduleDirToConnectorMap.values());
     }
+
 
     values.forEach(c -> shutdownConnector(c, wait));
   }
@@ -402,7 +407,7 @@ public final class MavenServerManager implements Disposable {
 
   private static void prepareClassPathForLocalRunAndUnitTests(@NotNull String mavenVersion, List<File> classpath, String root) {
     BuildDependenciesCommunityRoot communityRoot = new BuildDependenciesCommunityRoot(Path.of(PathManager.getCommunityHomePath()));
-    BundledMavenDownloader.downloadMavenCommonLibs(communityRoot);
+    BundledMavenDownloader.INSTANCE.downloadMavenCommonLibs(communityRoot);
 
     classpath.add(new File(PathUtil.getJarPathForClass(MavenId.class)));
     classpath.add(new File(root, "intellij.maven.server"));

@@ -7,6 +7,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.descriptors.*
+import org.jetbrains.kotlin.idea.base.facet.platform.platform
+import org.jetbrains.kotlin.idea.base.projectStructure.compositeAnalysis.findAnalyzerServices
 import org.jetbrains.kotlin.idea.base.utils.fqname.isImported
 import org.jetbrains.kotlin.idea.caches.resolve.getResolutionFacade
 import org.jetbrains.kotlin.idea.core.formatter.KotlinCodeStyleSettings
@@ -14,9 +16,8 @@ import org.jetbrains.kotlin.idea.core.targetDescriptors
 import org.jetbrains.kotlin.idea.formatter.kotlinCustomSettings
 import org.jetbrains.kotlin.idea.imports.getImportableTargets
 import org.jetbrains.kotlin.idea.imports.importableFqName
-import org.jetbrains.kotlin.idea.project.TargetPlatformDetector
-import org.jetbrains.kotlin.idea.project.findAnalyzerServices
-import org.jetbrains.kotlin.idea.resolve.getLanguageVersionSettings
+import org.jetbrains.kotlin.idea.resolve.languageVersionSettings
+import org.jetbrains.kotlin.idea.util.application.runAction
 import org.jetbrains.kotlin.incremental.components.LookupLocation
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
 import org.jetbrains.kotlin.name.FqName
@@ -41,24 +42,11 @@ class ImportInsertHelperImpl(private val project: Project) : ImportInsertHelper(
         getCodeStyleSettings(contextFile).PACKAGES_IMPORT_LAYOUT
     )
 
-    override fun isImportedWithDefault(importPath: ImportPath, contextFile: KtFile): Boolean {
-        val languageVersionSettings = contextFile.getResolutionFacade().getLanguageVersionSettings()
-        val platform = TargetPlatformDetector.getPlatform(contextFile)
-        val analyzerServices = platform.findAnalyzerServices(contextFile.project)
-        val allDefaultImports = analyzerServices.getDefaultImports(languageVersionSettings, includeLowPriorityImports = true)
-
-        val scriptExtraImports = contextFile.takeIf { it.isScript() }?.let { ktFile ->
-            val scriptDependencies = ScriptDependenciesProvider.getInstance(ktFile.project)
-                ?.getScriptConfiguration(ktFile.originalFile as KtFile)
-            scriptDependencies?.defaultImports?.map { ImportPath.fromString(it) }
-        }.orEmpty()
-
-        return importPath.isImported(allDefaultImports + scriptExtraImports, analyzerServices.excludedImports)
-    }
+    override fun isImportedWithDefault(importPath: ImportPath, contextFile: KtFile): Boolean =
+        isInDefaultImports(importPath, contextFile)
 
     override fun isImportedWithLowPriorityDefaultImport(importPath: ImportPath, contextFile: KtFile): Boolean {
-        val platform = TargetPlatformDetector.getPlatform(contextFile)
-        val analyzerServices = platform.findAnalyzerServices(contextFile.project)
+        val analyzerServices = contextFile.platform.findAnalyzerServices(contextFile.project)
         return importPath.isImported(analyzerServices.defaultLowPriorityImports, analyzerServices.excludedImports)
     }
 
@@ -77,11 +65,11 @@ class ImportInsertHelperImpl(private val project: Project) : ImportInsertHelper(
     override fun importDescriptor(
         element: KtElement,
         descriptor: DeclarationDescriptor,
-        actionRunningMode: ActionRunningMode,
+        runImmediately: Boolean,
         forceAllUnderImport: Boolean,
         aliasName: Name?,
     ): ImportDescriptorResult {
-        val importer = Importer(element, actionRunningMode)
+        val importer = Importer(element, runImmediately)
         return if (forceAllUnderImport) {
             importer.importDescriptorWithStarImport(descriptor)
         } else {
@@ -89,17 +77,17 @@ class ImportInsertHelperImpl(private val project: Project) : ImportInsertHelper(
         }
     }
 
-    override fun importPsiClass(element: KtElement, psiClass: PsiClass, actionRunningMode: ActionRunningMode): ImportDescriptorResult {
-        return Importer(element, actionRunningMode).importPsiClass(psiClass)
+    override fun importPsiClass(element: KtElement, psiClass: PsiClass, runImmediately: Boolean): ImportDescriptorResult {
+        return Importer(element, runImmediately).importPsiClass(psiClass)
     }
 
     private inner class Importer(
         private val element: KtElement,
-        private val actionRunningMode: ActionRunningMode
+        private val runImmediately: Boolean
     ) {
         private val file = element.containingKtFile
         private val resolutionFacade = file.getResolutionFacade()
-        private val languageVersionSettings = resolutionFacade.getLanguageVersionSettings()
+        private val languageVersionSettings = resolutionFacade.languageVersionSettings
 
         private fun alreadyImported(
             target: DeclarationDescriptor,
@@ -323,7 +311,7 @@ class ImportInsertHelperImpl(private val project: Project) : ImportInsertHelper(
             val addedImport = addImport(parentFqName, true)
 
             if (alreadyImported(targetDescriptor, resolutionFacade.getFileResolutionScope(file), targetFqName) == null) {
-                actionRunningMode.runAction { addedImport.delete() }
+                runAction(runImmediately) { addedImport.delete() }
                 return ImportDescriptorResult.FAIL
             }
             dropRedundantExplicitImports(parentFqName)
@@ -388,7 +376,7 @@ class ImportInsertHelperImpl(private val project: Project) : ImportInsertHelper(
                 if (targets.any { it is PackageViewDescriptor }) continue // do not drop import of package
                 val classDescriptor = targets.filterIsInstance<ClassDescriptor>().firstOrNull()
                 importsToCheck.addIfNotNull(classDescriptor?.importableFqName)
-                actionRunningMode.runAction { import.delete() }
+                runAction(runImmediately) { import.delete() }
             }
 
             if (importsToCheck.isNotEmpty()) {
@@ -442,8 +430,10 @@ class ImportInsertHelperImpl(private val project: Project) : ImportInsertHelper(
         private fun KtReferenceExpression.resolveTargets(): Collection<DeclarationDescriptor> =
             this.getImportableTargets(resolutionFacade.analyze(this, BodyResolveMode.PARTIAL))
 
-        private fun addImport(fqName: FqName, allUnder: Boolean, aliasName: Name? = null): KtImportDirective = actionRunningMode.runAction {
-            addImport(project, file, fqName, allUnder, aliasName)
+        private fun addImport(fqName: FqName, allUnder: Boolean, aliasName: Name? = null): KtImportDirective {
+            return runAction(runImmediately) {
+                addImport(project, file, fqName, allUnder, aliasName)
+            }
         }
     }
 
@@ -461,6 +451,25 @@ class ImportInsertHelperImpl(private val project: Project) : ImportInsertHelper(
                 this.safeAs<ClassifierDescriptor>()?.classId?.isNestedClass == true
 
     companion object {
+        fun isInDefaultImports(importPath: ImportPath, contextFile: KtFile): Boolean {
+            val (defaultImports, excludedImports) = computeDefaultAndExcludedImports(contextFile)
+            return importPath.isImported(defaultImports, excludedImports)
+        }
+
+        fun computeDefaultAndExcludedImports(contextFile: KtFile): Pair<List<ImportPath>, List<FqName>> {
+            val languageVersionSettings = contextFile.getResolutionFacade().languageVersionSettings
+            val analyzerServices = contextFile.platform.findAnalyzerServices(contextFile.project)
+            val allDefaultImports = analyzerServices.getDefaultImports(languageVersionSettings, includeLowPriorityImports = true)
+
+            val scriptExtraImports = contextFile.takeIf { it.isScript() }?.let { ktFile ->
+                val scriptDependencies = ScriptDependenciesProvider.getInstance(ktFile.project)
+                    ?.getScriptConfiguration(ktFile.originalFile as KtFile)
+                scriptDependencies?.defaultImports?.map { ImportPath.fromString(it) }
+            }.orEmpty()
+
+            return (allDefaultImports + scriptExtraImports) to analyzerServices.excludedImports
+        }
+
         fun addImport(project: Project, file: KtFile, fqName: FqName, allUnder: Boolean = false, alias: Name? = null): KtImportDirective {
             val importPath = ImportPath(fqName, allUnder, alias)
 

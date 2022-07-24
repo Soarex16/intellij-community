@@ -34,6 +34,7 @@ import com.intellij.openapi.vfs.pointers.VirtualFilePointerListener;
 import com.intellij.openapi.vfs.pointers.VirtualFilePointerManager;
 import com.intellij.testFramework.TestModeFlags;
 import com.intellij.util.ConcurrencyUtil;
+import com.intellij.util.UriUtil;
 import com.intellij.util.containers.CollectionFactory;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.MultiMap;
@@ -41,6 +42,7 @@ import com.intellij.util.io.URLUtil;
 import it.unimi.dsi.fastutil.objects.Reference2IntMap;
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.TestOnly;
@@ -48,6 +50,7 @@ import org.jetbrains.annotations.TestOnly;
 import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 
+@ApiStatus.Internal
 public final class VirtualFilePointerManagerImpl extends VirtualFilePointerManager implements Disposable, BulkFileListener {
   private static final Logger LOG = Logger.getInstance(VirtualFilePointerManagerImpl.class);
   private static final boolean IS_UNDER_UNIT_TEST = ApplicationManager.getApplication().isUnitTestMode();
@@ -114,6 +117,11 @@ public final class VirtualFilePointerManagerImpl extends VirtualFilePointerManag
 
     private void fireAfter() {
       myListener.validityChanged(myPointers);
+    }
+
+    @Override
+    public String toString() {
+      return myListener + " -> " + Arrays.toString(myPointers);
     }
   }
 
@@ -282,7 +290,7 @@ public final class VirtualFilePointerManagerImpl extends VirtualFilePointerManag
 
       if (next == '/' && i != 0 ||
           next == '/' && !SystemInfo.isWindows ||// additional condition for Windows UNC
-          next == '/' && slash == 2 && path.charAt(1) == ':' && OSAgnosticPathUtil.isDriveLetter(path.charAt(0)) ||// Z://foo -> Z:/foo
+          next == '/' && slash == 2 && OSAgnosticPathUtil.startsWithWindowsDrive(path) || // Z://foo -> Z:/foo
           next == '.' && (slash == path.length()-2 || path.charAt(slash+2) == '/')) {
         return cleanupTail(path, slash);
       }
@@ -324,7 +332,7 @@ public final class VirtualFilePointerManagerImpl extends VirtualFilePointerManag
 
   private static @NotNull String trimTrailingSeparators(@NotNull String path) {
     path = StringUtil.trimEnd(path, JarFileSystem.JAR_SEPARATOR);
-    path = StringUtil.trimTrailing(path, '/');
+    path = UriUtil.trimTrailingSlashes(path);
     return path;
   }
 
@@ -350,7 +358,7 @@ public final class VirtualFilePointerManagerImpl extends VirtualFilePointerManag
           index = path.indexOf(JarFileSystem.JAR_SEPARATOR, index + 1);
         }
         while (index > 0 && path.charAt(index-1) == '/');
-        if (index == -1) {
+        if (index == -1 && !isArchiveInTheWindowsDiskRoot(path)) {
           // treat url "jar://xx/x.jar" as "jar://xx/x.jar!/"
           normPath = path + JarFileSystem.JAR_SEPARATOR;
         }
@@ -386,6 +394,21 @@ public final class VirtualFilePointerManagerImpl extends VirtualFilePointerManag
     return pointer;
   }
 
+  private static boolean isArchiveInTheWindowsDiskRoot(@NotNull String path) {
+    // special case: "C:!/foo" means the archive is in the disk root - we shouldn't treat it as relative path starting with "!"
+    // other special case: "C:/!/foo" means the archive is in the disk root - we shouldn't treat it as under the (local) directory "!" in the disk root
+    return OSAgnosticPathUtil.startsWithWindowsDrive(path)
+           && path.length() >= 4
+           && (path.charAt(2) == '!'
+               && path.charAt(3) == '/'
+               ||
+               path.length() >= 5
+               && path.charAt(2) == '/'
+               && path.charAt(3) == '!'
+               && path.charAt(4) == '/'
+           );
+  }
+
   @Override
   public @NotNull VirtualFilePointer duplicate(@NotNull VirtualFilePointer pointer,
                                                @NotNull Disposable parent,
@@ -394,7 +417,7 @@ public final class VirtualFilePointerManagerImpl extends VirtualFilePointerManag
     return file == null ? create(pointer.getUrl(), parent, listener) : create(file, parent, listener);
   }
 
-  private synchronized void assertAllPointersDisposed() {
+  public synchronized void assertAllPointersDisposed() {
     List<VirtualFilePointer> leaked = new ArrayList<>(dumpAllPointers());
     leaked.sort(Comparator.comparing(VirtualFilePointer::getUrl));
     for (VirtualFilePointer pointer : leaked) {
@@ -668,10 +691,9 @@ public final class VirtualFilePointerManagerImpl extends VirtualFilePointerManag
     if (afterElapsedMs > 1000 || collectedEvents.prepareElapsedMs > 1000) {
       LOG.warn("VirtualFilePointerManagerImpl.prepareChange(" + eventsSize + " events): " + collectedEvents.prepareElapsedMs + "ms."
                + "; total pointers: " + numberOfPointers()
-               + "; afterElapsedMs: " + afterElapsedMs + "ms.; eventList.size(): " + collectedEvents.eventList.size() +
-               "; toFirePointers.size(): " + collectedEvents.toFirePointers.size() + "; toUpdateNodes.size(): " + collectedEvents.toUpdateNodes
-                 .size() + "; eventList: " +
-               ContainerUtil.getFirstItems(collectedEvents.eventList, 100));
+               + "; afterElapsedMs: " + afterElapsedMs + "ms.; eventList.size(): " + collectedEvents.eventList.size()
+               + "; toFirePointers.size(): " + collectedEvents.toFirePointers.size() + "; toUpdateNodes.size(): " + collectedEvents.toUpdateNodes.size()
+               + "; eventList: " + ContainerUtil.getFirstItems(collectedEvents.eventList, 100));
     }
   }
 

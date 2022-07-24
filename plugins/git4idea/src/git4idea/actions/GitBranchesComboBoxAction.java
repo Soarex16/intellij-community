@@ -2,11 +2,10 @@
 package git4idea.actions;
 
 import com.intellij.dvcs.branch.DvcsBranchUtil;
-import com.intellij.icons.AllIcons;
+import com.intellij.ide.ui.ToolbarSettings;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.actionSystem.ex.ComboBoxAction;
 import com.intellij.openapi.keymap.KeymapManager;
-import com.intellij.openapi.keymap.KeymapUtil;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopupListener;
@@ -30,6 +29,11 @@ public class GitBranchesComboBoxAction extends ComboBoxAction implements DumbAwa
   }
 
   @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.EDT;
+  }
+
+  @Override
   public void update(@NotNull AnActionEvent e) {
     var project = e.getProject();
     Presentation presentation = e.getPresentation();
@@ -37,8 +41,12 @@ public class GitBranchesComboBoxAction extends ComboBoxAction implements DumbAwa
       presentation.setEnabledAndVisible(false);
       return;
     }
-    GitRepository repo = GitBranchUtil.getCurrentRepository(project);
+    GitRepository repo = GitBranchUtil.guessWidgetRepository(project);
     if (repo == null) {
+      presentation.setEnabledAndVisible(false);
+      return;
+    }
+    if (!ToolbarSettings.getInstance().isEnabled()) {
       presentation.setEnabledAndVisible(false);
       return;
     }
@@ -62,7 +70,7 @@ public class GitBranchesComboBoxAction extends ComboBoxAction implements DumbAwa
                                                  @NotNull JComponent component,
                                                  @Nullable Runnable disposeCallback) {
     Project project = Objects.requireNonNull(context.getData(CommonDataKeys.PROJECT));
-    GitRepository repo = Objects.requireNonNull(GitBranchUtil.getCurrentRepository(project));
+    GitRepository repo = Objects.requireNonNull(GitBranchUtil.guessWidgetRepository(project));
 
     ListPopup popup = GitBranchPopup.getInstance(project, repo, context).asListPopup();
     popup.addListener(new JBPopupListener() {

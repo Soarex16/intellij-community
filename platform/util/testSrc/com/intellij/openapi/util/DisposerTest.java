@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.util;
 
 import com.intellij.openapi.Disposable;
@@ -8,11 +8,12 @@ import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.testFramework.LeakHunter;
 import com.intellij.testFramework.UsefulTestCase;
 import com.intellij.util.IncorrectOperationException;
-import com.intellij.util.ObjectUtils;
 import com.intellij.util.concurrency.SequentialTaskExecutor;
-import junit.framework.TestCase;
 import org.jetbrains.annotations.NonNls;
+import org.junit.*;
+import org.junit.rules.TestName;
 
+import java.lang.ref.Reference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -22,7 +23,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class DisposerTest extends TestCase {
+import static org.junit.Assert.*;
+
+public class DisposerTest  {
   private MyLoggingDisposable myRoot;
   private MyLoggingDisposable myFolder1;
   private MyLoggingDisposable myFolder2;
@@ -31,9 +34,11 @@ public class DisposerTest extends TestCase {
   private final List<MyLoggingDisposable> myDisposedObjects = Collections.synchronizedList(new ArrayList<>());
   @NonNls private final List<String> myDisposeActions = Collections.synchronizedList(new ArrayList<>());
 
-  @Override
-  protected void setUp() throws Exception {
-    super.setUp();
+  @Rule
+  public TestName name = new TestName();
+
+  @Before
+  public void setUp() throws Exception {
     Disposer.setDebugMode(true);
     myRoot = new MyLoggingDisposable("root");
 
@@ -46,17 +51,23 @@ public class DisposerTest extends TestCase {
     myDisposeActions.clear();
   }
 
-  @Override
-  protected void tearDown() throws Exception {
-    //noinspection SSBasedInspection
+  @After
+  public void tearDown() throws Exception {
     try {
       Disposer.dispose(myRoot);
     }
     finally {
-      super.tearDown();
+      myRoot = null;
+      myFolder1 = null;
+      myFolder2 = null;
+      myLeaf1 = null;
+      myLeaf2 = null;
+      myDisposedObjects.clear();
+      myDisposeActions.clear();
     }
   }
 
+  @Test
   public void testDisposalAndAbsenceOfReferences() {
     Disposer.register(myRoot, myFolder1);
     Disposer.register(myRoot, myFolder2);
@@ -75,6 +86,7 @@ public class DisposerTest extends TestCase {
     Disposer.dispose(myLeaf1);
   }
 
+  @Test
   public void testDisposalOrder() {
     Disposer.register(myRoot, myFolder1);
     Disposer.register(myFolder1, myLeaf1);
@@ -85,6 +97,7 @@ public class DisposerTest extends TestCase {
     assertEquals(Arrays.asList(myFolder2, myLeaf1, myFolder1, myRoot), myDisposedObjects);
   }
 
+  @Test
   public void testDisposalOrderNestedDispose() {
     Disposer.register(myRoot, myFolder2);
     //noinspection SSBasedInspection
@@ -95,6 +108,7 @@ public class DisposerTest extends TestCase {
     assertEquals(Arrays.asList(myFolder2, myRoot), myDisposedObjects);
   }
 
+  @Test
   public void testDirectCallOfDisposable() {
     SelDisposable selfDisposable = new SelDisposable("selfDisposable");
     Disposer.register(myRoot, selfDisposable);
@@ -109,12 +123,14 @@ public class DisposerTest extends TestCase {
     assertDisposed(myFolder2);
   }
 
+  @Test
   public void testDirectCallOfUnregisteredSelfDisposable() {
     SelDisposable selfDisposable = new SelDisposable("root");
     //noinspection SSBasedInspection
     selfDisposable.dispose();
   }
 
+  @Test
   public void testPostponedParentRegistration() {
     Disposer.register(myFolder1, myLeaf1);
     Disposer.register(myLeaf1, myLeaf2);
@@ -129,6 +145,7 @@ public class DisposerTest extends TestCase {
     assertDisposed(myLeaf2);
   }
 
+  @Test
   public void testDisposalOfParentless() {
     Disposer.register(myFolder1, myLeaf1);
     Disposer.register(myFolder1, myFolder2);
@@ -142,6 +159,7 @@ public class DisposerTest extends TestCase {
     assertDisposed(myLeaf2);
   }
 
+  @Test
   public void testDisposalOfParentess2() {
     Disposer.register(myFolder1, myLeaf1);
     Disposer.register(myFolder2, myLeaf2);
@@ -155,6 +173,7 @@ public class DisposerTest extends TestCase {
     assertDisposed(myLeaf2);
   }
 
+  @Test
   public void testOverrideParentDisposable() {
     Disposer.register(myFolder1, myLeaf1);
     Disposer.register(myFolder2, myFolder1);
@@ -171,6 +190,7 @@ public class DisposerTest extends TestCase {
     assertDisposed(myLeaf1);
   }
 
+  @Test
   public void testIsDisposingWorksForDisposablesRegisteredWithParent() throws ExecutionException, InterruptedException {
     AtomicBoolean disposeRun = new AtomicBoolean();
     AtomicBoolean allowToContinueDispose = new AtomicBoolean();
@@ -181,7 +201,7 @@ public class DisposerTest extends TestCase {
     Disposer.register(myRoot, disposable);
 
     assertFalse(Disposer.isDisposed(disposable));
-    ExecutorService executor = SequentialTaskExecutor.createSequentialApplicationPoolExecutor(StringUtil.capitalize(getName()));
+    ExecutorService executor = SequentialTaskExecutor.createSequentialApplicationPoolExecutor(StringUtil.capitalize(name.getMethodName()));
     Future<?> future = executor.submit(() -> Disposer.dispose(myRoot));
     while (!disposeRun.get());
     assertTrue(Disposer.isDisposed(disposable));
@@ -191,6 +211,7 @@ public class DisposerTest extends TestCase {
     assertTrue(Disposer.isDisposed(disposable));
   }
 
+  @Test
   public void testIsDisposingWorksForUnregisteredDisposables() throws ExecutionException, InterruptedException {
     AtomicBoolean disposeRun = new AtomicBoolean();
     AtomicBoolean allowToContinueDispose = new AtomicBoolean();
@@ -199,7 +220,7 @@ public class DisposerTest extends TestCase {
       while (!allowToContinueDispose.get());
     };
 
-    ExecutorService executor = SequentialTaskExecutor.createSequentialApplicationPoolExecutor(StringUtil.capitalize(getName()));
+    ExecutorService executor = SequentialTaskExecutor.createSequentialApplicationPoolExecutor(StringUtil.capitalize(name.getMethodName()));
     Future<?> future = executor.submit(() -> Disposer.dispose(disposable));
     while (!disposeRun.get());
     assertTrue(Disposer.isDisposed(disposable));
@@ -209,6 +230,7 @@ public class DisposerTest extends TestCase {
     assertTrue(Disposer.isDisposed(disposable));
   }
 
+  @Test
   public void testDisposableParentNotify() {
     MyParentDisposable root = new MyParentDisposable("root");
     Disposer.register(root, myFolder1);
@@ -279,6 +301,7 @@ public class DisposerTest extends TestCase {
     }
   }
 
+  @Test
   public void testIncest() {
     Disposable parent = Disposer.newDisposable("parent");
     Disposable child = Disposer.newDisposable("child");
@@ -298,6 +321,7 @@ public class DisposerTest extends TestCase {
     }
   }
 
+  @Test
   public void testRemoveOnlyChildren() {
     Disposable parent = Disposer.newDisposable("parent");
     Disposable child = Disposer.newDisposable("child");
@@ -319,6 +343,7 @@ public class DisposerTest extends TestCase {
     }
   }
 
+  @Test
   public void testRemoveOnlyChildrenByCondition() {
     Disposable parent = Disposer.newDisposable("parent");
     Disposable child1 = Disposer.newDisposable("child1");
@@ -346,6 +371,7 @@ public class DisposerTest extends TestCase {
     }
   }
 
+  @Test
   public void testMustNotRegisterWithAlreadyDisposed() {
     Disposable disposable = Disposer.newDisposable();
     Disposer.register(myRoot, disposable);
@@ -356,6 +382,7 @@ public class DisposerTest extends TestCase {
     UsefulTestCase.assertThrows(IncorrectOperationException.class, () -> Disposer.register(disposable, newDisposable));
   }
 
+  @Test
   public void testMustBeAbleToRegisterThenDisposeThenRegisterAgain() {
     Disposable disposable = Disposer.newDisposable();
     Disposer.register(myRoot, disposable);
@@ -368,6 +395,7 @@ public class DisposerTest extends TestCase {
     assertFalse(Disposer.isDisposed(newDisposable));
   }
 
+  @Test
   public void testDisposeDespiteExceptions() {
     DefaultLogger.disableStderrDumping(myRoot);
 
@@ -392,6 +420,7 @@ public class DisposerTest extends TestCase {
     assertTrue(Disposer.isDisposed(last));
   }
 
+  @Test
   public void testMustNotAllowToRegisterDuringParentDisposal() {
     DefaultLogger.disableStderrDumping(myRoot);
 
@@ -405,9 +434,15 @@ public class DisposerTest extends TestCase {
     assertTrue(Disposer.isDisposed(parent));
   }
 
+  @Test(timeout = 60 * 1000)
   public void testNoLeaksAfterConcurrentDisposeAndRegister() throws Exception {
-    LeakHunter.checkLeak(Disposer.getTree(), MyLoggingDisposable.class);
-    ExecutorService executor = SequentialTaskExecutor.createSequentialApplicationPoolExecutor(StringUtil.capitalize(getName()));
+    try {
+      LeakHunter.checkLeak(Disposer.getTree(), MyLoggingDisposable.class);
+    }
+    catch (AssertionError e) {
+      Assume.assumeNoException("test is ignored because MyLoggingDisposable is already leaking at the test start", e);
+    }
+    ExecutorService executor = SequentialTaskExecutor.createSequentialApplicationPoolExecutor(StringUtil.capitalize(name.getMethodName()));
 
     for (int i = 0; i < 1000; i++) {
       myDisposeActions.clear();
@@ -422,11 +457,12 @@ public class DisposerTest extends TestCase {
       assertTrue(parent.isDisposed());
       assertEquals(registered, child.isDisposed());
       LeakHunter.checkLeak(Disposer.getTree(), MyLoggingDisposable.class);
-      ObjectUtils.reachabilityFence(parent);
-      ObjectUtils.reachabilityFence(child);
+      Reference.reachabilityFence(parent);
+      Reference.reachabilityFence(child);
     }
   }
 
+  @Test
   public void testDisposerMustUseIdentitySemanticsForChildren() {
     List<Disposable> run = new ArrayList<>();
     //noinspection EqualsWhichDoesntCheckParameterClass
@@ -475,6 +511,7 @@ public class DisposerTest extends TestCase {
     assertSame(disposable0, run.get(1));
   }
 
+  @Test
   public void testDisposerMustHaveIdentitySemanticsForParent() {
     List<Disposable> run = new ArrayList<>();
     //noinspection EqualsWhichDoesntCheckParameterClass
@@ -532,11 +569,13 @@ public class DisposerTest extends TestCase {
     assertSame(child1, UsefulTestCase.assertOneElement(run));
   }
 
+  @Test
   public void testMustNotAllowToRegisterToItself() {
     Disposable d = Disposer.newDisposable();
     UsefulTestCase.assertThrows(IllegalArgumentException.class, () -> Disposer.register(d, d));
   }
 
+  @Test
   public void testCheckedDisposableMustKnowItsDisposalStatus() {
     CheckedDisposable disposable = Disposer.newCheckedDisposable();
     assertFalse(disposable.isDisposed());
@@ -554,6 +593,7 @@ public class DisposerTest extends TestCase {
     assertTrue(disposable.isDisposed());
   }
 
+  @Test
   public void testDoubleRegisterMustNotLeakOneOfTheInstances() {
     LeakHunter.checkLeak(Disposer.getTree(), MyLoggingDisposable.class);
     Disposable parent = new MyLoggingDisposable("parent");
@@ -574,6 +614,7 @@ public class DisposerTest extends TestCase {
     LeakHunter.checkLeak(Disposer.getTree(), MyLoggingDisposable.class);
   }
 
+  @Test
   public void testTryRegisterMustCheckInvariantsToo() {
     Disposable parent = new MyLoggingDisposable("parent");
     Disposable child = new MyLoggingDisposable("child");

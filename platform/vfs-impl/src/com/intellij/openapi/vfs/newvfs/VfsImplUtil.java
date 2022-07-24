@@ -138,6 +138,11 @@ public final class VfsImplUtil {
     return pair(pair.first, parts);
   }
 
+  /**
+   * @return (file system root, relative path inside that root) or null if the path is invalid or the root is not found
+   * For example, {@code extractRootFromPath(LocalFileSystem.getInstance, "C:/temp")} -> ("C:", "/temp")
+   * {@code extractRootFromPath(JarFileSystem.getInstance, "/temp/temp.jar!/com/foo/bar")} -> ("/temp/temp.jar!/", "/com/foo/bar")
+   */
   public static Pair<NewVirtualFile, String> extractRootFromPath(@NotNull NewVirtualFileSystem vfs, @NotNull String path) {
     String normalizedPath = vfs.normalize(path);
     if (normalizedPath == null || normalizedPath.isBlank()) {
@@ -155,7 +160,12 @@ public final class VfsImplUtil {
       return null;
     }
 
-    return pair(root, normalizedPath.substring(rootPath.length()));
+    int i = rootPath.length();
+    if (i < normalizedPath.length() && normalizedPath.charAt(i) == '/') {
+      i++;
+    }
+    String relativePath = normalizedPath.substring(i);
+    return pair(root, relativePath);
   }
 
   public static void refresh(@NotNull NewVirtualFileSystem vfs, boolean asynchronous) {

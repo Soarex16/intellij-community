@@ -18,7 +18,7 @@ import com.intellij.openapi.vfs.CharsetToolkit;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.*;
 import com.intellij.psi.impl.source.tree.ForeignLeafPsiElement;
-import com.intellij.psi.impl.source.tree.LeafPsiElement;
+import com.intellij.psi.impl.source.tree.LeafElement;
 import com.intellij.usages.ChunkExtractor;
 import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NonNls;
@@ -27,6 +27,7 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.nio.charset.Charset;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -39,7 +40,7 @@ public class NonAsciiCharactersInspection extends LocalInspectionTool {
   public boolean CHECK_FOR_DIFFERENT_LANGUAGES_IN_IDENTIFIER_NAME = true;
   public boolean CHECK_FOR_DIFFERENT_LANGUAGES_IN_STRING;
   public boolean CHECK_FOR_DIFFERENT_LANGUAGES_IN_COMMENTS;
-  public boolean CHECK_FOR_DIFFERENT_LANGUAGES_IN_ANY_OTHER_WORD = true;
+  public boolean CHECK_FOR_DIFFERENT_LANGUAGES_IN_ANY_OTHER_WORD;
   public boolean CHECK_FOR_FILES_CONTAINING_BOM;
 
   @Override
@@ -65,14 +66,14 @@ public class NonAsciiCharactersInspection extends LocalInspectionTool {
     return new PsiElementVisitor() {
       @Override
       public void visitElement(@NotNull PsiElement element) {
-        if (!(element instanceof LeafPsiElement)
+        if (!(element instanceof LeafElement)
             // optimization: ignore very frequent white space element
             || element instanceof PsiWhiteSpace) {
           return;
         }
 
         PsiElementKind kind = getKind(element, syntaxHighlighter);
-        TextRange valueRange = null; // the range inside element with the actual contents with quotes/comment prefixes stripped out
+        TextRange valueRange; // the range inside element with the actual contents with quotes/comment prefixes stripped out
         switch (kind) {
           case STRING:
             if (CHECK_FOR_NOT_ASCII_STRING_LITERAL || CHECK_FOR_DIFFERENT_LANGUAGES_IN_STRING) {
@@ -109,11 +110,11 @@ public class NonAsciiCharactersInspection extends LocalInspectionTool {
           case OTHER:
             if (CHECK_FOR_NOT_ASCII_IN_ANY_OTHER_WORD) {
               String text = element.getText();
-              reportNonAsciiRange(element, text, holder, valueRange);
+              iterateWordsInLeafElement(text, range -> reportMixedLanguages(element, text, holder, range));
             }
             if (CHECK_FOR_DIFFERENT_LANGUAGES_IN_ANY_OTHER_WORD) {
               String text = element.getText();
-              reportMixedLanguages(element, text, holder, valueRange);
+              iterateWordsInLeafElement(text, range -> reportMixedLanguages(element, text, holder, range));
             }
             break;
         }
@@ -127,6 +128,22 @@ public class NonAsciiCharactersInspection extends LocalInspectionTool {
         }
       }
     };
+  }
+
+  private static void iterateWordsInLeafElement(@NotNull String text, @NotNull Consumer<? super TextRange> consumer) {
+    int start = -1;
+    int c;
+    for (int i = 0; i <= text.length(); i += Character.charCount(c)) {
+      c = i == text.length() ? -1 : text.codePointAt(i);
+      boolean isIdentifierPart = Character.isJavaIdentifierPart(c);
+      if (isIdentifierPart && start == -1) {
+        start = i;
+      }
+      if (!isIdentifierPart && start != -1) {
+        consumer.accept(new TextRange(start, i));
+        start = -1;
+      }
+    }
   }
 
   // null means natural range
@@ -201,64 +218,44 @@ public class NonAsciiCharactersInspection extends LocalInspectionTool {
     return !(charset instanceof Native2AsciiCharset);
   }
 
+  private static boolean isAsciiCodePoint(int codePoint) {
+    return codePoint < 128;
+  }
+
   private static void reportMixedLanguages(@NotNull PsiElement element,
                                            @NotNull String text,
                                            @NotNull ProblemsHolder holder,
                                            @Nullable("null means natural range") TextRange elementRange) {
-    Character.UnicodeScript first = null;
-    Character.UnicodeScript second = null;
-    int i;
-    int codePoint = -1;
+    int nonAsciiStart = -1;
+    int codePoint;
     int endOffset = elementRange == null ? text.length() : elementRange.getEndOffset();
     int startOffset = elementRange == null ? 0 : elementRange.getStartOffset();
-    for (i = startOffset; i < endOffset; i += Character.charCount(codePoint)) {
-      codePoint = text.codePointAt(i);
-      Character.UnicodeScript currentScript = Character.UnicodeScript.of(codePoint);
-      if (ignoreScript(currentScript)) {
-        if (i == startOffset) startOffset += Character.charCount(codePoint);
-        continue; // ignore '123.(&$'...
-      }
-      second = currentScript;
-      if (first == null) {
-        first = second;
-      }
-      else if (first != second) {
-        break;
-      }
-    }
 
-    if (first == null || first == second) {
-      return;
-    }
-    // found two scripts
-    // now [startOffset..i) are of 'first' script
-    int j;
-    for (j = i + Character.charCount(codePoint); j < endOffset; j += Character.charCount(codePoint)) {
-      codePoint = text.codePointAt(j);
-      Character.UnicodeScript currentScript = Character.UnicodeScript.of(codePoint);
-      if (ignoreScript(currentScript)) continue;
-      if (currentScript != second) {
-        break;
+    for (int i = startOffset; i <= endOffset; i += Character.charCount(codePoint)) {
+      codePoint = i == endOffset ? 0 : text.codePointAt(i);
+      if (codePoint != 0 && ignoreScript(Character.UnicodeScript.of(codePoint))) {
+        if (i==startOffset) startOffset++; // to calculate "isHighlightWholeWord" correctly
+        continue;
+      }
+      if (isAsciiCodePoint(codePoint)) {
+        boolean isHighlightWholeWord = i - nonAsciiStart == endOffset - startOffset;
+        if (nonAsciiStart != -1 && !isHighlightWholeWord) {
+          // report non-ascii range [nonAsciiStart..i) inside ascii word
+          // but trim the trailing COMMON script characters first
+          int j = i;
+          for (; j > nonAsciiStart; j -= Character.charCount(codePoint)) {
+            codePoint = text.codePointAt(j-Character.charCount(codePoint));
+            if (!ignoreScript(Character.UnicodeScript.of(codePoint))) break;
+          }
+          
+          holder.registerProblem(element, new TextRange(nonAsciiStart, j), CodeInsightBundle.message("non.ascii.chars.inspection.message.symbols.from.different.languages.found"));
+          nonAsciiStart = -1;
+        }
+      }
+      else if (nonAsciiStart == -1) {
+        nonAsciiStart = i;
       }
     }
-    // ignore trailing COMMON script characters
-    for (; j > i; j -= Character.charCount(codePoint)) {
-      codePoint = text.codePointAt(j-Character.charCount(codePoint));
-      if (!ignoreScript(Character.UnicodeScript.of(codePoint))) break;
-    }
-    // now [i..j) are of 'second' script
-    // try to report the range which is the least latin
-    TextRange toReport;
-    if (first == Character.UnicodeScript.LATIN) {
-      toReport = new TextRange(i, j);
-    }
-    else {
-      toReport = new TextRange(startOffset, i);
-      Character.UnicodeScript t = second;
-      second = first;
-      first = t;
-    }
-    holder.registerProblem(element, toReport, CodeInsightBundle.message("non.ascii.chars.inspection.message.symbols.from.different.languages.found", second, first));
   }
 
   private static boolean ignoreScript(@NotNull Character.UnicodeScript script) {
@@ -298,16 +295,17 @@ public class NonAsciiCharactersInspection extends LocalInspectionTool {
 
   enum PsiElementKind { IDENTIFIER, STRING, COMMENT, OTHER}
   @NotNull
-  private static PsiElementKind getKind(@NotNull PsiElement element, SyntaxHighlighter syntaxHighlighter) {
+  private static PsiElementKind getKind(@NotNull PsiElement element, @Nullable SyntaxHighlighter syntaxHighlighter) {
     TextAttributesKey[] keys;
-    if (element.getParent() instanceof PsiLiteralValue || ChunkExtractor.isHighlightedAsString(keys = syntaxHighlighter.getTokenHighlights(((LeafPsiElement)element).getElementType()))) {
+    if (element.getParent() instanceof PsiLiteralValue
+        || ChunkExtractor.isHighlightedAsString(keys = syntaxHighlighter == null ? TextAttributesKey.EMPTY_ARRAY : syntaxHighlighter.getTokenHighlights(((LeafElement)element).getElementType()))) {
       return PsiElementKind.STRING;
-    }
-    if (isIdentifier(element)) {
-      return PsiElementKind.IDENTIFIER;
     }
     if (element instanceof PsiComment || ChunkExtractor.isHighlightedAsComment(keys)) {
       return PsiElementKind.COMMENT;
+    }
+    if (isIdentifier(element)) {
+      return PsiElementKind.IDENTIFIER;
     }
     return PsiElementKind.OTHER;
   }

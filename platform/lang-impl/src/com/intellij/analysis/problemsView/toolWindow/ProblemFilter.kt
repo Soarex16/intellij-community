@@ -5,6 +5,7 @@ import com.intellij.analysis.problemsView.Problem
 import com.intellij.codeInsight.daemon.impl.SeverityRegistrar
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.actionSystem.ActionGroup
+import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.DumbAware
@@ -29,10 +30,14 @@ internal class SeverityFiltersActionGroup : DumbAware, ActionGroup() {
       .filter { it != HighlightSeverity.INFO && it > HighlightSeverity.INFORMATION && it < HighlightSeverity.ERROR }
     val (mainSeverities, otherSeverities) = severities.partition { it >= HighlightSeverity.GENERIC_SERVER_ERROR_OR_WARNING }
     val actions = mainSeverities.mapTo(ArrayList<AnAction>()) {
-      SeverityFilterAction(ProblemsViewBundle.message("problems.view.highlighting.severity.show", renderSeverity(it)), it.myVal, panel)
+      SeverityFilterAction(renderSeverity(it), it.myVal, panel)
     }
     actions.add(OtherSeveritiesFilterAction(otherSeverities.map { it.myVal }, panel))
     return actions.toTypedArray()
+  }
+
+  override fun getActionUpdateThread(): ActionUpdateThread {
+    return ActionUpdateThread.EDT
   }
 }
 

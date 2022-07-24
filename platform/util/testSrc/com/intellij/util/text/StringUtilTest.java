@@ -115,13 +115,34 @@ public class StringUtilTest {
 
   @Test
   public void testSplitWithQuotes() {
-    final List<String> strings = StringUtil.splitHonorQuotes("aaa bbb   ccc \"ddd\" \"e\\\"e\\\"e\"  ", ' ');
-    assertEquals(5, strings.size());
-    assertEquals("aaa", strings.get(0));
-    assertEquals("bbb", strings.get(1));
-    assertEquals("ccc", strings.get(2));
-    assertEquals("\"ddd\"", strings.get(3));
-    assertEquals("\"e\\\"e\\\"e\"", strings.get(4));
+    UsefulTestCase.assertSameElements(
+      StringUtil.splitHonorQuotes("aaa bbb   ccc ", ' '),
+      "aaa", "bbb", "ccc"
+    );
+    UsefulTestCase.assertSameElements(
+      StringUtil.splitHonorQuotes("'aaa' \"bbb\"", ' '),
+      "'aaa'", "\"bbb\""
+    );
+    UsefulTestCase.assertSameElements(
+      StringUtil.splitHonorQuotes("'a aa' \"bb b\"", ' '),
+      "'a aa'", "\"bb b\""
+    );
+    UsefulTestCase.assertSameElements(
+      StringUtil.splitHonorQuotes("'a\" aa' \"bb 'b\"", ' '),
+      "'a\" aa'", "\"bb 'b\""
+    );
+    UsefulTestCase.assertSameElements(
+      StringUtil.splitHonorQuotes("'a \\'aa' \"bb\\\" b\"", ' '),
+      "'a \\'aa'", "\"bb\\\" b\""
+    );
+    UsefulTestCase.assertSameElements(
+      StringUtil.splitHonorQuotes("'a aa\\\\' \"bb b\\\\\"", ' '),
+      "'a aa\\\\'", "\"bb b\\\\\""
+    );
+    UsefulTestCase.assertSameElements(
+      StringUtil.splitHonorQuotes("'a \\\\\\'aa' \"bb \\\\\\\"b\"", ' '),
+      "'a \\\\\\'aa'", "\"bb \\\\\\\"b\""
+    );
   }
 
   @Test
@@ -270,11 +291,20 @@ public class StringUtilTest {
     assertEquals("Couldn't Connect to Debugger", StringUtil.wordsToBeginFromUpperCase("Couldn't connect to debugger"));
     assertEquals("Let's Make Abbreviations Like I18n, SQL and CSS",
                  StringUtil.wordsToBeginFromUpperCase("Let's make abbreviations like I18n, SQL and CSS"));
+    assertEquals("1s_t _How A&re Mn_emonics &Handled, or Aren't They",
+                 StringUtil.wordsToBeginFromUpperCase("1s_t _how a&re mn_emonics &handled, or aren't they"));
+    assertEquals("A Good Steak Should Not Be This Hard to Come By",
+                 StringUtil.wordsToBeginFromUpperCase("a good steak should not be this hard to come by"));
+    assertEquals("Twenty-One Quick-Fixes", StringUtil.wordsToBeginFromUpperCase("twenty-one quick-fixes"));
+    assertEquals("It's Not a Question of If, but When",
+                 StringUtil.wordsToBeginFromUpperCase("it's not a question of if, but when"));
+    assertEquals("Scroll to the End. A Good Steak Should Not Be This Hard to Come By.",
+                 StringUtil.wordsToBeginFromUpperCase("scroll to the end. a good steak should not be this hard to come by."));
   }
 
   @Test
   public void testSentenceCapitalization() {
-    assertEquals("couldn't connect to debugger", StringUtil.wordsToBeginFromLowerCase("Couldn't Connect to Debugger"));
+    assertEquals("couldn't connect to debugger", StringUtil.wordsToBeginFromLowerCase("Couldn't Connect To Debugger"));
     assertEquals("let's make abbreviations like I18n, SQL and CSS s SQ sq",
                  StringUtil.wordsToBeginFromLowerCase("Let's Make Abbreviations Like I18n, SQL and CSS S SQ Sq"));
   }
@@ -851,6 +881,7 @@ public class StringUtilTest {
     assertEquals("my string", StringUtil.trim("my string\t", CharFilter.NOT_WHITESPACE_FILTER));
     assertEquals("my string", StringUtil.trim("\nmy string", CharFilter.NOT_WHITESPACE_FILTER));
     assertEquals("my-string", StringUtil.trim("my-string", CharFilter.NOT_WHITESPACE_FILTER));
+    assertEquals("my-string", StringUtil.trim("my-string ", CharFilter.NOT_WHITESPACE_FILTER));
     assertEquals("\n   my string ", StringUtil.trim("\n   my string ", CharFilter.WHITESPACE_FILTER));
     assertEquals("", StringUtil.trim("", CharFilter.WHITESPACE_FILTER));
     assertEquals("", StringUtil.trim("\n   my string ", ch -> false));
@@ -875,7 +906,7 @@ public class StringUtilTest {
   public void testEndsWith() {
     assertTrue(StringUtil.endsWith("text", 0, 4, "text"));
     assertFalse(StringUtil.endsWith("text", 4, 4, "-->"));
-    UsefulTestCase.assertThrows(IllegalArgumentException.class, ()->StringUtil.endsWith("text", -1, 4, "t"));
+    UsefulTestCase.assertThrows(IllegalArgumentException.class, ()->assertFalse(StringUtil.endsWith("text", -1, 4, "t")));
     assertFalse(StringUtil.endsWith("text", "-->"));
   }
 }

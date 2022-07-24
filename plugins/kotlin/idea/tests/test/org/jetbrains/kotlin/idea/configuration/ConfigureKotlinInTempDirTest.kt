@@ -2,19 +2,28 @@
 
 package org.jetbrains.kotlin.idea.configuration
 
+import com.intellij.configurationStore.saveProjectsAndApp
 import com.intellij.facet.FacetManager
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.impl.ApplicationImpl
-import junit.framework.TestCase
+import com.intellij.ide.impl.runBlockingUnderModalProgress
+import com.intellij.openapi.application.runWriteAction
+import com.intellij.openapi.application.runWriteActionAndWait
+import com.intellij.openapi.project.RootsChangeRescanningInfo
+import com.intellij.openapi.roots.OrderRootType
+import com.intellij.openapi.util.JDOMUtil
 import org.jetbrains.kotlin.config.ApiVersion
 import org.jetbrains.kotlin.config.KotlinFacetSettingsProvider
 import org.jetbrains.kotlin.config.LanguageVersion
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
+import org.jetbrains.kotlin.idea.base.util.findLibrary
+import org.jetbrains.kotlin.idea.base.util.invalidateProjectRoots
 import org.jetbrains.kotlin.idea.compiler.configuration.Kotlin2JsCompilerArgumentsHolder
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCommonCompilerArgumentsHolder
+import org.jetbrains.kotlin.idea.compiler.configuration.KotlinJpsPluginSettings
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinPluginLayout
+import org.jetbrains.kotlin.idea.macros.KotlinBundledUsageDetector
+import org.jetbrains.kotlin.idea.macros.KotlinBundledUsageDetectorListener
 import org.jetbrains.kotlin.idea.notification.catchNotificationText
-import org.jetbrains.kotlin.idea.project.getLanguageVersionSettings
-import org.jetbrains.kotlin.idea.project.languageVersionSettings
 import org.junit.Assert
 import org.junit.internal.runners.JUnit38ClassRunner
 import org.junit.runner.RunWith
@@ -22,52 +31,107 @@ import java.io.File
 import java.nio.charset.StandardCharsets
 
 @RunWith(JUnit38ClassRunner::class)
-open class ConfigureKotlinInTempDirTest : AbstractConfigureKotlinInTempDirTest() {
-    private fun checkKotlincPresence(present: Boolean = true) {
-        TestCase.assertEquals(present, File(project.basePath, ".idea/kotlinc.xml").exists())
+class ConfigureKotlinInTempDirTest : AbstractConfigureKotlinInTempDirTest() {
+    private fun checkKotlincPresence(present: Boolean = true, jpsVersionOnly: Boolean = false) {
+        val file = File(project.basePath, ".idea/kotlinc.xml")
+        assertEquals(present, file.exists())
+        if (!present) return
+
+        val children = JDOMUtil.load(file).children
+        assertNotEmpty(children)
+
+        val jpsSettingsElement = children.singleOrNull {
+            it.getAttributeValue("name") == KotlinJpsPluginSettings::class.java.simpleName
+        }
+
+        val childrenNames = children.joinToString(prefix = "[", postfix = "]") { it.getAttributeValue("name") }
+        if (jpsVersionOnly) {
+            assertNotNull(jpsSettingsElement)
+            assertTrue(
+                /* message = */ "kotlinc.xml contains not only jps settings: $childrenNames",
+                /* condition = */ children.size == 1,
+            )
+        } else {
+            assertTrue(
+                /* message = */ "non-jps settings is not found: $childrenNames",
+                /* condition = */ jpsSettingsElement == null || children.size > 1,
+            )
+        }
     }
 
     private fun moduleFileContent() = String(module.moduleFile!!.contentsToByteArray(), StandardCharsets.UTF_8)
 
     fun testNoKotlincExistsNoSettingsRuntime10() {
-        val application = ApplicationManager.getApplication() as ApplicationImpl
-        application.isSaveAllowed = true
         Assert.assertEquals(LanguageVersion.KOTLIN_1_0, module.languageVersionSettings.languageVersion)
-        Assert.assertEquals(LanguageVersion.KOTLIN_1_0, myProject.getLanguageVersionSettings(null).languageVersion)
-        application.saveAll()
-        checkKotlincPresence(false)
+        Assert.assertEquals(LanguageVersion.KOTLIN_1_0, myProject.languageVersionSettings.languageVersion)
+        runBlockingUnderModalProgress {
+            saveProjectsAndApp(forceSavingAllSettings = true, onlyProject = myProject)
+        }
+        checkKotlincPresence(false) // TODO: replace to "jpsVersionOnly = true" after KTI-724
+    }
+
+    fun testKotlinBundledAdded() {
+        assertFalse(KotlinBundledUsageDetector.isKotlinBundledPotentiallyUsedInLibraries(project))
+
+        val connection = project.messageBus.connect(testRootDisposable)
+        var kotlinBundledWasDetected = false
+        connection.subscribe(KotlinBundledUsageDetector.TOPIC, object : KotlinBundledUsageDetectorListener {
+            override fun kotlinBundledDetected() {
+                kotlinBundledWasDetected = true
+            }
+        })
+
+        runWriteAction {
+            val kotlinRuntimeLibrary = module.findLibrary { it.name == "BundledKotlinStdlib" }
+            assertNotNull(kotlinRuntimeLibrary)
+
+            with(kotlinRuntimeLibrary!!.modifiableModel) {
+                addRoot(KotlinArtifacts.kotlinStdlib.absolutePath, OrderRootType.CLASSES)
+                commit()
+            }
+        }
+
+        assertTrue(KotlinBundledUsageDetector.isKotlinBundledPotentiallyUsedInLibraries(project))
+
+        connection.deliverImmediately()
+        assertTrue(kotlinBundledWasDetected)
     }
 
     fun testMigrationNotificationWithStdlib() {
         val notificationText = catchNotificationText(project) {
-            val application = ApplicationManager.getApplication() as ApplicationImpl
-            application.isSaveAllowed = true
             val languageVersionSettingsBefore = module.languageVersionSettings
             Assert.assertEquals(LanguageVersion.KOTLIN_1_5, languageVersionSettingsBefore.languageVersion)
             Assert.assertEquals(ApiVersion.KOTLIN_1_5, languageVersionSettingsBefore.apiVersion)
 
-            val projectLanguageVersionSettingsBefore = myProject.getLanguageVersionSettings()
+            val projectLanguageVersionSettingsBefore = myProject.languageVersionSettings
             Assert.assertEquals(LanguageVersion.KOTLIN_1_5, projectLanguageVersionSettingsBefore.languageVersion)
             Assert.assertEquals(ApiVersion.KOTLIN_1_5, projectLanguageVersionSettingsBefore.apiVersion)
 
-            application.saveAll()
+            runBlockingUnderModalProgress {
+                saveProjectsAndApp(forceSavingAllSettings = true, onlyProject = myProject)
+            }
             checkKotlincPresence(true)
 
             KotlinCommonCompilerArgumentsHolder.getInstance(project).update {
                 languageVersion = LanguageVersion.KOTLIN_1_6.versionString
             }
 
+            // Emulate project root change, as after changing Kotlin language settings in the preferences
+            runWriteActionAndWait {
+                myProject.invalidateProjectRoots(RootsChangeRescanningInfo.NO_RESCAN_NEEDED)
+            }
+
             val languageVersionSettingsAfter = module.languageVersionSettings
             Assert.assertEquals(LanguageVersion.KOTLIN_1_6, languageVersionSettingsAfter.languageVersion)
             Assert.assertEquals(ApiVersion.KOTLIN_1_5, languageVersionSettingsAfter.apiVersion)
 
-            val projectLanguageVersionSettingsAfter = myProject.getLanguageVersionSettings()
+            val projectLanguageVersionSettingsAfter = myProject.languageVersionSettings
             Assert.assertEquals(LanguageVersion.KOTLIN_1_6, projectLanguageVersionSettingsAfter.languageVersion)
             Assert.assertEquals(ApiVersion.KOTLIN_1_5, projectLanguageVersionSettingsAfter.apiVersion)
         }
 
         assertEquals(
-            "Migrations for Kotlin code are available<br/><br/>Detected migration:<br/>&nbsp;&nbsp;Language version: 1.5 -> 1.6<br/>",
+            "Update your code to replace the use of deprecated language and library features with supported constructs<br/><br/>Detected migration:<br/>&nbsp;&nbsp;Language version: 1.5 to 1.6<br/>",
             notificationText,
         )
     }
@@ -89,39 +153,39 @@ open class ConfigureKotlinInTempDirTest : AbstractConfigureKotlinInTempDirTest()
     }
 
     fun testNoKotlincExistsNoSettingsLatestRuntime() {
-        val application = ApplicationManager.getApplication() as ApplicationImpl
-        application.isSaveAllowed = true
-        val expectedLanguageVersion = KotlinPluginLayout.instance.standaloneCompilerVersion.languageVersion
+        val expectedLanguageVersion = KotlinPluginLayout.standaloneCompilerVersion.languageVersion
         Assert.assertEquals(expectedLanguageVersion, module.languageVersionSettings.languageVersion)
-        Assert.assertEquals(expectedLanguageVersion, myProject.getLanguageVersionSettings(null).languageVersion)
-        application.saveAll()
-        checkKotlincPresence(false)
+        Assert.assertEquals(expectedLanguageVersion, myProject.languageVersionSettings.languageVersion)
+        runBlockingUnderModalProgress {
+            saveProjectsAndApp(forceSavingAllSettings = true, onlyProject = myProject)
+        }
+        checkKotlincPresence(false) // TODO: replace to "jpsVersionOnly = true" after KTI-724
     }
 
     fun testKotlincExistsNoSettingsLatestRuntimeNoVersionAutoAdvance() {
-        val application = ApplicationManager.getApplication() as ApplicationImpl
-        application.isSaveAllowed = true
-        val expectedLanguageVersion = KotlinPluginLayout.instance.standaloneCompilerVersion.languageVersion
+        val expectedLanguageVersion = KotlinPluginLayout.standaloneCompilerVersion.languageVersion
         Assert.assertEquals(expectedLanguageVersion, module.languageVersionSettings.languageVersion)
-        Assert.assertEquals(expectedLanguageVersion, myProject.getLanguageVersionSettings(null).languageVersion)
+        Assert.assertEquals(expectedLanguageVersion, myProject.languageVersionSettings.languageVersion)
         KotlinCommonCompilerArgumentsHolder.getInstance(project).update {
             autoAdvanceLanguageVersion = false
             autoAdvanceApiVersion = false
         }
-        application.saveAll()
+        runBlockingUnderModalProgress {
+            saveProjectsAndApp(forceSavingAllSettings = true, onlyProject = myProject)
+        }
         checkKotlincPresence()
     }
 
     fun testDropKotlincOnVersionAutoAdvance() {
-        val application = ApplicationManager.getApplication() as ApplicationImpl
-        application.isSaveAllowed = true
         Assert.assertEquals(LanguageVersion.KOTLIN_1_4, module.languageVersionSettings.languageVersion)
         KotlinCommonCompilerArgumentsHolder.getInstance(project).update {
             autoAdvanceLanguageVersion = true
             autoAdvanceApiVersion = true
         }
-        application.saveAll()
-        checkKotlincPresence(false)
+        runBlockingUnderModalProgress {
+            saveProjectsAndApp(forceSavingAllSettings = true, onlyProject = myProject)
+        }
+        checkKotlincPresence(false) // TODO: replace to "jpsVersionOnly = true" after KTI-724
     }
 
     fun testProject107InconsistentVersionInConfig() {
@@ -148,9 +212,9 @@ open class ConfigureKotlinInTempDirTest : AbstractConfigureKotlinInTempDirTest()
 
     fun testLoadAndSaveProjectWithV2FacetConfig() {
         val moduleFileContentBefore = moduleFileContent()
-        val application = ApplicationManager.getApplication() as ApplicationImpl
-        application.isSaveAllowed = true
-        application.saveAll()
+        runBlockingUnderModalProgress {
+            saveProjectsAndApp(forceSavingAllSettings = true, onlyProject = myProject)
+        }
         val moduleFileContentAfter = moduleFileContent()
         Assert.assertEquals(moduleFileContentBefore, moduleFileContentAfter)
     }
@@ -178,29 +242,29 @@ open class ConfigureKotlinInTempDirTest : AbstractConfigureKotlinInTempDirTest()
 
     fun testApiVersionWithoutLanguageVersion() {
         KotlinCommonCompilerArgumentsHolder.getInstance(myProject)
-        val settings = myProject.getLanguageVersionSettings()
+        val settings = myProject.languageVersionSettings
         Assert.assertEquals(ApiVersion.KOTLIN_1_1, settings.apiVersion)
     }
 
     fun testNoKotlincExistsNoSettingsLatestRuntimeNullizeEmptyStrings() {
-        val application = ApplicationManager.getApplication() as ApplicationImpl
-        application.isSaveAllowed = true
         Kotlin2JsCompilerArgumentsHolder.getInstance(project).update {
             sourceMapPrefix = ""
             sourceMapEmbedSources = ""
         }
-        application.saveAll()
-        checkKotlincPresence(false)
+        runBlockingUnderModalProgress {
+            saveProjectsAndApp(forceSavingAllSettings = true, onlyProject = myProject)
+        }
+        checkKotlincPresence(false) // TODO: replace to "jpsVersionOnly = true" after KTI-724
     }
 
     private fun doTestLoadAndSaveProjectWithFacetConfig(valueBefore: String, valueAfter: String) {
         val facetManager = FacetManager.getInstance(module)
         val moduleFileContentBefore = moduleFileContent()
         Assert.assertTrue(moduleFileContentBefore.contains(valueBefore))
-        val application = ApplicationManager.getApplication() as ApplicationImpl
         facetManager.allFacets.forEach { facetManager.facetConfigurationChanged(it) }
-        application.isSaveAllowed = true
-        application.saveAll()
+        runBlockingUnderModalProgress {
+            saveProjectsAndApp(forceSavingAllSettings = true, onlyProject = myProject)
+        }
         val moduleFileContentAfter = moduleFileContent()
         Assert.assertEquals(moduleFileContentBefore.replace(valueBefore, valueAfter), moduleFileContentAfter)
     }

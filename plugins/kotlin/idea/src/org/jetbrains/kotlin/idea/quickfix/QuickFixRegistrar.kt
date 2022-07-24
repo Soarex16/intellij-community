@@ -6,6 +6,7 @@ import com.intellij.codeInsight.intention.IntentionAction
 import org.jetbrains.kotlin.diagnostics.DiagnosticFactory
 import org.jetbrains.kotlin.diagnostics.DiagnosticFactoryForDeprecation
 import org.jetbrains.kotlin.diagnostics.Errors.*
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.quickfixes.QuickFixFactory
 import org.jetbrains.kotlin.idea.core.overrideImplement.ImplementAsConstructorParameter
 import org.jetbrains.kotlin.idea.core.overrideImplement.ImplementMembersHandler
 import org.jetbrains.kotlin.idea.inspections.AddModifierFixFactory
@@ -311,6 +312,8 @@ class QuickFixRegistrar : QuickFixContributor {
         UNCHECKED_CAST.registerFactory(ChangeToStarProjectionFix)
         CANNOT_CHECK_FOR_ERASED.registerFactory(ChangeToStarProjectionFix)
 
+        CANNOT_CHECK_FOR_ERASED.registerFactory(ConvertToIsArrayOfCallFix)
+
         INACCESSIBLE_OUTER_CLASS_EXPRESSION.registerFactory(AddModifierFixFE10.createFactory(INNER_KEYWORD, KtClass::class.java))
 
         FINAL_SUPERTYPE.registerFactory(AddModifierFixFE10.MakeClassOpenFactory)
@@ -422,6 +425,9 @@ class QuickFixRegistrar : QuickFixContributor {
         TYPE_INFERENCE_EXPECTED_TYPE_MISMATCH.registerFactory(factoryForTypeMismatchError)
         SIGNED_CONSTANT_CONVERTED_TO_UNSIGNED.registerFactory(factoryForTypeMismatchError)
         NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS.registerFactory(factoryForTypeMismatchError)
+        INCOMPATIBLE_TYPES.registerFactory(factoryForTypeMismatchError)
+
+        EQUALITY_NOT_APPLICABLE.registerFactory(EqualityNotApplicableFactory)
 
         SMARTCAST_IMPOSSIBLE.registerFactory(SmartCastImpossibleExclExclFixFactory)
         SMARTCAST_IMPOSSIBLE.registerFactory(CastExpressionFix.SmartCastImpossibleFactory)
@@ -533,6 +539,7 @@ class QuickFixRegistrar : QuickFixContributor {
 
         NON_LOCAL_RETURN_NOT_ALLOWED.registerFactory(AddInlineModifierFix.CrossInlineFactory)
         USAGE_IS_NOT_INLINABLE.registerFactory(AddInlineModifierFix.NoInlineFactory)
+        USAGE_IS_NOT_INLINABLE_WARNING.registerFactory(AddInlineModifierFix.NoInlineFactory)
 
         UNRESOLVED_REFERENCE.registerFactory(MakeConstructorParameterPropertyFix)
         DELEGATED_MEMBER_HIDES_SUPERTYPE_OVERRIDE.registerFactory(SpecifyOverrideExplicitlyFix)
@@ -620,6 +627,7 @@ class QuickFixRegistrar : QuickFixContributor {
 
         NO_CONSTRUCTOR.registerFactory(RemoveNoConstructorFix)
         NO_CONSTRUCTOR.registerFactory(AddDefaultConstructorFix)
+        NO_CONSTRUCTOR_WARNING.registerFactory(RemoveNoConstructorFix)
 
         ANNOTATION_USED_AS_ANNOTATION_ARGUMENT.registerFactory(RemoveAtFromAnnotationArgument)
 
@@ -634,13 +642,14 @@ class QuickFixRegistrar : QuickFixContributor {
         JVM_DEFAULT_REQUIRED_FOR_OVERRIDE.registerFactory(AddJvmDefaultAnnotation)
         NON_JVM_DEFAULT_OVERRIDES_JAVA_DEFAULT.registerFactory(AddJvmDefaultAnnotation)
 
-        OPT_IN_USAGE.registerFactory(ExperimentalFixesFactory)
-        OPT_IN_USAGE_ERROR.registerFactory(ExperimentalFixesFactory)
-        OPT_IN_OVERRIDE.registerFactory(ExperimentalFixesFactory)
-        OPT_IN_OVERRIDE_ERROR.registerFactory(ExperimentalFixesFactory)
-        OPT_IN_IS_NOT_ENABLED.registerFactory(MakeModuleExperimentalFix)
-        OPT_IN_MARKER_ON_WRONG_TARGET.registerFactory(ExperimentalAnnotationWrongTargetFixesFactory)
+        OPT_IN_USAGE.registerFactory(OptInFixesFactory)
+        OPT_IN_USAGE_ERROR.registerFactory(OptInFixesFactory)
+        OPT_IN_OVERRIDE.registerFactory(OptInFixesFactory)
+        OPT_IN_OVERRIDE_ERROR.registerFactory(OptInFixesFactory)
+        OPT_IN_IS_NOT_ENABLED.registerFactory(MakeModuleOptInFix)
+        OPT_IN_MARKER_ON_WRONG_TARGET.registerFactory(OptInAnnotationWrongTargetFixesFactory)
         OPT_IN_MARKER_WITH_WRONG_TARGET.registerFactory(RemoveWrongOptInAnnotationTargetFactory)
+        OPT_IN_MARKER_WITH_WRONG_RETENTION.registerFactory(RemoveWrongOptInAnnotationRetentionFactory)
         OPT_IN_MARKER_ON_OVERRIDE.registerFactory(RemoveAnnotationFix)
         OPT_IN_MARKER_ON_OVERRIDE_WARNING.registerFactory(RemoveAnnotationFix)
         OPT_IN_WITHOUT_ARGUMENTS.registerFactory(RemoveAnnotationFix)
@@ -743,5 +752,6 @@ class QuickFixRegistrar : QuickFixContributor {
 
         WRONG_NULLABILITY_FOR_JAVA_OVERRIDE.registerFactory(ChangeMemberFunctionSignatureFix)
         CONFUSING_BRANCH_CONDITION.registerFactory(ConfusingExpressionInWhenBranchFix)
+        PROGRESSIONS_CHANGING_RESOLVE.registerFactory(OverloadResolutionChangeFix)
     }
 }

@@ -1,8 +1,9 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("ReplaceGetOrSet", "ReplaceNegatedIsEmptyWithIsNotEmpty")
 
 package org.jetbrains.intellij.build.tasks
 
+import com.intellij.diagnostic.telemetry.use
+import com.intellij.diagnostic.telemetry.useWithScope
 import com.jcraft.jsch.agentproxy.AgentProxy
 import com.jcraft.jsch.agentproxy.AgentProxyException
 import com.jcraft.jsch.agentproxy.Connector
@@ -13,6 +14,7 @@ import io.opentelemetry.api.common.Attributes
 import net.schmizz.keepalive.KeepAliveProvider
 import net.schmizz.sshj.DefaultConfig
 import net.schmizz.sshj.SSHClient
+import net.schmizz.sshj.connection.channel.Channel
 import net.schmizz.sshj.sftp.SFTPClient
 import net.schmizz.sshj.transport.verification.PromiscuousVerifier
 import net.schmizz.sshj.userauth.method.AuthKeyboardInteractive
@@ -24,7 +26,11 @@ import net.schmizz.sshj.userauth.password.Resource
 import org.apache.commons.compress.archivers.zip.Zip64Mode
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntryPredicate
 import org.apache.commons.compress.archivers.zip.ZipFile
+import org.jetbrains.intellij.build.dependencies.BuildDependenciesCommunityRoot
 import org.jetbrains.intellij.build.io.*
+import org.jetbrains.intellij.build.tracer
+import java.io.InputStream
+import java.io.OutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -39,14 +45,14 @@ import java.util.function.Consumer
 import java.util.logging.*
 import java.util.zip.Deflater
 import kotlin.io.path.name
+import kotlin.io.path.outputStream
 
 private val random by lazy { SecureRandom() }
 
 // our zip for JARs, but here we need to support file permissions - that's why apache compress is used
 fun prepareMacZip(macZip: Path,
                   sitFile: Path,
-                  productJson: ByteArray,
-                  macAdditionalDir: Path?,
+                  productJson: String,
                   zipRoot: String) {
   Files.newByteChannel(macZip, StandardOpenOption.READ).use { sourceFileChannel ->
     ZipFile(sourceFileChannel).use { zipFile ->
@@ -59,11 +65,8 @@ fun prepareMacZip(macZip: Path,
           // exclude existing product-info.json as a custom one will be added
           val productJsonZipPath = "$zipRoot/Resources/product-info.json"
           zipFile.copyRawEntries(out, ZipArchiveEntryPredicate { it.name != productJsonZipPath })
-          if (macAdditionalDir != null) {
-            out.dir(macAdditionalDir, prefix = "$zipRoot/")
-          }
 
-          out.entry(productJsonZipPath, productJson)
+          out.entry(productJsonZipPath, productJson.encodeToByteArray())
         }
       }
     }
@@ -84,8 +87,7 @@ fun signMacApp(
   notarize: Boolean,
   bundleIdentifier: String,
   appArchiveFile: Path,
-  jreArchiveFile: Path?,
-  communityHome: Path,
+  communityHome: BuildDependenciesCommunityRoot,
   artifactDir: Path,
   dmgImage: Path?,
   artifactBuilt: Consumer<Path>,
@@ -97,28 +99,16 @@ fun signMacApp(
       .setAttribute("file", appArchiveFile.toString())
       .setAttribute("remoteDir", remoteDir)
       .setAttribute("host", host)
-      .startSpan()
       .use {
         sftp.put(NioFileSource(appArchiveFile, filePermission = regularFileMode), "$remoteDir/${appArchiveFile.fileName}")
       }
 
-    if (jreArchiveFile != null) {
-      tracer.spanBuilder("upload JRE archive")
-        .setAttribute("file", jreArchiveFile.toString())
-        .setAttribute("remoteDir", remoteDir)
-        .setAttribute("host", host)
-        .startSpan()
-        .use {
-          sftp.put(NioFileSource(jreArchiveFile, filePermission = regularFileMode), "$remoteDir/${jreArchiveFile.fileName}")
-        }
-    }
-
-    val scriptDir = communityHome.resolve("platform/build-scripts/tools/mac/scripts")
+    val scriptDir = communityHome.communityRoot.resolve("platform/build-scripts/tools/mac/scripts")
     tracer.spanBuilder("upload scripts")
       .setAttribute("scriptDir", scriptDir.toString())
       .setAttribute("remoteDir", remoteDir)
       .setAttribute("host", host)
-      .startSpan().use {
+      .use {
         sftp.put(NioFileSource(scriptDir.resolve("entitlements.xml"), filePermission = regularFileMode), "$remoteDir/entitlements.xml")
         @Suppress("SpellCheckingInspection")
         for (fileName in listOf("sign.sh", "notarize.sh", "signapp.sh", "makedmg.sh", "makedmg.py", "codesign.sh")) {
@@ -137,7 +127,6 @@ fun signMacApp(
       user,
       password,
       codesignString,
-      jreArchiveFile?.fileName?.toString() ?: "no-jdk",
       if (notarize) "yes" else "no",
       bundleIdentifier,
       publishAppArchive.toString(),
@@ -152,7 +141,7 @@ fun signMacApp(
                   "${it.first}=${it.second}"
                 } ?: ""
     @Suppress("SpellCheckingInspection")
-    tracer.spanBuilder("sign mac app").setAttribute("file", appArchiveFile.toString()).startSpan().useWithScope {
+    tracer.spanBuilder("sign mac app").setAttribute("file", appArchiveFile.toString()).useWithScope {
       signFile(remoteDir = remoteDir,
                commandString = "$env'$remoteDir/signapp.sh' '${args.joinToString("' '")}'",
                file = appArchiveFile,
@@ -175,7 +164,7 @@ fun signMacApp(
     if (dmgImage != null) {
       val fileNameWithoutExt = appArchiveFile.fileName.toString().removeSuffix(".sit")
       val dmgFile = artifactDir.resolve("$fileNameWithoutExt.dmg")
-      tracer.spanBuilder("build dmg").setAttribute("file", dmgFile.toString()).startSpan().useWithScope {
+      tracer.spanBuilder("build dmg").setAttribute("file", dmgFile.toString()).useWithScope {
         @Suppress("SpellCheckingInspection")
         processFile(localFile = dmgFile,
                     ssh = ssh,
@@ -223,12 +212,13 @@ private fun processFile(localFile: Path,
   ssh.startSession().use { session ->
     val command = session.exec(commandString)
     try {
-      // use CompletableFuture because get will call ForkJoinPool.helpAsyncBlocker, so, other tasks in FJP will be executed while waiting
-      CompletableFuture.allOf(
-        runAsync { command.inputStream.transferTo(System.out) },
-        runAsync { Files.copy(command.errorStream, logFile, StandardCopyOption.REPLACE_EXISTING) }
-      ).get(6, TimeUnit.HOURS)
-
+      logFile.outputStream(StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING).use { logStream ->
+        // use CompletableFuture because get will call ForkJoinPool.helpAsyncBlocker, so, other tasks in FJP will be executed while waiting
+        CompletableFuture.allOf(
+          runAsync { command.inputStream.writeEachLineTo(logStream, System.out, channel = command) },
+          runAsync { command.errorStream.writeEachLineTo(logStream, System.out, channel = command) },
+        ).get(6, TimeUnit.HOURS)
+      }
       command.join(1, TimeUnit.MINUTES)
     }
     catch (e: Exception) {
@@ -249,6 +239,38 @@ private fun processFile(localFile: Path,
   }
 }
 
+private fun InputStream.writeEachLineTo(vararg outputStreams: OutputStream, channel: Channel) {
+  val lineBuffer = StringBuilder()
+  fun writeLine() {
+    val lineBytes = lineBuffer.toString().toByteArray()
+    outputStreams.forEach {
+      synchronized(it) {
+        it.write(lineBytes)
+      }
+    }
+  }
+  bufferedReader().use { reader ->
+    while (channel.isOpen || reader.ready()) {
+      if (reader.ready()) {
+        val char = reader.read()
+          .takeIf { it != -1 }?.toChar()
+          ?.also(lineBuffer::append)
+        val endOfLine = char == '\n' || char == '\r' || char == null
+        if (endOfLine && lineBuffer.isNotEmpty()) {
+          writeLine()
+          lineBuffer.clear()
+        }
+      }
+      else {
+        Thread.sleep(100L)
+      }
+    }
+    if (lineBuffer.isNotBlank()) {
+      writeLine()
+    }
+  }
+}
+
 private fun downloadResult(remoteFile: String,
                            localFile: Path,
                            ftpClient: SFTPClient,
@@ -256,7 +278,6 @@ private fun downloadResult(remoteFile: String,
   tracer.spanBuilder("download file")
     .setAttribute("remoteFile", remoteFile)
     .setAttribute("localFile", localFile.toString())
-    .startSpan()
     .use { span ->
       val localFileParent = localFile.parent
       val tempFile = localFileParent.resolve("${localFile.fileName}.download")
@@ -376,7 +397,7 @@ private inline fun executeTask(host: String,
 }
 
 private fun removeDir(ssh: SSHClient, remoteDir: String) {
-  tracer.spanBuilder("remove remote dir").setAttribute("remoteDir", remoteDir).startSpan().use {
+  tracer.spanBuilder("remove remote dir").setAttribute("remoteDir", remoteDir).use {
     ssh.startSession().use { session ->
       val command = session.exec("rm -rf '$remoteDir'")
       command.join(30, TimeUnit.SECONDS)

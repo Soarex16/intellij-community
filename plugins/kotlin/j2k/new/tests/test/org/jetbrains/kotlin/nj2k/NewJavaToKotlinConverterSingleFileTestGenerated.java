@@ -151,6 +151,11 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
             runTest("testData/newJ2k/annotations/repeatableAnnotationOneSixWithAlias.java");
         }
 
+        @TestMetadata("retention.java")
+        public void testRetention() throws Exception {
+            runTest("testData/newJ2k/annotations/retention.java");
+        }
+
         @TestMetadata("serialVersionUID.java")
         public void testSerialVersionUID() throws Exception {
             runTest("testData/newJ2k/annotations/serialVersionUID.java");
@@ -164,6 +169,16 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
         @TestMetadata("typeUseAnnotation.java")
         public void testTypeUseAnnotation() throws Exception {
             runTest("testData/newJ2k/annotations/typeUseAnnotation.java");
+        }
+
+        @TestMetadata("typeUseAnnotationDeclaration.java")
+        public void testTypeUseAnnotationDeclaration() throws Exception {
+            runTest("testData/newJ2k/annotations/typeUseAnnotationDeclaration.java");
+        }
+
+        @TestMetadata("typeUseAnnotationDeclaration2.java")
+        public void testTypeUseAnnotationDeclaration2() throws Exception {
+            runTest("testData/newJ2k/annotations/typeUseAnnotationDeclaration2.java");
         }
     }
 
@@ -1097,6 +1112,11 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
         @TestMetadata("fieldWithEndOfLineComment2.java")
         public void testFieldWithEndOfLineComment2() throws Exception {
             runTest("testData/newJ2k/comments/fieldWithEndOfLineComment2.java");
+        }
+
+        @TestMetadata("fieldWithEndOfLineCommentAndNoInitializer.java")
+        public void testFieldWithEndOfLineCommentAndNoInitializer() throws Exception {
+            runTest("testData/newJ2k/comments/fieldWithEndOfLineCommentAndNoInitializer.java");
         }
 
         @TestMetadata("fieldsInitializedFromParams.java")
@@ -2806,6 +2826,69 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
     }
 
     @RunWith(JUnit3RunnerWithInners.class)
+    @TestMetadata("testData/newJ2k/interface")
+    public static class Interface extends AbstractNewJavaToKotlinConverterSingleFileTest {
+        private void runTest(String testDataFilePath) throws Exception {
+            KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+        }
+
+        @TestMetadata("abstactInterface.java")
+        public void testAbstactInterface() throws Exception {
+            runTest("testData/newJ2k/interface/abstactInterface.java");
+        }
+
+        @TestMetadata("emptyInterface.java")
+        public void testEmptyInterface() throws Exception {
+            runTest("testData/newJ2k/interface/emptyInterface.java");
+        }
+
+        @TestMetadata("extendsOneClassAndImplementsSeveralInterfaces.java")
+        public void testExtendsOneClassAndImplementsSeveralInterfaces() throws Exception {
+            runTest("testData/newJ2k/interface/extendsOneClassAndImplementsSeveralInterfaces.java");
+        }
+
+        @TestMetadata("extendsOneInterface.java")
+        public void testExtendsOneInterface() throws Exception {
+            runTest("testData/newJ2k/interface/extendsOneInterface.java");
+        }
+
+        @TestMetadata("interfaceWithFields.java")
+        public void testInterfaceWithFields() throws Exception {
+            runTest("testData/newJ2k/interface/interfaceWithFields.java");
+        }
+
+        @TestMetadata("interfaceWithMethodDeclaration.java")
+        public void testInterfaceWithMethodDeclaration() throws Exception {
+            runTest("testData/newJ2k/interface/interfaceWithMethodDeclaration.java");
+        }
+
+        @TestMetadata("interfaceWithStaticFields.java")
+        public void testInterfaceWithStaticFields() throws Exception {
+            runTest("testData/newJ2k/interface/interfaceWithStaticFields.java");
+        }
+
+        @TestMetadata("internalInterface.java")
+        public void testInternalInterface() throws Exception {
+            runTest("testData/newJ2k/interface/internalInterface.java");
+        }
+
+        @TestMetadata("privateInterface.java")
+        public void testPrivateInterface() throws Exception {
+            runTest("testData/newJ2k/interface/privateInterface.java");
+        }
+
+        @TestMetadata("protectedInterface.java")
+        public void testProtectedInterface() throws Exception {
+            runTest("testData/newJ2k/interface/protectedInterface.java");
+        }
+
+        @TestMetadata("publicInterface.java")
+        public void testPublicInterface() throws Exception {
+            runTest("testData/newJ2k/interface/publicInterface.java");
+        }
+    }
+
+    @RunWith(JUnit3RunnerWithInners.class)
     @TestMetadata("testData/newJ2k/invalidCode")
     public static class InvalidCode extends AbstractNewJavaToKotlinConverterSingleFileTest {
         private void runTest(String testDataFilePath) throws Exception {
@@ -3295,6 +3378,24 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
     }
 
     @RunWith(JUnit3RunnerWithInners.class)
+    @TestMetadata("testData/newJ2k/javaStandardMethods")
+    public static class JavaStandardMethods extends AbstractNewJavaToKotlinConverterSingleFileTest {
+        private void runTest(String testDataFilePath) throws Exception {
+            KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+        }
+
+        @TestMetadata("cloneable.java")
+        public void testCloneable() throws Exception {
+            runTest("testData/newJ2k/javaStandardMethods/cloneable.java");
+        }
+
+        @TestMetadata("cloneable2.java")
+        public void testCloneable2() throws Exception {
+            runTest("testData/newJ2k/javaStandardMethods/cloneable2.java");
+        }
+    }
+
+    @RunWith(JUnit3RunnerWithInners.class)
     @TestMetadata("testData/newJ2k/javaStreamsApi")
     public static class JavaStreamsApi extends AbstractNewJavaToKotlinConverterSingleFileTest {
         private void runTest(String testDataFilePath) throws Exception {
@@ -3632,6 +3733,21 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
     public static class MethodCallExpression extends AbstractNewJavaToKotlinConverterSingleFileTest {
         private void runTest(String testDataFilePath) throws Exception {
             KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
+        }
+
+        @TestMetadata("annotationReceiver.java")
+        public void testAnnotationReceiver() throws Exception {
+            runTest("testData/newJ2k/methodCallExpression/annotationReceiver.java");
+        }
+
+        @TestMetadata("annotationReceiver2.java")
+        public void testAnnotationReceiver2() throws Exception {
+            runTest("testData/newJ2k/methodCallExpression/annotationReceiver2.java");
+        }
+
+        @TestMetadata("annotationReceiver3.java")
+        public void testAnnotationReceiver3() throws Exception {
+            runTest("testData/newJ2k/methodCallExpression/annotationReceiver3.java");
         }
 
         @TestMetadata("callWithKeywords.java")
@@ -4620,6 +4736,11 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
             KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
         }
 
+        @TestMetadata("binaryExpressionWithLineBreak.java")
+        public void testBinaryExpressionWithLineBreak() throws Exception {
+            runTest("testData/newJ2k/returnStatement/binaryExpressionWithLineBreak.java");
+        }
+
         @TestMetadata("currentMethodBug.java")
         public void testCurrentMethodBug() throws Exception {
             runTest("testData/newJ2k/returnStatement/currentMethodBug.java");
@@ -4752,11 +4873,6 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
             KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
         }
 
-        @TestMetadata("classAdotSuperFoo.java")
-        public void testClassAdotSuperFoo() throws Exception {
-            runTest("testData/newJ2k/superExpression/classAdotSuperFoo.java");
-        }
-
         @TestMetadata("classAextendsB.java")
         public void testClassAextendsB() throws Exception {
             runTest("testData/newJ2k/superExpression/classAextendsB.java");
@@ -4767,9 +4883,24 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
             runTest("testData/newJ2k/superExpression/kotlinSuperClassWithImplicitConstructor.java");
         }
 
+        @TestMetadata("outerTypeQualifier.java")
+        public void testOuterTypeQualifier() throws Exception {
+            runTest("testData/newJ2k/superExpression/outerTypeQualifier.java");
+        }
+
         @TestMetadata("superStatement.java")
         public void testSuperStatement() throws Exception {
             runTest("testData/newJ2k/superExpression/superStatement.java");
+        }
+
+        @TestMetadata("superTypeQualifier.java")
+        public void testSuperTypeQualifier() throws Exception {
+            runTest("testData/newJ2k/superExpression/superTypeQualifier.java");
+        }
+
+        @TestMetadata("superTypeQualifier2.java")
+        public void testSuperTypeQualifier2() throws Exception {
+            runTest("testData/newJ2k/superExpression/superTypeQualifier2.java");
         }
     }
 
@@ -4953,69 +5084,6 @@ public abstract class NewJavaToKotlinConverterSingleFileTestGenerated extends Ab
         @TestMetadata("TypeParameterBound.java")
         public void testTypeParameterBound() throws Exception {
             runTest("testData/newJ2k/toKotlinClasses/TypeParameterBound.java");
-        }
-    }
-
-    @RunWith(JUnit3RunnerWithInners.class)
-    @TestMetadata("testData/newJ2k/trait")
-    public static class Trait extends AbstractNewJavaToKotlinConverterSingleFileTest {
-        private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
-        }
-
-        @TestMetadata("abstactInterface.java")
-        public void testAbstactInterface() throws Exception {
-            runTest("testData/newJ2k/trait/abstactInterface.java");
-        }
-
-        @TestMetadata("emptyInterface.java")
-        public void testEmptyInterface() throws Exception {
-            runTest("testData/newJ2k/trait/emptyInterface.java");
-        }
-
-        @TestMetadata("extendsOneClassAndImplementsSeveralInterfaces.java")
-        public void testExtendsOneClassAndImplementsSeveralInterfaces() throws Exception {
-            runTest("testData/newJ2k/trait/extendsOneClassAndImplementsSeveralInterfaces.java");
-        }
-
-        @TestMetadata("extendsOneInterface.java")
-        public void testExtendsOneInterface() throws Exception {
-            runTest("testData/newJ2k/trait/extendsOneInterface.java");
-        }
-
-        @TestMetadata("interfaceWithFields.java")
-        public void testInterfaceWithFields() throws Exception {
-            runTest("testData/newJ2k/trait/interfaceWithFields.java");
-        }
-
-        @TestMetadata("interfaceWithMethodDeclaration.java")
-        public void testInterfaceWithMethodDeclaration() throws Exception {
-            runTest("testData/newJ2k/trait/interfaceWithMethodDeclaration.java");
-        }
-
-        @TestMetadata("interfaceWithStaticFields.java")
-        public void testInterfaceWithStaticFields() throws Exception {
-            runTest("testData/newJ2k/trait/interfaceWithStaticFields.java");
-        }
-
-        @TestMetadata("internalInterface.java")
-        public void testInternalInterface() throws Exception {
-            runTest("testData/newJ2k/trait/internalInterface.java");
-        }
-
-        @TestMetadata("privateInterface.java")
-        public void testPrivateInterface() throws Exception {
-            runTest("testData/newJ2k/trait/privateInterface.java");
-        }
-
-        @TestMetadata("protectedInterface.java")
-        public void testProtectedInterface() throws Exception {
-            runTest("testData/newJ2k/trait/protectedInterface.java");
-        }
-
-        @TestMetadata("publicInterface.java")
-        public void testPublicInterface() throws Exception {
-            runTest("testData/newJ2k/trait/publicInterface.java");
         }
     }
 

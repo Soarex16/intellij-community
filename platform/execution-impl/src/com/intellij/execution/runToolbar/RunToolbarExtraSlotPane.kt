@@ -189,8 +189,9 @@ class RunToolbarExtraSlotPane(val project: Project, val baseWidth: () -> Int?): 
       }
     })
 
-    slotPane.add(slot.view)
     components.add(slot)
+    slotPane.add(slot.view)
+
   }
 
   fun pack() {
@@ -235,7 +236,9 @@ class RunToolbarExtraSlotPane(val project: Project, val baseWidth: () -> Int?): 
       if(RunToolbarData.RUN_TOOLBAR_DATA_KEY.`is`(key)) {
         getData(component)
       }
-      else
+      else if(RunToolbarProcessData.RW_SLOT.`is`(key)) {
+        getData(component)?.id
+      } else
         null
     })
 

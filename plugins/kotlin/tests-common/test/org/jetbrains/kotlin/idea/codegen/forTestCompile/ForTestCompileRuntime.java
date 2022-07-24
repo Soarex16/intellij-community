@@ -3,7 +3,7 @@
 package org.jetbrains.kotlin.idea.codegen.forTestCompile;
 
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.kotlin.idea.artifacts.KotlinArtifacts;
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts;
 import org.jetbrains.kotlin.utils.ExceptionUtilsKt;
 
 import java.io.File;
@@ -21,8 +21,11 @@ public class ForTestCompileRuntime {
     public static synchronized ClassLoader runtimeJarClassLoader() {
         ClassLoader loader = runtimeJarClassLoader.get();
         if (loader == null) {
-            KotlinArtifacts artifacts = KotlinArtifacts.getInstance();
-            loader = createClassLoader(artifacts.getKotlinStdlib(), artifacts.getKotlinScriptRuntime(), artifacts.getKotlinTest());
+            loader = createClassLoader(
+                    KotlinArtifacts.getKotlinStdlib(),
+                    KotlinArtifacts.getKotlinScriptRuntime(),
+                    KotlinArtifacts.getKotlinTest()
+            );
             runtimeJarClassLoader = new SoftReference<>(loader);
         }
         return loader;

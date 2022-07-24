@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.codeInsight.daemon.impl;
 
 import com.intellij.codeHighlighting.HighlightDisplayLevel;
@@ -32,7 +32,7 @@ public final class SeverityRegistrar implements Comparator<HighlightSeverity>, M
   /**
    * Always first {@link HighlightDisplayLevel#DO_NOT_SHOW} must be skipped during navigation, editing settings, etc.
    */
-  static final int SHOWN_SEVERITIES_OFFSET = 1;
+  static final int SHOWN_SEVERITIES_OFFSET = 2;
 
   private static final Logger LOG = Logger.getInstance(SeverityRegistrar.class);
 
@@ -64,6 +64,7 @@ public final class SeverityRegistrar implements Comparator<HighlightSeverity>, M
     map.put(HighlightSeverity.INFO.getName(), HighlightInfoType.INFO);
     map.put(HighlightSeverity.WEAK_WARNING.getName(), HighlightInfoType.WEAK_WARNING);
     map.put(HighlightSeverity.GENERIC_SERVER_ERROR_OR_WARNING.getName(), HighlightInfoType.GENERIC_WARNINGS_OR_ERRORS_FROM_SERVER);
+    map.put(HighlightDisplayLevel.CONSIDERATION_ATTRIBUTES.getName(), HighlightInfoType.TEXT_ATTRIBUTES);
     map.put(HighlightDisplayLevel.DO_NOT_SHOW.getName(), HighlightInfoType.INFORMATION);
     STANDARD_SEVERITIES = new ConcurrentHashMap<>(map);
   }
@@ -383,7 +384,7 @@ public final class SeverityRegistrar implements Comparator<HighlightSeverity>, M
     return Collections.unmodifiableCollection(myMap.values());
   }
   @NotNull
-  static Collection<HighlightInfoType> standardSeverities() {
+  public static Collection<HighlightInfoType> standardSeverities() {
     return STANDARD_SEVERITIES.values();
   }
 }

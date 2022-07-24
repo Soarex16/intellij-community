@@ -191,10 +191,7 @@ public abstract class DebugProcessImpl extends UserDataHolderBase implements Deb
   }
 
   public void setWatchMethodReturnValuesEnabled(boolean enabled) {
-    final MethodReturnValueWatcher watcher = myReturnValueWatcher;
-    if (watcher != null) {
-      watcher.setEnabled(enabled);
-    }
+    ObjectUtils.consumeIfNotNull(myReturnValueWatcher, v -> v.setEnabled(enabled));
   }
 
   public boolean canGetMethodReturnValue() {
@@ -343,7 +340,7 @@ public abstract class DebugProcessImpl extends UserDataHolderBase implements Deb
     ourTraceMask = mask;
   }
 
-  private int getTraceMask() {
+  protected int getTraceMask() {
     int mask = ourTraceMask;
     DebugEnvironment environment = mySession.getDebugEnvironment();
     if (environment instanceof DefaultDebugEnvironment) {
@@ -453,7 +450,6 @@ public abstract class DebugProcessImpl extends UserDataHolderBase implements Deb
       stepRequest.addCountFilter(1);
 
       if (hint != null) {
-        //noinspection HardCodedStringLiteral
         stepRequest.putProperty("hint", hint);
       }
       DebuggerUtilsAsync.setEnabled(stepRequest, true).whenComplete((__, e) -> {
@@ -477,6 +473,13 @@ public abstract class DebugProcessImpl extends UserDataHolderBase implements Deb
       }
     }
     return false;
+  }
+
+  public static boolean isClassFiltered(@Nullable String name) {
+    if (name == null) {
+      return false;
+    }
+    return DebuggerUtilsEx.isFiltered(name, getActiveFilters());
   }
 
   @NotNull
@@ -714,7 +717,7 @@ public abstract class DebugProcessImpl extends UserDataHolderBase implements Deb
       .orElseThrow(() -> new CantRunException(JavaDebuggerBundle.message("error.debug.connector.not.found", connectorName)));
   }
 
-  private void checkVirtualMachineVersion(VirtualMachine vm) {
+  protected void checkVirtualMachineVersion(VirtualMachine vm) {
     final String versionString = vm.version();
     if ("1.4.0".equals(versionString)) {
       DebuggerInvocationUtil.swingInvokeLater(myProject, () -> Messages.showMessageDialog(
@@ -817,11 +820,6 @@ public abstract class DebugProcessImpl extends UserDataHolderBase implements Deb
   public boolean canRedefineClasses() {
     final VirtualMachineProxyImpl vm = myVirtualMachineProxy;
     return vm != null && vm.canRedefineClasses();
-  }
-
-  public boolean canWatchFieldModification() {
-    final VirtualMachineProxyImpl vm = myVirtualMachineProxy;
-    return vm != null && vm.canWatchFieldModification();
   }
 
   public boolean isInInitialState() {
@@ -2332,11 +2330,6 @@ public abstract class DebugProcessImpl extends UserDataHolderBase implements Deb
     }
   }
 
-  public boolean isPausePressed() {
-    final VirtualMachineProxyImpl vm = myVirtualMachineProxy;
-    return vm != null && vm.isPausePressed();
-  }
-
   @NotNull
   public DebuggerCommandImpl createPauseCommand() {
     return new PauseCommand();
@@ -2354,9 +2347,7 @@ public abstract class DebugProcessImpl extends UserDataHolderBase implements Deb
       @Override
       public void contextAction() {
         breakpointManager.applyThreadFilter(DebugProcessImpl.this, null); // clear the filter on resume
-        if (myReturnValueWatcher != null) {
-          myReturnValueWatcher.clear();
-        }
+        ObjectUtils.consumeIfNotNull(myReturnValueWatcher, MethodReturnValueWatcher::clear);
         super.contextAction();
       }
 
@@ -2496,15 +2487,11 @@ public abstract class DebugProcessImpl extends UserDataHolderBase implements Deb
   }
 
   public void startWatchingMethodReturn(ThreadReferenceProxyImpl thread) {
-    if (myReturnValueWatcher != null) {
-      myReturnValueWatcher.enable(thread.getThreadReference());
-    }
+    ObjectUtils.consumeIfNotNull(myReturnValueWatcher, v -> v.enable(thread.getThreadReference()));
   }
 
   void stopWatchingMethodReturn() {
-    if (myReturnValueWatcher != null) {
-      myReturnValueWatcher.disable();
-    }
+    ObjectUtils.consumeIfNotNull(myReturnValueWatcher, MethodReturnValueWatcher::disable);
   }
 
   private static class VirtualMachineData {

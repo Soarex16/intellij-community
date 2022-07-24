@@ -2,29 +2,25 @@
 package org.jetbrains.intellij.build.impl
 
 import com.intellij.openapi.util.io.FileUtil
+import com.intellij.openapi.util.io.NioFiles
 import org.jetbrains.intellij.build.*
 import org.jetbrains.intellij.build.dependencies.Jdk11Downloader
 import org.junit.Test
+import java.nio.file.Files
 
 class BundledRuntimeTest {
   @Test
   fun download() {
     withCompilationContext { context ->
-      val bundledRuntime = BundledRuntime(context)
-      val currentJbr = bundledRuntime.homeForCurrentOsAndArch
+      val bundledRuntime = BundledRuntimeImpl(context)
+      val currentJbr = bundledRuntime.getHomeForCurrentOsAndArch()
       var spottedCurrentJbrInDownloadVariants = false
-      for (prefix in JetBrainsRuntimeDistribution.getALL()) {
-        for (os in OsFamily.getALL()) {
-          for (arch in JvmArchitecture.getALL()) {
+      for (prefix in JetBrainsRuntimeDistribution.ALL) {
+        for (os in OsFamily.ALL) {
+          for (arch in JvmArchitecture.ALL) {
             if (os == OsFamily.WINDOWS && arch == JvmArchitecture.aarch64) {
               // Not supported yet
               // https://youtrack.jetbrains.com/issue/JBR-2074
-              continue
-            }
-
-            if (os == OsFamily.LINUX && arch == JvmArchitecture.aarch64 && prefix == JetBrainsRuntimeDistribution.JCEF) {
-              // Not supported yet
-              // https://youtrack.jetbrains.com/issue/JBR-3906
               continue
             }
 
@@ -57,7 +53,7 @@ class BundledRuntimeTest {
   @Test
   fun currentArchDownload() {
     withCompilationContext { context ->
-      val currentJbrHome = BundledRuntime(context).homeForCurrentOsAndArch
+      val currentJbrHome = BundledRuntimeImpl(context).getHomeForCurrentOsAndArch()
       val javaExe = Jdk11Downloader.getJavaExecutable(currentJbrHome)
       val process = ProcessBuilder(javaExe.toString(), "-version")
         .inheritIO()
@@ -70,14 +66,18 @@ class BundledRuntimeTest {
   }
 
   private fun withCompilationContext(block: (CompilationContext) -> Unit) {
-    val tempDir = FileUtil.createTempDirectory("compilation-context-", "")
+    val tempDir = Files.createTempDirectory("compilation-context-")
     try {
       val communityHome = IdeaProjectLoaderUtil.guessCommunityHome(javaClass)
-      val context = CompilationContextImpl.create(communityHome.toString(), communityHome.toString(), tempDir.toString())
+      val context = createCompilationContext(
+        communityHome = communityHome,
+        projectHome = communityHome.communityRoot,
+        defaultOutputRoot = tempDir,
+      )
       block(context)
     }
     finally {
-      FileUtil.delete(tempDir)
+      NioFiles.deleteRecursively(tempDir)
     }
   }
 }

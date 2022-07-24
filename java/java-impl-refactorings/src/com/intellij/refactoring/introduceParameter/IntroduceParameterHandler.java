@@ -212,7 +212,6 @@ public class IntroduceParameterHandler extends IntroduceHandlerBase {
 
     final JPanel panel = new JPanel(new BorderLayout());
     final JCheckBox superMethod = new JCheckBox(JavaRefactoringBundle.message("introduce.parameter.super.method.checkbox"), true);
-    superMethod.setMnemonic('U');
     panel.add(superMethod, BorderLayout.SOUTH);
     final JBList<PsiMethod> list = new JBList<>(validEnclosingMethods.toArray(PsiMethod.EMPTY_ARRAY));
     list.setVisibleRowCount(5);
@@ -713,7 +712,7 @@ public class IntroduceParameterHandler extends IntroduceHandlerBase {
     }
 
     @Override
-    public boolean prepare(@Nullable Consumer<ExtractMethodProcessor> pass) throws PrepareFailedException {
+    public boolean prepare(@Nullable Consumer<? super ExtractMethodProcessor> pass) throws PrepareFailedException {
       final boolean prepare = super.prepare(pass);
       if (prepare) {
         if (myNotNullConditionalCheck || myNullConditionalCheck) {

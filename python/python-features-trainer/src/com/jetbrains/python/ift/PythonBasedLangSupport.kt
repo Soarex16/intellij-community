@@ -24,7 +24,6 @@ import com.jetbrains.python.sdk.configuration.PyProjectSdkConfiguration.setReady
 import com.jetbrains.python.sdk.configuration.PyProjectVirtualEnvConfiguration
 import com.jetbrains.python.statistics.modules
 import training.dsl.LessonContext
-import training.dsl.TaskRuntimeContext
 import training.lang.AbstractLangSupport
 import training.learn.CourseManager
 import training.learn.course.KLesson
@@ -46,9 +45,12 @@ abstract class PythonBasedLangSupport : AbstractLangSupport() {
   override fun installAndOpenLearningProject(contentRoot: Path,
                                              projectToClose: Project?,
                                              postInitCallback: (learnProject: Project) -> Unit) {
-    // if we open project with isProjectCreatedFromWizard flag as true, PythonSdkConfigurator will not run and configure our sdks
+    // if we open project with isProjectCreatedFromWizard flag as true, PythonSdkConfigurator will not run and configure our sdks,
     // and we will configure it individually without any race conditions
-    val openProjectTask = OpenProjectTask(projectToClose = projectToClose, isProjectCreatedWithWizard = true)
+    val openProjectTask = OpenProjectTask {
+      this.projectToClose = projectToClose
+      isProjectCreatedWithWizard = true
+    }
     ProjectUtils.simpleInstallAndOpenLearningProject(contentRoot, this, openProjectTask, postInitCallback)
   }
 
@@ -133,8 +135,7 @@ abstract class PythonBasedLangSupport : AbstractLangSupport() {
 
       dialog.title = PythonLessonsBundle.message("choose.python.sdk.to.start.learning.header")
       if (dialog.showAndGet()) {
-        val selectedSdk = baseSdkField.selectedSdk
-        if (selectedSdk == null) return
+        val selectedSdk = baseSdkField.selectedSdk ?: return
         startCallback(selectedSdk)
       }
     } else {
@@ -142,11 +143,12 @@ abstract class PythonBasedLangSupport : AbstractLangSupport() {
     }
   }
 
+  override fun isSdkConfigured(project: Project): Boolean = project.pythonSdk != null
 
-  override val commonCheckContent: LessonContext.(lesson: KLesson) -> Unit = { lesson ->
+  override val sdkConfigurationTasks: LessonContext.(lesson: KLesson) -> Unit = { lesson ->
     task {
       stateCheck {
-        hasPythonSdk()
+        isSdkConfigured(project)
       }
       val configureCallbackId = LearningUiManager.addCallback {
         val module = project.modules.singleOrNull() ?: return@addCallback
@@ -155,19 +157,19 @@ abstract class PythonBasedLangSupport : AbstractLangSupport() {
       if (useUserProjects || isLearningProject(project, this@PythonBasedLangSupport)) {
         showWarning(PythonLessonsBundle.message("no.interpreter.in.learning.project", configureCallbackId),
                     problem = LearningInternalProblems.NO_SDK_CONFIGURED) {
-          !hasPythonSdk()
+          !isSdkConfigured(project)
         }
       } else {
         // for Scratch lessons in the non-learning project
         val openCallbackId = LearningUiManager.addCallback {
-          CourseManager.instance.openLesson(project, lesson, LessonStartingWay.NO_SDK_RESTART, true, true)
+          CourseManager.instance.openLesson(project, lesson, LessonStartingWay.NO_SDK_RESTART,
+                                            forceStartLesson = true,
+                                            forceOpenLearningProject = true)
         }
         showWarning(PythonLessonsBundle.message("no.interpreter.in.user.project", openCallbackId, configureCallbackId)) {
-          !hasPythonSdk()
+          !isSdkConfigured(project)
         }
       }
     }
   }
 }
-
-private fun TaskRuntimeContext.hasPythonSdk() = project.pythonSdk != null

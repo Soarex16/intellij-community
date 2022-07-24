@@ -39,6 +39,10 @@ class FE1UastResolveApiFixtureTest : KotlinLightCodeInsightFixtureTestCase(), Ua
         checkMultiResolveInClass(myFixture)
     }
 
+    fun testResolveToFacade() {
+        checkResolveToFacade(myFixture)
+    }
+
     fun testMultiConstructorResolve() {
         checkMultiConstructorResolve(myFixture, project)
     }
@@ -59,8 +63,20 @@ class FE1UastResolveApiFixtureTest : KotlinLightCodeInsightFixtureTestCase(), Ua
         checkResolveLocalDefaultConstructor(myFixture)
     }
 
+    fun testResolveJavaClassAsAnonymousObjectSuperType() {
+        checkResolveJavaClassAsAnonymousObjectSuperType(myFixture)
+    }
+
     fun testResolveCompiledAnnotation() {
         checkResolveCompiledAnnotation(myFixture)
+    }
+
+    fun testResolveExplicitLambdaParameter() {
+        checkResolveExplicitLambdaParameter(myFixture)
+    }
+
+    fun testResolveImplicitLambdaParameter() {
+        checkResolveImplicitLambdaParameter(myFixture)
     }
 
     fun testResolveSyntheticMethod() {
@@ -69,6 +85,30 @@ class FE1UastResolveApiFixtureTest : KotlinLightCodeInsightFixtureTestCase(), Ua
 
     fun testAssigningArrayElementType() {
         checkAssigningArrayElementType(myFixture)
+    }
+
+    fun testMapFunctions() {
+        checkMapFunctions(myFixture)
+    }
+
+    fun testListIterator() {
+        checkListIterator(myFixture)
+    }
+
+    fun testArgumentMappingDefaultValue() {
+        checkArgumentMappingDefaultValue(myFixture)
+    }
+
+    fun testArgumentMappingExtensionFunction() {
+        checkArgumentMappingExtensionFunction(myFixture)
+    }
+
+    fun testArgumentMappingVararg() {
+        checkArgumentMappingVararg(myFixture)
+    }
+
+    fun testArgumentMappingOOBE() {
+        checkArgumentMappingOOBE(myFixture)
     }
 
     fun testDivByZero() {
@@ -81,5 +121,25 @@ class FE1UastResolveApiFixtureTest : KotlinLightCodeInsightFixtureTestCase(), Ua
 
     fun testSyntheticEnumMethods() {
         checkSyntheticEnumMethods(myFixture)
+    }
+
+    fun testImplicitReceiverType() {
+        checkImplicitReceiverType(myFixture)
+    }
+
+    fun testSubstitutedReceiverType() {
+        checkSubstitutedReceiverType(myFixture)
+    }
+
+    fun testCallKindOfSamConstructor() {
+        checkCallKindOfSamConstructor(myFixture)
+    }
+
+    fun testArrayAccessOverloads() {
+        checkArrayAccessOverloads(myFixture)
+    }
+
+    fun testOperatorOverloads() {
+        checkOperatorOverloads(myFixture)
     }
 }

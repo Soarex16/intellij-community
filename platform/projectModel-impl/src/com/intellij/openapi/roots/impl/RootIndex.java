@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.roots.impl;
 
 import com.intellij.openapi.application.ApplicationManager;
@@ -56,7 +56,8 @@ class RootIndex {
     this(project, RootFileSupplier.INSTANCE);
   }
 
-  RootIndex(@NotNull Project project, @NotNull RootFileSupplier rootSupplier) {
+  RootIndex(@NotNull Project project,
+            @NotNull RootFileSupplier rootSupplier) {
     myProject = project;
     myRootSupplier = rootSupplier;
 
@@ -178,6 +179,7 @@ class RootIndex {
     final RootInfo info = new RootInfo();
     ModuleManager moduleManager = ModuleManager.getInstance(project);
     boolean includeProjectJdk = true;
+
     for (final Module module : moduleManager.getModules()) {
       final ModuleRootManager moduleRootManager = ModuleRootManager.getInstance(module);
 
@@ -252,10 +254,11 @@ class RootIndex {
     if (includeProjectJdk) {
       Sdk sdk = ProjectRootManager.getInstance(project).getProjectSdk();
       if (sdk != null) {
-        fillIndexWithLibraryRoots(info, sdk, myRootSupplier.getSdkRoots(sdk, OrderRootType.SOURCES), myRootSupplier.getSdkRoots(sdk, OrderRootType.CLASSES));
+        fillIndexWithLibraryRoots(info, sdk, myRootSupplier.getSdkRoots(sdk, OrderRootType.SOURCES),
+                                  myRootSupplier.getSdkRoots(sdk, OrderRootType.CLASSES));
       }
     }
-    
+
     for (AdditionalLibraryRootsProvider provider : AdditionalLibraryRootsProvider.EP_NAME.getExtensionList()) {
       Collection<SyntheticLibrary> libraries = provider.getAdditionalProjectLibraries(project);
       for (SyntheticLibrary library : libraries) {
@@ -289,6 +292,7 @@ class RootIndex {
         }
       }
     }
+
     for (DirectoryIndexExcludePolicy policy : DirectoryIndexExcludePolicy.EP_NAME.getExtensions(project)) {
       List<VirtualFile> files = ContainerUtil.mapNotNull(policy.getExcludeUrlsForProject(), myRootSupplier::findFileByUrl);
       info.excludedFromProject.addAll(ContainerUtil.filter(files, file -> RootFileSupplier.ensureValid(file, project, policy)));
@@ -327,6 +331,7 @@ class RootIndex {
         }
       }
     }
+
     return info;
   }
 
@@ -910,6 +915,13 @@ class RootIndex {
           if (exclusion != null) {
             exclusions.add(exclusion);
             if (exclusion.value(root)) {
+              continue;
+            }
+          }
+          Condition<VirtualFile> constantCondition = ((SyntheticLibrary)library).getConstantExcludeConditionAsCondition();
+          if (constantCondition != null) {
+            exclusions.add(constantCondition);
+            if (constantCondition.value(root)) {
               continue;
             }
           }

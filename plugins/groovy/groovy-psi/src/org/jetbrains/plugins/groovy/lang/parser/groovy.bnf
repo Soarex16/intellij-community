@@ -63,6 +63,7 @@
     T_RANGE_BOTH_OPEN = '<..<'
     T_DOT = '.'
     T_SAFE_DOT = '?.'
+    T_SAFE_CHAIN_DOT = '??.'
     T_SPREAD_DOT = '*.'
     T_METHOD_CLOSURE = '.&'
     T_METHOD_REFERENCE = '::'
@@ -680,7 +681,7 @@ fake variable_declaration ::= { elementTypeClass = 'org.jetbrains.plugins.groovy
 private parse_block_declaration ::= <<parseTailLeftFlat block_declaration_start block_declaration_tail>>
 private block_declaration_start ::= declaration_start_modifiers | block_declaration_start_no_modifiers
 private block_declaration_start_no_modifiers ::= empty_modifier_list mb_type_parameter_list block_declaration_type_element
-private block_declaration_type_element ::= (capital_type_element | clear_variants_and_fail) declaration_lookahead
+private block_declaration_type_element ::= (capital_type_element | lowercase_type_element | clear_variants_and_fail) declaration_lookahead
 private block_declaration_tail ::= <<mb_nl_group (method | variable_declaration_tail)>>
 private local_variable_declaration ::= <<parseTailLeftFlat block_declaration_start variable_declaration_tail>>
 
@@ -1090,7 +1091,7 @@ attribute_expression ::= expression (mb_nl attribute_dot) after_dot
 property_expression ::= expression (mb_nl property_dot) <<mb_nl_group (type_argument_list? property_expression_identifiers)>>
 
 private method_reference_dot ::= '.&' | '::' { consumeTokenMethod = 'consumeTokenFast' }
-private reference_dot ::= '.' | '?.' | '*.' { consumeTokenMethod = 'fast' }
+private reference_dot ::= '.' | '?.' | '??.' | '*.' { consumeTokenMethod = 'fast' }
 private attribute_dot ::= reference_dot mb_nl ('@') { consumeTokenMethod = 'fast' }
 private property_dot ::= attribute_dot | method_reference_dot | reference_dot
 
@@ -1309,6 +1310,7 @@ external primitive_type ::= parsePrimitiveType
 // Example 3: com.foo.bar.baz       will not match
 // Example 4: com.foo.bar.baz<Baz>  will not match
 capital_type_element ::= (primitive_type_element | capital_class_type_element) array_type_elements { elementType = type_element }
+lowercase_type_element ::= code_reference &((weak_keyword | IDENTIFIER) '=') { elementType = type_element }
 
 class_type_element ::= code_reference
 qualified_class_type_element ::= qualified_code_reference

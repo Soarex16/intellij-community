@@ -61,9 +61,9 @@ import com.intellij.util.indexing.roots.kind.ModuleRootOrigin;
 import com.intellij.util.text.StringSearcher;
 import com.intellij.util.ui.EDT;
 import com.intellij.workspaceModel.ide.WorkspaceModel;
-import com.intellij.workspaceModel.storage.WorkspaceEntityStorage;
-import com.intellij.workspaceModel.storage.bridgeEntities.ModuleEntity;
-import com.intellij.workspaceModel.storage.bridgeEntities.ModuleId;
+import com.intellij.workspaceModel.storage.EntityStorage;
+import com.intellij.workspaceModel.storage.bridgeEntities.api.ModuleEntity;
+import com.intellij.workspaceModel.storage.bridgeEntities.api.ModuleId;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -306,8 +306,9 @@ final class FindInProjectTask {
     SearchScope customScope = myFindModel.isCustomScope() ? myFindModel.getCustomScope() : null;
     GlobalSearchScope globalCustomScope = customScope == null ? null : GlobalSearchScopeUtil.toGlobalSearchScope(customScope, myProject);
 
-    boolean checkExcluded = myDirectory != null && !Registry.is("find.search.in.excluded.dirs") &&
-                            !ReadAction.compute(() -> myProjectFileIndex.isExcluded(myDirectory));
+    boolean ignoreExcluded = myDirectory != null
+                             && !Registry.is("find.search.in.excluded.dirs")
+                             && !ReadAction.compute(() -> myProjectFileIndex.isExcluded(myDirectory));
     boolean withSubdirs = myDirectory != null && myFindModel.isWithSubdirectories();
     boolean locateClassSources = myDirectory != null && myProjectFileIndex.getClassRootForFile(myDirectory) != null;
     boolean searchInLibs = globalCustomScope != null && globalCustomScope.isSearchInLibraries();
@@ -324,7 +325,7 @@ final class FindInProjectTask {
       deque.addAll(withSubdirs ? List.of(myDirectory) : List.of(myDirectory.getChildren()));
     }
     else if (myModule != null) {
-      WorkspaceEntityStorage storage = WorkspaceModel.getInstance(myProject).getEntityStorage().getCurrent();
+      EntityStorage storage = WorkspaceModel.getInstance(myProject).getEntityStorage().getCurrent();
       ModuleEntity moduleEntity = Objects.requireNonNull(storage.resolve(new ModuleId(myModule.getName())));
       deque.addAll(IndexableEntityProviderMethods.INSTANCE.createIterators(moduleEntity, storage, myProject));
     }
@@ -362,7 +363,7 @@ final class FindInProjectTask {
         if (!file.isValid()) {
           return true;
         }
-        if (checkExcluded && myProjectFileIndex.isExcluded(file)) {
+        if (ignoreExcluded && myProjectFileIndex.isExcluded(file)) {
           return true;
         }
         if (((VirtualFile)obj).isDirectory()) {

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.openapi.module.impl;
 
 import com.intellij.configurationStore.RenameableStateStorageManager;
@@ -11,7 +11,6 @@ import com.intellij.openapi.components.impl.stores.IComponentStore;
 import com.intellij.openapi.components.impl.stores.ModuleStore;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
-import com.intellij.openapi.module.ModuleComponent;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.module.impl.scopes.ModuleScopeProviderImpl;
 import com.intellij.openapi.progress.ProgressIndicator;
@@ -77,7 +76,7 @@ public class ModuleImpl extends ComponentManagerImpl implements ModuleEx {
 
   @ApiStatus.Internal
   public ModuleImpl(@NotNull String name, @NotNull Project project) {
-    super((ComponentManagerImpl)project);
+    super((ComponentManagerImpl)project, false);
 
     registerServiceInstance(Module.class, this, ComponentManagerImpl.fakeCorePluginDescriptor);
     myProject = project;
@@ -99,7 +98,7 @@ public class ModuleImpl extends ComponentManagerImpl implements ModuleEx {
     if (beforeComponentCreation != null) {
       beforeComponentCreation.run();
     }
-    createComponents(null);
+    createComponents();
   }
 
   private boolean isPersistent() {
@@ -197,10 +196,10 @@ public class ModuleImpl extends ComponentManagerImpl implements ModuleEx {
 
   @Override
   public void projectOpened() {
-    //noinspection deprecation
-    processInitializedComponents(ModuleComponent.class, (component, __) -> {
+    //noinspection removal,UnnecessaryFullyQualifiedName
+    processInitializedComponents(com.intellij.openapi.module.ModuleComponent.class, (component, __) -> {
       try {
-        //noinspection deprecation
+        //noinspection removal
         component.projectOpened();
       }
       catch (Exception e) {
@@ -212,17 +211,17 @@ public class ModuleImpl extends ComponentManagerImpl implements ModuleEx {
 
   @Override
   public void projectClosed() {
-    //noinspection deprecation
-    List<ModuleComponent> components = new ArrayList<>();
-    //noinspection deprecation
-    processInitializedComponents(ModuleComponent.class, (component, __) -> {
+    @SuppressWarnings({"removal", "UnnecessaryFullyQualifiedName"})
+    List<com.intellij.openapi.module.ModuleComponent> components = new ArrayList<>();
+    //noinspection removal,UnnecessaryFullyQualifiedName
+    processInitializedComponents(com.intellij.openapi.module.ModuleComponent.class, (component, __) -> {
       components.add(component);
       return Unit.INSTANCE;
     });
 
     for (int i = components.size() - 1; i >= 0; i--) {
       try {
-        //noinspection deprecation
+        //noinspection removal
         components.get(i).projectClosed();
       }
       catch (Throwable e) {
@@ -251,9 +250,9 @@ public class ModuleImpl extends ComponentManagerImpl implements ModuleEx {
   @Override
   public void moduleAdded() {
     isModuleAdded = true;
-    //noinspection deprecation
-    processInitializedComponents(ModuleComponent.class, (component, __) -> {
-      //noinspection deprecation
+    //noinspection removal,UnnecessaryFullyQualifiedName
+    processInitializedComponents(com.intellij.openapi.module.ModuleComponent.class, (component, __) -> {
+      //noinspection removal
       component.moduleAdded();
       return Unit.INSTANCE;
     });

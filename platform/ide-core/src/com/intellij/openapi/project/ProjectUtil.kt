@@ -36,7 +36,6 @@ import java.nio.file.Files
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.*
-import java.util.function.Consumer
 import javax.swing.JComponent
 
 val NOTIFICATIONS_SILENT_MODE = Key.create<Boolean>("NOTIFICATIONS_SILENT_MODE")
@@ -102,8 +101,11 @@ fun guessCurrentProject(component: JComponent?): Project {
 
 fun currentOrDefaultProject(project: Project?): Project = project ?: ProjectManager.getInstance().defaultProject
 
+val Project.modules: Array<Module>
+  get() = ModuleManager.getInstance(this).modules
+
 inline fun <T> Project.modifyModules(crossinline task: ModifiableModuleModel.() -> T): T {
-  val model = ModuleManager.getInstance(this).modifiableModel
+  val model = ModuleManager.getInstance(this).getModifiableModel()
   val result = model.task()
   runWriteAction {
     model.commit()
@@ -134,7 +136,11 @@ fun Project.guessProjectDir() : VirtualFile? {
   if (isDefault) {
     return null
   }
-  val customBaseDir = BASE_DIRECTORY_SUGGESTER_EP_NAME.extensions().map { it.suggestBaseDirectory(this) }.filter(Objects::nonNull).findFirst().orElse(null)
+
+  val customBaseDir = BASE_DIRECTORY_SUGGESTER_EP_NAME.extensionList.asSequence()
+    .map { it.suggestBaseDirectory(this) }
+    .filterNotNull()
+    .firstOrNull()
   if (customBaseDir != null) {
     return customBaseDir
   }
@@ -252,16 +258,6 @@ fun Project.getProjectCachePath(baseDir: Path, forceNameUse: Boolean = false, ha
 fun runWhenProjectOpened(project : Project, handler: Runnable) {
   runWhenProjectOpened(project) {
     handler.run()
-  }
-}
-
-/**
- * Add one-time first projectOpened listener.
- */
-@JvmOverloads
-fun runWhenProjectOpened(project: Project? = null, handler: Consumer<Project>) {
-  runWhenProjectOpened(project) {
-    handler.accept(it)
   }
 }
 

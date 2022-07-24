@@ -41,7 +41,7 @@ internal class DocumentationPopupUI(
 ) : Disposable {
 
   private var _ui: DocumentationUI? = ui
-  val ui: DocumentationUI get() = requireNotNull(_ui) { "already detached" }
+  private val ui: DocumentationUI get() = requireNotNull(_ui) { "already detached" }
   val browser: DocumentationBrowser get() = ui.browser
 
   private val toolbarComponent: JComponent

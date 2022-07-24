@@ -58,6 +58,11 @@ public class ShowUIDefaultsAction extends AnAction implements DumbAware {
     perform(project);
   }
 
+  @Override
+  public @NotNull ActionUpdateThread getActionUpdateThread() {
+    return ActionUpdateThread.BGT;
+  }
+
   public void perform(Project project) {
     new DialogWrapper(project, true) {
       {
@@ -261,6 +266,11 @@ public class ShowUIDefaultsAction extends AnAction implements DumbAware {
               if (rows.length > 0) {
                   return new TextCopyProvider() {
                     @Override
+                    public @NotNull ActionUpdateThread getActionUpdateThread() {
+                      return ActionUpdateThread.EDT;
+                    }
+
+                    @Override
                     public Collection<String> getTextLinesToCopy() {
                       List<String> result = new ArrayList<>();
                       String tail = rows.length > 1 ? "," : "";
@@ -347,7 +357,7 @@ public class ShowUIDefaultsAction extends AnAction implements DumbAware {
 
       }
 
-      private @Nullable <T> T editNumber(String key, String value, Function<String, T> parser) {
+      private @Nullable <T> T editNumber(String key, String value, Function<? super String, ? extends T> parser) {
         String newValue = Messages.showInputDialog(getRootPane(), IdeBundle.message("dialog.message.enter.new.value.for.0", key),
                                                    IdeBundle.message("dialog.title.number.editor"), null, value,
                                                    new InputValidator() {

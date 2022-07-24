@@ -3,11 +3,12 @@ package org.jetbrains.kotlin.idea.intentions
 
 import com.intellij.openapi.editor.Editor
 import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
-import org.jetbrains.kotlin.idea.KotlinBundle
+import org.jetbrains.kotlin.idea.base.resources.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.resolveToCall
 import org.jetbrains.kotlin.idea.completion.ArgumentThatCanBeUsedWithoutName
 import org.jetbrains.kotlin.idea.completion.collectAllArgumentsThatCanBeUsedWithoutName
-import org.jetbrains.kotlin.idea.core.copied
+import org.jetbrains.kotlin.idea.base.psi.copied
+import org.jetbrains.kotlin.idea.codeinsight.api.classic.intentions.SelfTargetingIntention
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.resolve.calls.components.isVararg
 
@@ -53,7 +54,7 @@ class RemoveAllArgumentNamesIntention : SelfTargetingIntention<KtCallElement>(
             return when {
                 isVararg && argumentExpr is KtCollectionLiteralExpression ->
                     argumentExpr.getInnerExpressions().map { psiFactory.createArgument(it) }
-                isVararg && argumentExpr is KtCallExpression && argumentExpr.isArrayOfMethod() ->
+                isVararg && argumentExpr is KtCallExpression && argumentExpr.isArrayOfFunction() ->
                     argumentExpr.valueArguments.map { psiFactory.createArgument(it.getArgumentExpression()) }
                 else ->
                     listOf(psiFactory.createArgument(argumentExpr, null, isVararg))

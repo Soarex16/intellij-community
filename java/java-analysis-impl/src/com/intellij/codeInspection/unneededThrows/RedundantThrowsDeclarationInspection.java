@@ -79,7 +79,7 @@ public final class RedundantThrowsDeclarationInspection extends GlobalJavaBatchI
         final PsiElement throwsRef = throwRefType.getReference();
         final String message = getMessage(refMethod);
         final MyQuickFix fix = new MyQuickFix(processor, throwRefType.getType().getClassName(), IGNORE_ENTRY_POINTS);
-        return manager.createProblemDescriptor(throwsRef, message, fix, ProblemHighlightType.LIKE_UNUSED_SYMBOL, false);
+        return manager.createProblemDescriptor(throwsRef, message, fix, ProblemHighlightType.GENERIC_ERROR_OR_WARNING, false);
       })
       .toArray(CommonProblemDescriptor.EMPTY_ARRAY);
   }
@@ -434,7 +434,7 @@ public final class RedundantThrowsDeclarationInspection extends GlobalJavaBatchI
 
         block.accept(new JavaRecursiveElementWalkingVisitor() {
           @Override
-          public void visitCallExpression(PsiCallExpression callExpression) {
+          public void visitCallExpression(@NotNull PsiCallExpression callExpression) {
             final List<PsiClassType> exceptions = ExceptionUtil.getUnhandledExceptions(callExpression, block);
             for (PsiClassType exception : exceptions) {
               addExceptionInducer(exception, callExpression);
@@ -442,7 +442,7 @@ public final class RedundantThrowsDeclarationInspection extends GlobalJavaBatchI
           }
 
           @Override
-          public void visitThrowStatement(PsiThrowStatement statement) {
+          public void visitThrowStatement(@NotNull PsiThrowStatement statement) {
             final PsiExpression exception = statement.getException();
             if (exception == null) return;
 

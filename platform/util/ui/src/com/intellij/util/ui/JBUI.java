@@ -364,6 +364,10 @@ public final class JBUI {
         return insets("ActionsList.mnemonicsBorderInsets", insets(0, 8, 1, 6));
       }
 
+      public static @NotNull Insets mnemonicInsets() {
+        return insets("ActionsList.mnemonicsInsets", insets(0, 0, 0, 8));
+      }
+
       public static @NotNull Insets cellPadding() {
         return insets("ActionsList.cellBorderInsets", insets(1, 12, 1, 12));
       }
@@ -384,6 +388,10 @@ public final class JBUI {
         }
         return font;
       }
+    }
+
+    public static final class Banner {
+      public static final Color WARNING_BACKGROUND = JBColor.namedColor("Banner.warningBackground", 0xfff8e3, 0x3d3223);
     }
 
     public static final class Button {
@@ -951,13 +959,21 @@ public final class JBUI {
         return JBUIScale.scale(170);
       }
 
+      public static Color mnemonicForeground() {
+        return JBColor.namedColor("Popup.mnemonicForeground", ActionsList.MNEMONIC_FOREGROUND);
+      }
+
       public static class Selection {
         public static final JBValue ARC = new JBValue.UIInteger("Popup.Selection.arc", 8);
         public static final JBValue LEFT_RIGHT_INSET = new JBValue.UIInteger("Popup.Selection.leftRightInset", 12);
 
         @NotNull
         public static Insets innerInsets() {
-          return insets("Popup.Selection.innerInsets", insets(2, 8));
+          JBInsets result = insets("Popup.Selection.innerInsets", insets(0, 8));
+          // Top and bottom values are ignored now
+          result.top = 0;
+          result.bottom = 0;
+          return result;
         }
       }
     }
@@ -1151,6 +1167,9 @@ public final class JBUI {
         return JBColor.namedColor("ToolTip.shortcutForeground", new JBColor(0x787878, 0x999999));
       }
 
+      /**
+       * Border color for tooltips except information/question/error tooltips (see {@link com.intellij.codeInsight.hint.HintUtil#HINT_BORDER_COLOR_KEY})
+       */
       public static @NotNull Color borderColor() {
         return JBColor.namedColor("ToolTip.borderColor", new JBColor(0xadadad, 0x636569));
       }
@@ -1302,6 +1321,13 @@ public final class JBUI {
         return selected ? Selection.foreground(focused) : FOREGROUND;
       }
 
+      static int rowHeight() {
+        int defaultHeight = JBUIScale.scale(24);
+        int result = getInt("List.rowHeight", defaultHeight);
+        // Linux doesn't support rowHeight now, use default value. See IDEA-234112
+        return result <= 0 ? defaultHeight : result;
+      }
+
       final class Selection {
         private static final Color BACKGROUND = JBColor.namedColor("List.selectionBackground", DEFAULT_RENDERER_SELECTION_BACKGROUND);
         private static final Color FOREGROUND = JBColor.namedColor("List.selectionForeground", Label.foreground(true));
@@ -1391,6 +1417,13 @@ public final class JBUI {
 
       static @NotNull Color foreground(boolean selected, boolean focused) {
         return selected ? Selection.foreground(focused) : FOREGROUND;
+      }
+
+      static int rowHeight() {
+        int defaultHeight = JBUIScale.scale(24);
+        int result = getInt("Tree.rowHeight", defaultHeight);
+        // Linux doesn't support rowHeight now, use default value. See IDEA-234112
+        return result <= 0 ? defaultHeight : result;
       }
 
       final class Selection {

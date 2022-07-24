@@ -35,14 +35,11 @@ public class ProjectGroupActionGroup extends DefaultActionGroup implements DumbA
   }
 
   @Override
-  public void actionPerformed(@NotNull AnActionEvent e) { }
-
-  @Override
-  public boolean isPopup() {
-    return !myGroup.isExpanded();
+  public void update(@NotNull AnActionEvent e) {
+    e.getPresentation().setPopupGroup(!myGroup.isExpanded());
   }
 
-  public ProjectGroup getGroup() {
+  public @NotNull ProjectGroup getGroup() {
     return myGroup;
   }
 }

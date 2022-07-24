@@ -35,6 +35,7 @@ import com.intellij.openapi.vfs.local.CoreLocalVirtualFile;
 import com.intellij.ui.*;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBPanel;
+import com.intellij.util.UriUtil;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.ui.JBInsets;
 import com.intellij.util.ui.JBUI;
@@ -323,12 +324,11 @@ final class FileChooserPanelImpl extends JBPanel<FileChooserPanelImpl> implement
 
   @Override
   public void load(@Nullable Path path) {
-    if (path == null || path.isAbsolute()) {
-      load(path, null, 0, true);
+    if (path != null && !path.isAbsolute()) {
+      LOG.info("unexpected relative path: " + path);
+      path = null;
     }
-    else {
-      throw new IllegalArgumentException("Not absolute: " + path);
-    }
+    load(path, null, 0, true);
   }
 
   @Override
@@ -463,7 +463,8 @@ final class FileChooserPanelImpl extends JBPanel<FileChooserPanelImpl> implement
       try {
         @SuppressWarnings("resource") var fs = myOpenFileSystems.computeIfAbsent(path, k -> {
           try {
-            return FileSystems.newFileSystem(path, null);
+            //noinspection RedundantCast -- Java 17 compatibility
+            return FileSystems.newFileSystem(path, (ClassLoader)null);
           }
           catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -664,7 +665,8 @@ final class FileChooserPanelImpl extends JBPanel<FileChooserPanelImpl> implement
       if (archive != null && myRegistry.getFileTypeByFileName(archive.getFileName().toString()) == ArchiveFileType.INSTANCE) {
         @SuppressWarnings("resource") var fs = myOpenFileSystems.computeIfAbsent(archive, k -> {
           try {
-            return FileSystems.newFileSystem(archive, null);
+            //noinspection RedundantCast -- Java 17 compatibility
+            return FileSystems.newFileSystem(archive, (ClassLoader)null);
           }
           catch (IOException e) {
             LOG.warn(e);
@@ -686,7 +688,7 @@ final class FileChooserPanelImpl extends JBPanel<FileChooserPanelImpl> implement
 
   // faster than `Files#getFileStore` (at least for ZipFS); not suitable for local FS
   private static String storeName(Path path) {
-    return StringUtil.trimTrailing(path.getFileSystem().getFileStores().iterator().next().name(), '/');
+    return UriUtil.trimTrailingSlashes(path.getFileSystem().getFileStores().iterator().next().name());
   }
 
   private static Future<Void> execute(Runnable operation) {

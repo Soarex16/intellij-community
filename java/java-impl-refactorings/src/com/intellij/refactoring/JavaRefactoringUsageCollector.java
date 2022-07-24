@@ -17,13 +17,14 @@ import org.jetbrains.annotations.NotNull;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 
 import static com.intellij.internal.statistic.beans.MetricEventUtilKt.addBoolIfDiffers;
 import static com.intellij.internal.statistic.beans.MetricEventUtilKt.addMetricIfDiffers;
 
 @NonNls
 public class JavaRefactoringUsageCollector extends ApplicationUsagesCollector {
-  private static final EventLogGroup GROUP = new EventLogGroup("java.refactoring.settings", 5);
+  private static final EventLogGroup GROUP = new EventLogGroup("java.refactoring.settings", 7);
   private static final VarargEventId RENAME_SEARCH_IN_COMMENTS_FOR_FIELD =
     GROUP.registerVarargEvent("rename.search.in.comments.for.field", EventFields.Enabled);
   private static final VarargEventId RENAME_SEARCH_IN_COMMENTS_FOR_METHOD =
@@ -137,22 +138,22 @@ public class JavaRefactoringUsageCollector extends ApplicationUsagesCollector {
                      ENCAPSULATE_FIELDS_USE_ACCESSORS);
 
     addMetricIfDiffers(result, settings, defaultSettings,
-                       s -> getReplaceGettersOption(settings.INTRODUCE_PARAMETER_REPLACE_FIELDS_WITH_GETTERS),
+                       s -> getReplaceGettersOption(s.INTRODUCE_PARAMETER_REPLACE_FIELDS_WITH_GETTERS),
                        javadoc -> INTRODUCE_PARAMETER_REPLACE_FIELDS_WITH_GETTERS.metric(javadoc));
 
-    addJavadoc(result, settings, defaultSettings, EXTRACT_INTERFACE_JAVADOC, settings.EXTRACT_INTERFACE_JAVADOC);
-    addJavadoc(result, settings, defaultSettings, EXTRACT_SUPERCLASS_JAVADOC, settings.EXTRACT_SUPERCLASS_JAVADOC);
-    addJavadoc(result, settings, defaultSettings, PULL_UP_MEMBERS_JAVADOC, settings.PULL_UP_MEMBERS_JAVADOC);
+    addJavadoc(result, settings, defaultSettings, EXTRACT_INTERFACE_JAVADOC, s -> s.EXTRACT_INTERFACE_JAVADOC);
+    addJavadoc(result, settings, defaultSettings, EXTRACT_SUPERCLASS_JAVADOC, s -> s.EXTRACT_SUPERCLASS_JAVADOC);
+    addJavadoc(result, settings, defaultSettings, PULL_UP_MEMBERS_JAVADOC, s -> s.PULL_UP_MEMBERS_JAVADOC);
 
     addBoolIfDiffers(result, settings, defaultSettings, s -> s.INTRODUCE_PARAMETER_DELETE_LOCAL_VARIABLE, INTRODUCE_PARAMETER_DELETE_LOCAL);
     addBoolIfDiffers(result, settings, defaultSettings, s -> s.INTRODUCE_PARAMETER_USE_INITIALIZER, INTRODUCE_PARAMETER_USE_INITIALIZER);
     addBoolIfDiffers(result, settings, defaultSettings, s -> s.INTRODUCE_PARAMETER_CREATE_FINALS, INTRODUCE_PARAMETER_CREATE_FINALS);
 
     addMetricIfDiffers(result, settings, defaultSettings,
-                       s -> getVisibility(settings.INTRODUCE_FIELD_VISIBILITY),
+                       s -> getVisibility(s.INTRODUCE_FIELD_VISIBILITY),
                        javadoc -> INTRODUCE_FIELD_VISIBILITY.metric(VISIBILITY.with(javadoc)));
     addMetricIfDiffers(result, settings, defaultSettings,
-                       s -> getVisibility(settings.INTRODUCE_CONSTANT_VISIBILITY),
+                       s -> getVisibility(s.INTRODUCE_CONSTANT_VISIBILITY),
                        javadoc -> INTRODUCE_CONSTANT_VISIBILITY.metric(VISIBILITY.with(javadoc)));
     addBoolIfDiffers(result, settings, defaultSettings, s -> s.INTRODUCE_CONSTANT_REPLACE_ALL, INTRODUCE_CONSTANT_REPLACE_ALL);
 
@@ -175,9 +176,10 @@ public class JavaRefactoringUsageCollector extends ApplicationUsagesCollector {
   private static void addJavadoc(Set<MetricEvent> result,
                                  JavaRefactoringSettings settings,
                                  JavaRefactoringSettings defaultSettings,
-                                 VarargEventId eventId, int javadocOption) {
+                                 VarargEventId eventId, 
+                                 Function<JavaRefactoringSettings, Integer> javadocOption) {
     addMetricIfDiffers(result, settings, defaultSettings,
-                       s -> getJavadocOption(javadocOption),
+                       s -> getJavadocOption(javadocOption.apply(s)),
                        javadoc -> eventId.metric(JAVADOC.with(javadoc)));
   }
 

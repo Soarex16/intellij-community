@@ -55,7 +55,6 @@ public abstract class ActionPlaces {
 
   public static final String SCOPE_VIEW_POPUP = "ScopeViewPopup";
   public static final String ACTION_SEARCH = "GoToAction";
-  public static final String ACTION_SEARCH_INDUCED_POPUP = "GoToActionInducedPopup";
 
   public static final String TESTTREE_VIEW_POPUP = "TestTreeViewPopup";
   public static final String TESTTREE_VIEW_TOOLBAR = "TestTreeViewToolbar";
@@ -67,6 +66,7 @@ public abstract class ActionPlaces {
   public static final String METHOD_HIERARCHY_VIEW_TOOLBAR = "MethodHierarchyViewToolbar";
   public static final String CALL_HIERARCHY_VIEW_POPUP = "CallHierarchyViewPopup";
   public static final String CALL_HIERARCHY_VIEW_TOOLBAR = "CallHierarchyViewToolbar";
+  public static final String SIMILAR_USAGES_PREVIEW_TOOLBAR = "SimilarUsagesPreviewToolbar";
   public static final String J2EE_ATTRIBUTES_VIEW_POPUP = "J2EEAttributesViewPopup";
   public static final String J2EE_VIEW_POPUP = "J2EEViewPopup";
   public static final String RUNNER_TOOLBAR = "RunnerToolbar";
@@ -167,6 +167,8 @@ public abstract class ActionPlaces {
 
   public static final String SETTINGS_HISTORY = "SettingsHistory";
 
+  public static final String PROJECT_WIDGET_POPUP = "ProjectWidgetPopup";
+
   // Vcs Log
   public static final String VCS_LOG_TABLE_PLACE = "Vcs.Log.ContextMenu";
   public static final String VCS_LOG_TOOLBAR_PLACE = "Vcs.Log.Toolbar";
@@ -189,7 +191,8 @@ public abstract class ActionPlaces {
 
   public static boolean isMainMenuOrActionSearch(String place) {
     return MAIN_MENU.equals(place) || ACTION_SEARCH.equals(place) || isShortcutPlace(place) ||
-           ACTION_SEARCH_INDUCED_POPUP.equals(place) || MAIN_MENU_IN_POPUP.equals(place);
+           MAIN_MENU_IN_POPUP.equals(place) ||
+           place != null && place.startsWith(POPUP_PREFIX) && isMainMenuOrActionSearch(place.substring(POPUP_PREFIX.length()));
   }
 
   public static boolean isShortcutPlace(String place) {
@@ -200,7 +203,7 @@ public abstract class ActionPlaces {
     UNKNOWN, KEYBOARD_SHORTCUT, MOUSE_SHORTCUT, FORCE_TOUCH,
     TOOLBAR, MAIN_MENU, MAIN_TOOLBAR, EDITOR_TOOLBAR, TABS_MORE_TOOLBAR, EDITOR_TAB, COMMANDER_TOOLBAR, CONTEXT_TOOLBAR, TOOLWINDOW_TITLE,
     LEARN_TOOLWINDOW, PROJECT_VIEW_TOOLBAR, STATUS_BAR_PLACE, ACTION_SEARCH, TESTTREE_VIEW_TOOLBAR, TYPE_HIERARCHY_VIEW_TOOLBAR,
-    METHOD_HIERARCHY_VIEW_TOOLBAR, CALL_HIERARCHY_VIEW_TOOLBAR, RUNNER_TOOLBAR, DEBUGGER_TOOLBAR, USAGE_VIEW_TOOLBAR,
+    METHOD_HIERARCHY_VIEW_TOOLBAR, CALL_HIERARCHY_VIEW_TOOLBAR, SIMILAR_USAGES_PREVIEW_TOOLBAR, RUNNER_TOOLBAR, DEBUGGER_TOOLBAR, USAGE_VIEW_TOOLBAR,
     SHOW_USAGES_POPUP_TOOLBAR,
     STRUCTURE_VIEW_TOOLBAR, NAVIGATION_BAR_TOOLBAR, TODO_VIEW_TOOLBAR, COMPILER_MESSAGES_TOOLBAR,
     ANT_MESSAGES_TOOLBAR, ANT_EXPLORER_TOOLBAR, CODE_INSPECTION, JAVADOC_TOOLBAR, JAVADOC_INPLACE_SETTINGS,
@@ -229,7 +232,7 @@ public abstract class ActionPlaces {
     EDITOR_ANNOTATIONS_AREA_POPUP,
     RUN_ANYTHING_POPUP, RUN_TOOLBAR_LEFT_SIDE,
     VCS_LOG_TABLE_PLACE, VCS_HISTORY_PLACE, VCS_LOG_TOOLBAR_POPUP_PLACE, VCS_TOOLBAR_WIDGET,
-    ACTION_SEARCH_INDUCED_POPUP, MAIN_MENU_IN_POPUP
+    MAIN_MENU_IN_POPUP, PROJECT_WIDGET_POPUP
   );
 
   private static final String POPUP_PREFIX = "popup@";

@@ -9,7 +9,6 @@ import com.intellij.openapi.options.BoundCompositeSearchableConfigurable
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.Configurable.WithEpDependencies
 import com.intellij.openapi.options.SearchableConfigurable
-import com.intellij.openapi.options.advanced.AdvancedSettings
 import com.intellij.openapi.options.ex.ConfigurableWrapper
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.util.registry.Registry
@@ -18,12 +17,10 @@ import com.intellij.ui.dsl.builder.*
 import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.layout.*
-import com.intellij.ui.tabs.impl.JBTabsImpl
-import com.intellij.ui.tabs.impl.tabsLayout.TabsLayoutInfo
-import com.intellij.ui.tabs.layout.TabsLayoutSettingsUi
-import javax.swing.*
-import javax.swing.event.ListDataEvent
-import javax.swing.event.ListDataListener
+import javax.swing.JCheckBox
+import javax.swing.JComboBox
+import javax.swing.JComponent
+import javax.swing.SwingConstants
 import kotlin.math.max
 
 internal class EditorTabsConfigurable : BoundCompositeSearchableConfigurable<SearchableConfigurable>(
@@ -44,50 +41,30 @@ internal class EditorTabsConfigurable : BoundCompositeSearchableConfigurable<Sea
     val ui = UISettings.getInstance().state
     return panel {
       group(message("group.tab.appearance")) {
-
-        if (JBTabsImpl.NEW_TABS) {
-          val tabPlacementComboBoxModel: DefaultComboBoxModel<Int> = DefaultComboBoxModel(TAB_PLACEMENTS)
-          val myTabsLayoutComboBox: JComboBox<TabsLayoutInfo> = TabsLayoutSettingsUi.tabsLayoutComboBox(tabPlacementComboBoxModel)
-
-          row(message("combobox.editor.tab.tabslayout") + ":") {
-            val builder = cell(myTabsLayoutComboBox)
-            TabsLayoutSettingsUi.prepare(builder, myTabsLayoutComboBox)
-          }.layout(RowLayout.INDEPENDENT)
-          row(TAB_PLACEMENT + ":") {
-            myEditorTabPlacement = tabPlacementComboBox(tabPlacementComboBoxModel).component
-          }.layout(RowLayout.INDEPENDENT)
-
-          updateTabPlacementComboBoxVisibility(tabPlacementComboBoxModel)
-          tabPlacementComboBoxModel.addListDataListener(MyAnyChangeOfListListener {
-            updateTabPlacementComboBoxVisibility(tabPlacementComboBoxModel)
-          })
+        row(TAB_PLACEMENT + ":") {
+          myEditorTabPlacement = tabPlacementComboBox().component
         }
-        else {
-          row(TAB_PLACEMENT + ":") {
-            myEditorTabPlacement = tabPlacementComboBox().component
+        if (ExperimentalUI.isNewUI()) {
+          row {
+            checkBox(hideTabsIfNeeded)
+              .enabledIf(myEditorTabPlacement.selectedValueMatches { it == SwingConstants.TOP })
+              .component
           }
-          if (ExperimentalUI.isNewEditorTabs()) {
+        } else {
+          row {
+            myOneRowCheckbox = checkBox(showTabsInOneRow)
+              .enabledIf(myEditorTabPlacement.selectedValueIs(SwingConstants.TOP)).component
+          }
+          indent {
             row {
-              checkBox(hideTabsIfNeeded)
-                .enabledIf(myEditorTabPlacement.selectedValueMatches { it == SwingConstants.TOP })
-                .component
-            }
-          } else {
-            row {
-              myOneRowCheckbox = checkBox(showTabsInOneRow)
-                .enabledIf(myEditorTabPlacement.selectedValueIs(SwingConstants.TOP)).component
-            }
-            indent {
-              row {
-                checkBox(hideTabsIfNeeded).enabledIf(
-                  myEditorTabPlacement.selectedValueMatches { it == SwingConstants.TOP || it == SwingConstants.BOTTOM }
-                    and myOneRowCheckbox.selected).component
-              }
+              checkBox(hideTabsIfNeeded).enabledIf(
+                myEditorTabPlacement.selectedValueMatches { it == SwingConstants.TOP || it == SwingConstants.BOTTOM }
+                  and myOneRowCheckbox.selected).component
             }
           }
-          row { checkBox(showPinnedTabsInASeparateRow).enabledIf(myEditorTabPlacement.selectedValueIs(SwingConstants.TOP)
-                                                                   and AdvancedSettingsPredicate("editor.keep.pinned.tabs.on.left", disposable!!)) }
         }
+        row { checkBox(showPinnedTabsInASeparateRow).enabledIf(myEditorTabPlacement.selectedValueIs(SwingConstants.TOP)
+                                                                 and AdvancedSettingsPredicate("editor.keep.pinned.tabs.on.left", disposable!!)) }
         row { checkBox(useSmallFont).enableIfTabsVisible() }.visible(!ExperimentalUI.isNewUI())
         row { checkBox(showFileIcon).enableIfTabsVisible() }
         row { checkBox(showFileExtension).enableIfTabsVisible() }
@@ -99,7 +76,7 @@ internal class EditorTabsConfigurable : BoundCompositeSearchableConfigurable<Sea
         }.enabledIf((myEditorTabPlacement.selectedValueMatches { it != TABS_NONE }))
       }
       group(message("group.tab.order")) {
-        row { checkBox(sortTabsAlphabetically) }
+        row { checkBox(sortTabsAlphabetically).onApply { resetAlwaysKeepSorted() } }
         row { checkBox(openTabsAtTheEnd) }
       }
       group(message("group.tab.opening.policy")) {
@@ -133,10 +110,6 @@ internal class EditorTabsConfigurable : BoundCompositeSearchableConfigurable<Sea
     }
   }
 
-  private fun updateTabPlacementComboBoxVisibility(tabPlacementComboBoxModel: DefaultComboBoxModel<Int>) {
-    myEditorTabPlacement.isEnabled = tabPlacementComboBoxModel.size > 1
-  }
-
   private fun <T : JComponent> Cell<T>.enableIfTabsVisible() {
     enabledIf(myEditorTabPlacement.selectedValueMatches { it != TABS_NONE })
   }
@@ -149,12 +122,6 @@ internal class EditorTabsConfigurable : BoundCompositeSearchableConfigurable<Sea
     }
   }
 
-  private class MyAnyChangeOfListListener(val action: () -> Unit) : ListDataListener {
-    override fun contentsChanged(e: ListDataEvent?) { action() }
-    override fun intervalRemoved(e: ListDataEvent?) { action() }
-    override fun intervalAdded(e: ListDataEvent?) { action() }
-  }
-
   private fun Panel.addSections() {
     configurables.filterIsInstance<EditorTabsOptionsCustomSection>()
       .sortedWith(Comparator.comparing { c ->
@@ -163,3 +130,10 @@ internal class EditorTabsConfigurable : BoundCompositeSearchableConfigurable<Sea
       .forEach { appendDslConfigurable(it) }
   }
 }
+
+  private fun resetAlwaysKeepSorted() {
+    if (!UISettings.getInstance().sortTabsAlphabetically) {
+      UISettings.getInstance().alwaysKeepTabsAlphabeticallySorted = false
+    }
+  }
+

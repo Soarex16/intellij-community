@@ -307,8 +307,8 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
     else if (myManager.myToolWindow != null) {
       Disposer.register(myManager.myToolWindow.getContentManager(), this);
     }
-    myEditorPane.putClientProperty(DataManager.CLIENT_PROPERTY_DATA_PROVIDER, HELP_DATA_PROVIDER);
-    myScrollPane.putClientProperty(DataManager.CLIENT_PROPERTY_DATA_PROVIDER, HELP_DATA_PROVIDER);
+    DataManager.registerDataProvider(myEditorPane, HELP_DATA_PROVIDER);
+    DataManager.registerDataProvider(myScrollPane, HELP_DATA_PROVIDER);
 
     updateControlState();
   }
@@ -431,7 +431,7 @@ public class DocumentationComponent extends JPanel implements Disposable, DataPr
   }
 
   private long getCurrentModificationCount() {
-    return myElement != null ? PsiModificationTracker.SERVICE.getInstance(myElement.getProject()).getModificationCount() : -1;
+    return myElement != null ? PsiModificationTracker.getInstance(myElement.getProject()).getModificationCount() : -1;
   }
 
   public void setText(@NotNull @Nls String text, @Nullable PsiElement element, @Nullable DocumentationProvider provider) {

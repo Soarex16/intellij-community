@@ -2,11 +2,11 @@
 
 package org.jetbrains.idea.maven.importing;
 
+import com.intellij.maven.testFramework.MavenMultiVersionImportingTestCase;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.roots.OrderRootType;
 import com.intellij.openapi.roots.libraries.Library;
 import com.intellij.openapi.vfs.LocalFileSystem;
-import com.intellij.maven.testFramework.MavenMultiVersionImportingTestCase;
 import org.jetbrains.idea.maven.server.MavenServerManager;
 import org.jetbrains.plugins.groovy.compiler.GreclipseIdeaCompilerSettings;
 import org.jetbrains.plugins.groovy.config.GroovyConfigUtils;
@@ -173,7 +173,18 @@ public class GroovyImporterTest extends MavenMultiVersionImportingTestCase {
   }
 
   @Test
-  public void testGroovyEclipsePlugin() {
+  public void testGroovyEclipsePlugin() throws IOException {
+
+    File batchDir = new File(repoPath, "org/codehaus/groovy/groovy-eclipse-batch/2.1.3-01/");
+    //noinspection ResultOfMethodCallIgnored
+    batchDir.mkdirs();
+    File batchJar = new File(batchDir, "groovy-eclipse-batch-2.1.3-01.jar");
+    //noinspection ResultOfMethodCallIgnored
+    if (!isNewImportingProcess) { // old import tests are not resolving anything
+      batchJar.createNewFile();
+    }
+
+
     createStdProjectFolders();
     createProjectSubDirs("src/main/groovy",
                          "src/test/groovy");
@@ -236,7 +247,7 @@ public class GroovyImporterTest extends MavenMultiVersionImportingTestCase {
     assertTestResources("project", "src/test/resources");
 
     GreclipseIdeaCompilerSettings compilerSettings = myProject.getService(GreclipseIdeaCompilerSettings.class);
-    assertEquals("", compilerSettings.getState().greclipsePath);
+    assertEquals(LocalFileSystem.getInstance().findFileByIoFile(batchJar).getPath(), compilerSettings.getState().greclipsePath);
   }
 
   @Test
@@ -667,9 +678,10 @@ public class GroovyImporterTest extends MavenMultiVersionImportingTestCase {
                     "</build>");
 
       ApplicationManager.getApplication().runWriteAction(() -> {
-        MavenRootModelAdapter a = new MavenRootModelAdapter(new MavenRootModelAdapterLegacyImpl(myProjectsTree.findProject(myProjectPom),
+        MavenRootModelAdapter a = new MavenRootModelAdapter(new MavenRootModelAdapterLegacyImpl(getProjectsTree().findProject(myProjectPom),
                                                                                                 getModule("project"),
-                                                                                                new ModifiableModelsProviderProxyWrapper(myProject)));
+                                                                                                new ModifiableModelsProviderProxyWrapper(
+                                                                                                  myProject)));
         a.unregisterAll(getProjectPath() + "/target", true, true);
         a.getRootModel().commit();
       });
@@ -741,10 +753,5 @@ public class GroovyImporterTest extends MavenMultiVersionImportingTestCase {
     assertTestResources("project", "src/test/resources");
 
     assertExcludes("project", "target");
-  }
-
-  @Test
-  public void testGrEclipseMavenPlugin() {
-
   }
 }

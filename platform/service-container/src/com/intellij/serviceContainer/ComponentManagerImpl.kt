@@ -1,5 +1,5 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("DeprecatedCallableAddReplaceWith", "ReplaceNegatedIsEmptyWithIsNotEmpty", "ReplaceGetOrSet", "ReplacePutWithAssignment")
+@file:Suppress("ReplaceNegatedIsEmptyWithIsNotEmpty", "ReplaceGetOrSet", "ReplacePutWithAssignment")
 package com.intellij.serviceContainer
 
 import com.intellij.diagnostic.*
@@ -7,10 +7,7 @@ import com.intellij.ide.plugins.*
 import com.intellij.ide.plugins.cl.PluginAwareClassLoader
 import com.intellij.idea.Main
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.AccessToken
-import com.intellij.openapi.application.Application
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.invokeAndWaitIfNeeded
+import com.intellij.openapi.application.*
 import com.intellij.openapi.components.*
 import com.intellij.openapi.components.ServiceDescriptor.PreloadMode
 import com.intellij.openapi.components.impl.stores.IComponentStore
@@ -33,6 +30,7 @@ import com.intellij.util.ArrayUtil
 import com.intellij.util.messages.*
 import com.intellij.util.messages.impl.MessageBusEx
 import com.intellij.util.messages.impl.MessageBusImpl
+import kotlinx.coroutines.*
 import org.jetbrains.annotations.ApiStatus
 import org.jetbrains.annotations.TestOnly
 import org.picocontainer.ComponentAdapter
@@ -52,7 +50,7 @@ private val methodLookup = MethodHandles.lookup()
 private val emptyConstructorMethodType = MethodType.methodType(Void.TYPE)
 
 @ApiStatus.Internal
-abstract class ComponentManagerImpl @JvmOverloads constructor(
+abstract class ComponentManagerImpl(
   internal val parent: ComponentManagerImpl?,
   setExtensionsRootArea: Boolean = parent == null
 ) : ComponentManager, Disposable.Parent, MessageBusOwner, UserDataHolderBase(), PicoContainer, ComponentManagerEx, IComponentStoreOwner {
@@ -116,7 +114,6 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
   protected val containerStateName: String
     get() = containerState.get().name
 
-  @Suppress("LeakingThis")
   private val _extensionArea by lazy { ExtensionsAreaImpl(this) }
 
   private var messageBus: MessageBusImpl? = null
@@ -139,6 +136,15 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
 
   @Volatile
   internal var componentContainerIsReadonly: String? = null
+
+  private val coroutineScope: CoroutineScope? = when {
+    parent == null -> Main.mainScope?.let(::createSupervisorCoroutineScope) ?: CoroutineScope(SupervisorJob())
+    parent.parent == null -> createSupervisorCoroutineScope(parent.coroutineScope!!)
+    else -> null
+  }
+
+  @Suppress("MemberVisibilityCanBePrivate")
+  fun getCoroutineScope(): CoroutineScope = coroutineScope ?: throw RuntimeException("Module doesn't have coroutineScope")
 
   override val componentStore: IComponentStore
     get() = getService(IComponentStore::class.java)!!
@@ -221,7 +227,6 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
     return _extensionArea
   }
 
-  // convenient method - use only in a not important code
   fun registerComponents() {
     registerComponents(modules = PluginManagerCore.getPluginSet().getEnabledModules(),
                        app = getApplication(),
@@ -383,26 +388,22 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
     return count
   }
 
-  fun createInitOldComponentsTask(): Runnable? {
-    val components = componentAdapters.getImmutableSet().filterIsInstance<MyComponentAdapter>()
-    if (components.isEmpty()) {
+  fun createInitOldComponentsTask(): (() -> Unit)? {
+    if (componentAdapters.getImmutableSet().none { it is MyComponentAdapter }) {
       return null
     }
-    return Runnable {
+
+    return {
       for (componentAdapter in componentAdapters.getImmutableSet()) {
         if (componentAdapter is MyComponentAdapter) {
-          componentAdapter.getInstance<Any>(this, keyClass = null, indicator = null)
+          componentAdapter.getInstance<Any>(this, keyClass = null)
         }
       }
     }
   }
 
-  protected fun createComponents(indicator: ProgressIndicator?) {
+  protected fun createComponents() {
     LOG.assertTrue(containerState.get() == ContainerState.PRE_INIT)
-
-    if (indicator != null) {
-      indicator.isIndeterminate = false
-    }
 
     val activity = when (val activityNamePrefix = activityNamePrefix()) {
       null -> null
@@ -411,7 +412,7 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
 
     for (componentAdapter in componentAdapters.getImmutableSet()) {
       if (componentAdapter is MyComponentAdapter) {
-        componentAdapter.getInstance<Any>(this, keyClass = null, indicator = indicator)
+        componentAdapter.getInstance<Any>(this, keyClass = null)
       }
     }
 
@@ -565,11 +566,10 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
         LOG.error("getComponent must be called on appropriate container (current: $this, expected: ${adapter.componentManager})")
       }
 
-      val indicator = ProgressManager.getGlobalProgressIndicator()
       if (containerState.get() == ContainerState.DISPOSE_COMPLETED) {
-        adapter.throwAlreadyDisposedError(this, indicator)
+        adapter.throwAlreadyDisposedError(this, ProgressManager.getGlobalProgressIndicator())
       }
-      return adapter.getInstance(adapter.componentManager, interfaceClass, indicator = indicator)
+      return adapter.getInstance(adapter.componentManager, interfaceClass)
     }
     else {
       @Suppress("UNCHECKED_CAST")
@@ -577,27 +577,33 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
     }
   }
 
-  override fun <T : Any> getService(serviceClass: Class<T>): T? {
+  final override fun <T : Any> getService(serviceClass: Class<T>): T? {
     // `computeIfAbsent` cannot be used because of recursive update
-    var result = serviceInstanceHotCache.get(serviceClass)
-    if (result == null) {
-      result = doGetService(serviceClass, true) ?: return null
-      serviceInstanceHotCache.putIfAbsent(serviceClass, result)
-    }
     @Suppress("UNCHECKED_CAST")
-    return result as T?
-  }
-
-  @Suppress("UNCHECKED_CAST")
-  override fun <T : Any> getServiceIfCreated(serviceClass: Class<T>): T? {
     var result = serviceInstanceHotCache.get(serviceClass) as T?
     if (result == null) {
-      result = doGetService(serviceClass, createIfNeeded = false)
-      if (result != null) {
-        serviceInstanceHotCache.putIfAbsent(serviceClass, result)
-      }
+      result = doGetService(serviceClass, true) ?: return postGetService(serviceClass, createIfNeeded = true)
+      serviceInstanceHotCache.putIfAbsent(serviceClass, result)
     }
     return result
+  }
+
+  protected open fun <T : Any> postGetService(serviceClass: Class<T>, createIfNeeded: Boolean): T? = null
+
+  final override fun <T : Any> getServiceIfCreated(serviceClass: Class<T>): T? {
+    @Suppress("UNCHECKED_CAST")
+    var result = serviceInstanceHotCache.get(serviceClass) as T?
+    if (result != null) {
+      return result
+    }
+    result = doGetService(serviceClass, createIfNeeded = false)
+    if (result == null) {
+      return postGetService(serviceClass, createIfNeeded = false)
+    }
+    else {
+      serviceInstanceHotCache.putIfAbsent(serviceClass, result)
+      return result
+    }
   }
 
   protected open fun <T : Any> doGetService(serviceClass: Class<T>, createIfNeeded: Boolean): T? {
@@ -982,51 +988,29 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
 
   open fun activityNamePrefix(): String? = null
 
-  class PreloadServicesResult(@JvmField val sync: CompletableFuture<*>, @JvmField val async: CompletableFuture<*>)
-
-  open fun preloadServices(modules: Sequence<IdeaPluginDescriptorImpl>,
-                           activityPrefix: String,
-                           onlyIfAwait: Boolean = false): PreloadServicesResult {
-    val asyncPreloadedServices = mutableListOf<ForkJoinTask<*>>()
-    val syncPreloadedServices = mutableListOf<ForkJoinTask<*>>()
+  fun preloadServices(modules: Sequence<IdeaPluginDescriptorImpl>,
+                      activityPrefix: String,
+                      syncScope: CoroutineScope,
+                      onlyIfAwait: Boolean = false) {
+    val asyncScope = coroutineScope!!
     for (plugin in modules) {
       serviceLoop@ for (service in getContainerDescriptor(plugin).services) {
-        if (!isServiceSuitable(service) || service.os != null && !isSuitableForOs(service.os)) {
+        if (!isServiceSuitable(service) || (service.os != null && !isSuitableForOs(service.os))) {
           continue@serviceLoop
         }
-        val list: MutableList<ForkJoinTask<*>> = when (service.preload) {
-          PreloadMode.TRUE -> {
-            if (onlyIfAwait) {
-              continue@serviceLoop
-            }
-            else {
-              asyncPreloadedServices
-            }
-          }
-          PreloadMode.NOT_HEADLESS -> {
-            if (onlyIfAwait || getApplication()!!.isHeadlessEnvironment) {
-              continue@serviceLoop
-            }
-            else {
-              asyncPreloadedServices
-            }
-          }
-          PreloadMode.NOT_LIGHT_EDIT -> {
-            if (onlyIfAwait || Main.isLightEdit()) {
-              continue@serviceLoop
-            }
-            else {
-              asyncPreloadedServices
-            }
-          }
-          PreloadMode.AWAIT -> syncPreloadedServices
-          PreloadMode.FALSE -> continue@serviceLoop
+
+        val scope: CoroutineScope? = when (service.preload) {
+          PreloadMode.TRUE -> if (onlyIfAwait) null else asyncScope
+          PreloadMode.NOT_HEADLESS -> if (onlyIfAwait || getApplication()!!.isHeadlessEnvironment) null else asyncScope
+          PreloadMode.NOT_LIGHT_EDIT -> if (onlyIfAwait || Main.isLightEdit()) null else asyncScope
+          PreloadMode.AWAIT -> syncScope
+          PreloadMode.FALSE -> null
           else -> throw IllegalStateException("Unknown preload mode ${service.preload}")
         }
 
-        list.add(ForkJoinTask.adapt task@{
+        scope?.launch {
           if (isServicePreloadingCancelled || isDisposed) {
-            return@task
+            return@launch
           }
 
           val activity = StartUpMeasurer.startActivity("${service.`interface`} preloading")
@@ -1039,24 +1023,18 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
             isServicePreloadingCancelled = true
             throw e
           }
-
           activity.end()
-        })
+        }
       }
     }
 
-    return PreloadServicesResult(
-      sync = CompletableFuture.runAsync({
-                                          runActivity("${activityPrefix}service sync preloading") {
-                                            ForkJoinTask.invokeAll(syncPreloadedServices)
-                                          }
-                                        }, ForkJoinPool.commonPool()),
-      async = CompletableFuture.runAsync({
-                                           runActivity("${activityPrefix}service async preloading") {
-                                             ForkJoinTask.invokeAll(asyncPreloadedServices)
-                                           }
-                                         }, ForkJoinPool.commonPool())
-    )
+    postPreloadServices(modules, activityPrefix, syncScope, onlyIfAwait)
+  }
+
+  protected open fun postPreloadServices(modules: Sequence<IdeaPluginDescriptorImpl>,
+                                         activityPrefix: String,
+                                         syncScope: CoroutineScope,
+                                         onlyIfAwait: Boolean) {
   }
 
   protected open fun preloadService(service: ServiceDescriptor) {
@@ -1100,7 +1078,7 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
   fun startDispose() {
     stopServicePreloading()
 
-    Disposer.disposeChildren(this, { _ -> true})
+    Disposer.disposeChildren(this) { true }
 
     val messageBus = messageBus
     // There is a chance that someone will try to connect to the message bus and will get NPE because of disposed connection disposable,
@@ -1118,6 +1096,8 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
       throw IllegalStateException("Expected current state is DISPOSE_IN_PROGRESS, but actual state is ${containerState.get()} ($this)")
     }
 
+    coroutineScope?.cancel("ComponentManagerImpl.dispose is called")
+
     // dispose components and services
     Disposer.dispose(serviceParentDisposable)
 
@@ -1126,11 +1106,10 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
     componentAdapters.clear()
     serviceInstanceHotCache.clear()
 
-    val messageBus = messageBus
-    if (messageBus != null) {
+    messageBus?.let {
       // Must be after disposing of serviceParentDisposable, because message bus disposes child buses, so, we must dispose all services first.
       // For example, service ModuleManagerImpl disposes modules; each module, in turn, disposes module's message bus (child bus of application).
-      Disposer.dispose(messageBus)
+      Disposer.dispose(it)
       this.messageBus = null
     }
 
@@ -1314,9 +1293,8 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
     return null
   }
 
-  final override fun <T : Any> processInitializedComponents(aClass: Class<T>, processor: (T, PluginDescriptor) -> Unit) {
-    // We must use instances only from our adapter (could be service or something else).
-    // unsafeGetAdapters should be not used here as ProjectManagerImpl uses it to call projectOpened
+  fun <T : Any> processInitializedComponents(aClass: Class<T>, processor: (T, PluginDescriptor) -> Unit) {
+    // we must use instances only from our adapter (could be service or something else).
     for (adapter in componentAdapters.getImmutableSet()) {
       if (adapter is MyComponentAdapter) {
         val component = adapter.getInitializedInstance()
@@ -1357,7 +1335,6 @@ abstract class ComponentManagerImpl @JvmOverloads constructor(
         }
       }
     }
-    @Suppress("DEPRECATION")
     return ArrayUtil.toObjectArray(result, baseClass)
   }
 

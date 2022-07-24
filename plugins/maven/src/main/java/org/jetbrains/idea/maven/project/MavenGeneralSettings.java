@@ -253,7 +253,9 @@ public class MavenGeneralSettings implements Cloneable {
 
     if (!Objects.equals(this.overriddenLocalRepository, overriddenLocalRepository)) {
       this.overriddenLocalRepository = overriddenLocalRepository;
-      MavenServerManager.getInstance().shutdown(true);
+      if (myProject != null) {
+        MavenUtil.restartMavenConnectors(myProject, false);
+      }
       changed();
     }
   }
@@ -452,6 +454,10 @@ public class MavenGeneralSettings implements Cloneable {
 
   public void removeListener(Listener l) {
     myListeners.remove(l);
+  }
+
+  public void copyListeners(MavenGeneralSettings another) {
+    myListeners.addAll(another.myListeners);
   }
 
   @Transient

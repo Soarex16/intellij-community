@@ -7,49 +7,51 @@
   </extensionPoints>
   <extensions defaultExtensionNs="com.intellij">
     <!--Test frameworks-->
-    <psi.referenceContributor implementation="com.intellij.codeInspection.test.junit.references.JUnitReferenceContributor"/>
+    <psi.referenceContributor language="UAST" implementation="com.intellij.codeInspection.test.junit.references.JUnitReferenceContributor"/>
+    <localInspection language="UAST" enabledByDefault="true" level="WARNING" shortName="AssertBetweenInconvertibleTypes"
+                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
+                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
+                     key="assertequals.between.inconvertible.types.display.name"
+                     implementationClass="com.intellij.codeInspection.AssertBetweenInconvertibleTypesInspection"/>
     <localInspection language="UAST" enabledByDefault="false" level="WARNING" shortName="TestOnlyProblems"
                      groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
                      groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
                      key="jvm.inspections.testonly.display.name"
                      implementationClass="com.intellij.codeInspection.test.TestOnlyInspection"/>
+    <localInspection language="UAST" enabledByDefault="false" level="WARNING" shortName="TestMethodWithoutAssertion"
+                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
+                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
+                     key="jvm.inspections.test.method.without.assertion.display.name"
+                     implementationClass="com.intellij.codeInspection.test.TestMethodWithoutAssertionInspection"/>
+    <localInspection language="UAST" enabledByDefault="false" level="WARNING" shortName="TestCaseWithConstructor"
+                     suppressId="JUnitTestCaseWithNonTrivialConstructors"
+                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
+                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
+                     key="jvm.inspections.test.case.with.constructor.display.name"
+                     implementationClass="com.intellij.codeInspection.test.TestCaseWithConstructorInspection"/>
     <localInspection language="UAST" enabledByDefault="true" level="WARNING" shortName="TestFailedLine"
                      groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
                      groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
                      key="jvm.inspection.test.failed.line.display.name"
                      implementationClass="com.intellij.codeInspection.test.TestFailedLineInspection"/>
-    <localInspection language="UAST" enabledByDefault="false" level="ERROR" shortName="JUnitRule"
+    <localInspection language="UAST" enabledByDefault="false" level="WARNING" shortName="MigrateAssertToMatcherAssert"
                      groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
                      groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
-                     key="jvm.inspections.junit.rule.display.name"
-                     implementationClass="com.intellij.codeInspection.test.junit.JUnitRuleInspection"/>
-    <localInspection language="JVM" enabledByDefault="true" level="WARNING" shortName="JUnit5MalformedNestedClass"
+                     key="jvm.inspections.migrate.assertion.name"
+                     implementationClass="com.intellij.codeInspection.test.junit.HamcrestAssertionsConverterInspection"/>
+    <localInspection language="UAST" enabledByDefault="false" level="WARNING" shortName="TestInProductSource"
                      groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
                      groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
-                     key="jvm.inspections.junit5.nested.test.display.name"
-                     implementationClass="com.intellij.codeInspection.test.junit.JUnit5MalformedNestedClassInspection"/>
-    <localInspection language="JVM" enabledByDefault="true" level="WARNING" shortName="JUnit5MalformedExtensions"
+                     key="jvm.inspections.junit.test.case.in.product.source.display.name"
+                     implementationClass="com.intellij.codeInspection.test.TestInProductSourceInspection"/>
+    <inspectionElementsMerger implementation="com.intellij.codeInspection.test.TestInProductSourceInspectionMerger"/>
+
+    <!--JUnit framework-->
+    <localInspection language="UAST" enabledByDefault="false" level="WARNING" shortName="SuperTearDownInFinally"
                      groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
                      groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
-                     key="jvm.inspections.junit5.extensions.display.name"
-                     implementationClass="com.intellij.codeInspection.test.junit.JUnit5MalformedExtensionsInspection"/>
-    <localInspection language="UAST" enabledByDefault="true" level="WARNING" shortName="Junit5MalformedParameterized"
-                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
-                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
-                     key="jvm.inspections.junit5.malformed.parameterized.display.name"
-                     implementationClass="com.intellij.codeInspection.test.junit.JUnit5MalformedParameterizedInspection"/>
-    <localInspection language="UAST" enabledByDefault="true" level="WARNING" shortName="BeforeOrAfterIsPublicVoidNoArg"
-                     suppressId="BeforeOrAfterWithIncorrectSignature"
-                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
-                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
-                     key="jvm.inspections.before.after.display.name"
-                     implementationClass="com.intellij.codeInspection.test.junit.JUnitBeforeAfterInspection"/>
-    <localInspection language="UAST" enabledByDefault="true" level="WARNING" shortName="BeforeClassOrAfterClassIsPublicStaticVoidNoArg"
-                     suppressId="BeforeOrAfterWithIncorrectSignature"
-                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
-                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
-                     key="jvm.inspections.before.after.class.display.name"
-                     implementationClass="com.intellij.codeInspection.test.junit.JUnitBeforeAfterClassInspection"/>
+                     key="jvm.inspections.junit3.super.teardown.display.name"
+                     implementationClass="com.intellij.codeInspection.test.junit.JUnit3SuperTearDownInspection"/>
     <localInspection language="UAST" enabledByDefault="true" level="WARNING" shortName="JUnit5AssertionsConverter"
                      groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
                      groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
@@ -60,17 +62,33 @@
                      groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
                      key="jvm.inspections.junit5.converter.display.name"
                      implementationClass="com.intellij.codeInspection.test.junit.JUnit5ConverterInspection"/>
-    <localInspection language="UAST" enabledByDefault="true" level="WARNING" shortName="JUnit5MalformedRepeated"
-                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
-                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
-                     key="jvm.inspections.junit5.malformed.repeated.test.display.name"
-                     implementationClass="com.intellij.codeInspection.test.junit.JUnit5MalformedRepeatedTestInspection"/>
     <localInspection language="UAST" enabledByDefault="true" level="WARNING" shortName="UnconstructableTestCase"
                      suppressId="UnconstructableJUnitTestCase"
                      groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
                      groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
                      key="jvm.inspections.unconstructable.test.case.display.name"
                      implementationClass="com.intellij.codeInspection.test.junit.JUnitUnconstructableTestCaseInspection"/>
+    <localInspection language="UAST" enabledByDefault="false" level="WARNING" shortName="IgnoredJUnitTest"
+                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
+                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
+                     key="jvm.inspections.junit.ignored.test.display.name"
+                     implementationClass="com.intellij.codeInspection.test.junit.JUnitIgnoredTestInspection"/>
+    <localInspection language="UAST" enabledByDefault="false" cleanupTool="true" level="WARNING" shortName="AssertEqualsCalledOnArray"
+                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
+                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
+                     key="jvm.inspections.junit.assertequals.on.array.display.name"
+                     implementationClass="com.intellij.codeInspection.test.junit.JUnitAssertEqualsOnArrayInspection"/>
+    <localInspection language="UAST" enabledByDefault="false" cleanupTool="true" level="WARNING" shortName="AssertEqualsMayBeAssertSame"
+                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
+                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
+                     key="jvm.inspections.junit.assertequals.may.be.assertsame.display.name"
+                     implementationClass="com.intellij.codeInspection.test.junit.JUnitAssertEqualsMayBeAssertSameInspection"/>
+    <localInspection language="UAST" enabledByDefault="true" level="WARNING" shortName="JUnitMalformedDeclaration"
+                     groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
+                     groupPathKey="jvm.inspections.group.name" groupKey="jvm.inspections.test.frameworks.group.name"
+                     key="jvm.inspections.junit.malformed.declaration.name"
+                     implementationClass="com.intellij.codeInspection.test.junit.JUnitMalformedDeclarationInspection"/>
+    <inspectionElementsMerger implementation="com.intellij.codeInspection.test.junit.JUnitMalformedDeclarationInspectionMerger"/>
 
     <localInspection language="UAST" enabledByDefault="true" level="WARNING" shortName="UnstableApiUsage"
                      groupBundle="messages.JvmAnalysisBundle" bundle="messages.JvmAnalysisBundle"
@@ -145,3 +163,4 @@
     </group>
   </actions>
 </idea-plugin>
+

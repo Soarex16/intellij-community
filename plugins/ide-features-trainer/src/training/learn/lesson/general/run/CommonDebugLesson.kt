@@ -5,6 +5,7 @@ import com.intellij.execution.RunManager
 import com.intellij.execution.RunManagerListener
 import com.intellij.execution.RunnerAndConfigurationSettings
 import com.intellij.execution.actions.ConfigurationContext
+import com.intellij.execution.ui.UIExperiment
 import com.intellij.icons.AllIcons
 import com.intellij.ide.impl.DataManagerImpl
 import com.intellij.idea.ActionsBundle
@@ -26,7 +27,6 @@ import com.intellij.xdebugger.impl.XDebugSessionImpl
 import com.intellij.xdebugger.impl.XDebuggerManagerImpl
 import com.intellij.xdebugger.impl.breakpoints.XBreakpointUtil
 import com.intellij.xdebugger.impl.evaluate.XDebuggerEvaluationDialog
-import com.intellij.xdebugger.impl.frame.XDebuggerFramesList
 import com.intellij.xdebugger.impl.ui.XDebuggerEmbeddedComboBox
 import com.intellij.xdebugger.impl.ui.tree.XDebuggerTree
 import com.intellij.xdebugger.impl.ui.tree.nodes.WatchNodeImpl
@@ -79,8 +79,6 @@ abstract class CommonDebugLesson(id: String) : KLesson(id, LessonsBundle.message
 
     startDebugTask()
 
-    returnToEditorTask()
-
     waitBeforeContinue(500)
 
     evaluateExpressionTasks()
@@ -121,6 +119,7 @@ abstract class CommonDebugLesson(id: String) : KLesson(id, LessonsBundle.message
   private fun LessonContext.prepareTask() {
     var needToRun = false
     prepareRuntimeTask {
+      (this@CommonDebugLesson).debugSession = null
       val stopAction = getActionById("Stop")
       invokeActionForFocusContext(stopAction)
       runWriteAction {
@@ -178,29 +177,6 @@ abstract class CommonDebugLesson(id: String) : KLesson(id, LessonsBundle.message
       }
       proposeModificationRestore(sample.text, checkDebugSession = false)
       test { actions(it) }
-    }
-
-    task {
-      stateCheck {
-        focusOwner is XDebuggerFramesList
-      }
-    }
-  }
-
-  private fun LessonContext.returnToEditorTask() {
-    task("EditorEscape") {
-      before {
-        LearningUiHighlightingManager.clearHighlights()
-      }
-      text(LessonsBundle.message("debug.workflow.return.to.editor", action(it)))
-      stateCheck {
-        focusOwner is EditorComponentImpl
-      }
-      proposeModificationRestore(sample.text)
-      test {
-        Thread.sleep(500)
-        invokeActionViaShortcut("ESCAPE")
-      }
     }
   }
 
@@ -368,18 +344,29 @@ abstract class CommonDebugLesson(id: String) : KLesson(id, LessonsBundle.message
     caret(position)
 
     highlightLineNumberByOffset(position.startOffset)
-    highlightButtonById("RunToCursor", clearHighlights = false)
+    task {
+      if (!UIExperiment.isNewDebuggerUIEnabled()) {
+        val runToCursorAction = getActionById("RunToCursor")
+        triggerAndFullHighlight {
+          usePulsation = true
+          clearPreviousHighlights = false
+        }.component { ui: ActionButton ->
+          ui.action == runToCursorAction && LessonUtil.checkToolbarIsShowing(ui)
+        }
+      }
+    }
 
     actionTask("RunToCursor") {
       proposeRestore {
         checkPositionOfEditor(LessonSample(afterFixText, position))
       }
-      LessonsBundle.message("debug.workflow.run.to.cursor",
-                            code(debuggingMethodName),
-                            code("return"),
-                            action(it),
-                            icon(AllIcons.Actions.RunToCursor),
-                            LessonUtil.actionName(it))
+      val intro = LessonsBundle.message("debug.workflow.run.to.cursor.intro", code(debuggingMethodName), code("return"))
+      val actionPart = if (!UIExperiment.isNewDebuggerUIEnabled()) {
+        LessonsBundle.message("debug.workflow.run.to.cursor.press.or.click", action(it), icon(AllIcons.Actions.RunToCursor))
+      }
+      else LessonsBundle.message("debug.workflow.run.to.cursor.press", action(it))
+      val alternative = LessonsBundle.message("debug.workflow.run.to.cursor.alternative", LessonUtil.actionName(it))
+      "$intro $actionPart $alternative"
     }
   }
 

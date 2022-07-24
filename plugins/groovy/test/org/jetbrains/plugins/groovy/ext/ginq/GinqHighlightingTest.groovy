@@ -19,11 +19,11 @@ class GinqHighlightingTest extends GrHighlightingTestBase {
   }
 
   private void testGinqHighlighting(String ginqContents) {
-    testHighlighting("GQ {\n $ginqContents \n}")
+    doTestHighlighting("GQ {\n $ginqContents \n}")
   }
 
   private void testGinqMethodHighlighting(String ginqContents) {
-    testHighlighting("""
+    doTestHighlighting("""
 import groovy.ginq.transform.GQ
 
 @GQ
@@ -33,7 +33,7 @@ def foo() {
   }
 
   void testKeywordHighlighting() {
-    testHighlighting """
+    doTestHighlighting """
 <info descr="null">GQ</info> {
     <info descr="null">from</info> n in [1, 2, 3]
     <info descr="null">select</info> n
@@ -85,7 +85,7 @@ def foo() {
   }
 
   void testTwoGinqExpressions() {
-    testHighlighting """
+    doTestHighlighting """
 <info descr="null">GQ</info> {
   <info descr="null">from</info> n in [0]
   <info descr="null">where</info> n in (<info descr="null">from</info> m in [1] <info descr="null">select</info> m) && n in (<info descr="null">from</info> m in [1] <info descr="null">select</info> m)
@@ -816,8 +816,16 @@ where true
 
   void testSelectShouldBeLast() {
     testGinqHighlighting """
-from b in [1]
-<error>join</error> a in [1]
+<error>from</error> b in [1]
+join a in [1] on a == b
+"""
+  }
+
+  void testOnWithKw() {
+    testGinqHighlighting """
+from x in [1]
+join x1 in [2] on true
+select x
 """
   }
 

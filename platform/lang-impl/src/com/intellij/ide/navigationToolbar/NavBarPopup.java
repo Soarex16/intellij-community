@@ -1,12 +1,13 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.ide.navigationToolbar;
 
-import com.intellij.ide.DataManager;
 import com.intellij.ide.actions.OpenInRightSplitAction;
+import com.intellij.ide.impl.DelegatingDataProvider;
 import com.intellij.ide.navigationToolbar.ui.NavBarUIManager;
+import com.intellij.ide.ui.NavBarLocation;
+import com.intellij.ide.ui.UISettings;
 import com.intellij.internal.statistic.service.fus.collectors.UIEventLogger;
 import com.intellij.openapi.Disposable;
-import com.intellij.openapi.actionSystem.DataProvider;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Queryable;
 import com.intellij.openapi.util.Disposer;
@@ -16,13 +17,14 @@ import com.intellij.ui.awt.RelativePoint;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.popup.HintUpdateSupply;
 import com.intellij.ui.speedSearch.ListWithFilter;
-import com.intellij.util.containers.JBIterable;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.accessibility.AccessibleContextUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import java.awt.*;
 import java.awt.event.*;
 import java.util.ArrayList;
@@ -98,7 +100,9 @@ public class NavBarPopup extends LightweightHint implements Disposable{
   private void show(final NavBarItem item, boolean checkRepaint) {
     UIEventLogger.NavBarShowPopup.log(myPanel.getProject());
 
-    int relativeY = ExperimentalUI.isNewUI() ? -getComponent().getPreferredSize().height : item.getHeight();
+    int relativeY = ExperimentalUI.isNewUI() && UISettings.getInstance().getNavBarLocation() == NavBarLocation.BOTTOM
+                    ? -getComponent().getPreferredSize().height
+                    : item.getHeight();
 
     final RelativePoint point = new RelativePoint(item, new Point(0, relativeY));
     final Point p = point.getPoint(myPanel);
@@ -151,7 +155,7 @@ public class NavBarPopup extends LightweightHint implements Disposable{
   }
 
   private static JComponent createPopupContent(NavBarPanel panel, int sourceItemIndex, Object[] siblings) {
-    class MyList<E> extends JBList<E> implements DataProvider, Queryable {
+    class MyList<E> extends JBList<E> implements DelegatingDataProvider, Queryable {
       @Override
       public void putInfo(@NotNull Map<? super String, ? super String> info) {
         panel.putInfo(info);
@@ -159,12 +163,11 @@ public class NavBarPopup extends LightweightHint implements Disposable{
 
       @Nullable
       @Override
-      public Object getData(@NotNull String dataId) {
-        return panel.getDataImpl(dataId, this, () -> JBIterable.from(getSelectedValuesList()));
+      public Component getDelegatedDataProviderComponent() {
+        return panel;
       }
     }
     JBList<Object> list = new MyList<>();
-    DataManager.registerDataProvider(list, dataId -> panel.getDataImpl(dataId, list, () -> JBIterable.from(list.getSelectedValuesList())));
     list.setModel(new CollectionListModel<>(siblings));
     HintUpdateSupply.installSimpleHintUpdateSupply(list);
     List<NavBarItem> items = new ArrayList<>();
@@ -181,6 +184,13 @@ public class NavBarPopup extends LightweightHint implements Disposable{
       return item;
     });
     list.setBorder(JBUI.Borders.empty(5));
+    list.addListSelectionListener(new ListSelectionListener() {
+      @Override
+      public void valueChanged(ListSelectionEvent e) {
+        panel.updatePopupSelection(list.getSelectedIndices());
+      }
+    });
+
     ActionMap map = list.getActionMap();
     map.put(ListActions.Left.ID, createMoveAction(panel, -1));
     map.put(ListActions.Right.ID, createMoveAction(panel, 1));

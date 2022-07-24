@@ -35,7 +35,7 @@ import java.util.List;
  *
  *      <tr valign="top"><td>9<td><pre>is permanent entry</pre><td>{@link RefElementImpl}
  *
- *      <tr valign="top"><td>10<td>-<td>-
+ *      <tr valign="top"><td>10<td><pre>references built</pre><td>{@link RefElementImpl}
  *
  *      <tr valign="top"><td>11<td><pre>is synthetic jsp element</pre><td>{@link com.intellij.codeInspection.reference.RefJavaElementImpl}
  *
@@ -87,7 +87,7 @@ import java.util.List;
  *      <tr valign="top"><td><td><pre>constructor</pre><td>{@link com.jetbrains.php.lang.inspections.reference.elements.PhpRefMethodImpl}
  *      <tr valign="top"><td><td><pre>implicitly read</pre><td>{@link com.intellij.codeInspection.reference.RefFieldImpl}
  *
- *      <tr valign="top"><td>21<td><pre>is body empty</pre><td>{@link com.intellij.codeInspection.reference.RefMethodImpl}
+ *      <tr valign="top"><td>21<td><pre>is body empty</pre><td>{@link RefMethodImpl} & {@link RefFunctionalExpressionImpl}
  *      <tr valign="top"><td><td><pre>is final</pre><td>{@link com.jetbrains.php.lang.inspections.reference.elements.PhpRefClassImpl}
  *      <tr valign="top"><td><td><pre>with static constructor</pre><td>{@link com.jetbrains.php.lang.inspections.reference.elements.PhpRefMethodImpl}
  *      <tr valign="top"><td><td><pre>implicitly written</pre><td>{@link com.intellij.codeInspection.reference.RefFieldImpl}
@@ -111,6 +111,7 @@ import java.util.List;
  *      <tr valign="top"><td><td><pre>access public</pre><td>{@link com.jetbrains.php.lang.inspections.reference.elements.PhpRefClassMemberImpl}
  *
  *      <tr valign="top"><td>26<td><pre>is implicitly used constructor</pre><td>{@link com.jetbrains.php.lang.inspections.reference.elements.PhpRefClassImpl}
+ *      <tr valign="top"><td><td><pre>is enum class</pre><td>{@link RefClassImpl}
  *
  *      <tr valign="top"><td>27<td><pre>is with duplicates</pre><td>{@link com.jetbrains.php.lang.inspections.reference.elements.PhpRefClassImpl}
  *      <tr valign="top"><td><td><pre>is abstract</pre><td>{@link com.jetbrains.php.lang.inspections.reference.elements.PhpRefClassMemberImpl}
@@ -137,8 +138,8 @@ import java.util.List;
  * </ul>
  */
 public abstract class RefEntityImpl extends UserDataHolderBase implements RefEntity, WritableRefEntity {
-  private volatile WritableRefEntity myOwner;
-  private List<RefEntity> myChildren;  // guarded by this
+  private WritableRefEntity myOwner; // guarded by this
+  private List<RefEntity> myChildren; // guarded by this
   private final String myName;
   protected long myFlags; // guarded by this
   protected final RefManagerImpl myManager;
@@ -167,12 +168,12 @@ public abstract class RefEntityImpl extends UserDataHolderBase implements RefEnt
   }
 
   @Override
-  public WritableRefEntity getOwner() {
+  public synchronized WritableRefEntity getOwner() {
     return myOwner;
   }
 
   @Override
-  public void setOwner(@Nullable final WritableRefEntity owner) {
+  public synchronized void setOwner(@Nullable final WritableRefEntity owner) {
     myOwner = owner;
   }
 

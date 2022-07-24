@@ -47,6 +47,10 @@
   </extensionPoints>
 
   <extensions defaultExtensionNs="com.intellij">
+    <startupActivity
+      implementation="com.intellij.workspaceModel.ide.impl.legacyBridge.module.ModuleManagerComponentBridge$ModuleManagerInitProjectActivity"
+      order="first"/>
+
     <applicationService serviceInterface="com.intellij.openapi.command.undo.UndoManager"
                         serviceImplementation="com.intellij.openapi.command.impl.UndoManagerImpl" preload="await"/>
 
@@ -87,7 +91,11 @@
 
     <projectService serviceInterface="com.intellij.openapi.wm.ToolWindowManager"
                     serviceImplementation="com.intellij.openapi.wm.impl.ToolWindowManagerImpl"
+                    testServiceImplementation="com.intellij.toolWindow.ToolWindowHeadlessManagerImpl"
                     headlessImplementation="com.intellij.toolWindow.ToolWindowHeadlessManagerImpl" preload="notHeadless"/>
+
+    <projectService serviceInterface="com.intellij.openapi.wm.impl.ToolWindowManagerState"
+                    serviceImplementation="com.intellij.openapi.wm.impl.ToolWindowManagerStateImpl"/>
 
     <ideEventQueueDispatcher implementation="com.intellij.openapi.keymap.impl.ModifierKeyDoubleClickHandler$MyEventDispatcher"/>
 
@@ -121,6 +129,8 @@
     <applicationService serviceImplementation="com.intellij.ide.IdeTooltipManager" preload="notHeadless"/>
 
     <applicationService serviceInterface="com.intellij.refactoring.RefactoringUiService" serviceImplementation="com.intellij.refactoring.RefactoringUiServiceImpl"/>
+    
+    <postStartupActivity implementation="com.intellij.ide.RecentProjectsManagerBase$MyProjectPostStartupActivity"/>
   </extensions>
 
   <!--suppress PluginXmlDynamicPlugin -->
@@ -213,6 +223,8 @@
     <listener class="com.intellij.internal.statistic.collectors.fus.fileTypes.FileTypeUsageService$MyFileEditorManagerListener"
               topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
     <listener class="com.intellij.internal.statistic.local.FileTypeSummaryListener"
+              topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
+    <listener class="com.intellij.internal.statistic.local.LanguageUsageUpdaterListener"
               topic="com.intellij.openapi.fileEditor.FileEditorManagerListener"/>
 
     <!-- another one for project level -->

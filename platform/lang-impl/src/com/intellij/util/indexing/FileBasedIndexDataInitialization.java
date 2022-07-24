@@ -77,6 +77,9 @@ final class FileBasedIndexDataInitialization extends IndexDataInitializer<IndexC
       myRegisteredIndexes.registerIndexExtension(extension);
 
       tasks.add(() -> {
+        if (IOUtil.isSharedCachesEnabled()) {
+          IOUtil.OVERRIDE_BYTE_BUFFERS_USE_NATIVE_BYTE_ORDER_PROP.set(false);
+        }
         try {
           FileBasedIndexImpl.registerIndexer(extension,
                                              myState,
@@ -88,6 +91,9 @@ final class FileBasedIndexDataInitialization extends IndexDataInitializer<IndexC
         }
         catch (Throwable t) {
           handleComponentError(t, extension.getClass().getName(), null);
+        }
+        finally {
+          IOUtil.OVERRIDE_BYTE_BUFFERS_USE_NATIVE_BYTE_ORDER_PROP.remove();
         }
       });
     }
@@ -161,6 +167,7 @@ final class FileBasedIndexDataInitialization extends IndexDataInitializer<IndexC
     finally {
       //CorruptionMarker.markIndexesAsDirty();
       FileBasedIndexImpl.setupWritingIndexValuesSeparatedFromCounting();
+      FileBasedIndexImpl.setupWritingIndexValuesSeparatedFromCountingForContentIndependentIndexes();
       myFileBasedIndex.addStaleIds(myStaleIds);
       myFileBasedIndex.setUpFlusher();
       myFileBasedIndex.setUpHealthCheck();
@@ -220,7 +227,8 @@ final class FileBasedIndexDataInitialization extends IndexDataInitializer<IndexC
       }
     }
 
-    boolean dropFilenameIndex = Registry.is("indexing.filename.over.vfs") && indicesToDrop.contains(FilenameIndex.NAME.getName());
+    boolean dropFilenameIndex = FileBasedIndexExtension.USE_VFS_FOR_FILENAME_INDEX &&
+                                indicesToDrop.contains(FilenameIndex.NAME.getName());
     if (!exceptionThrown) {
       for (ID<?, ?> key : ids) {
         if (dropFilenameIndex && key == FilenameIndex.NAME) continue;

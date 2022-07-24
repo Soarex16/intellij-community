@@ -3,12 +3,15 @@ package com.intellij.codeInspection.ex;
 
 import com.intellij.codeHighlighting.HighlightDisplayLevel;
 import com.intellij.codeInsight.daemon.HighlightDisplayKey;
+import com.intellij.codeInsight.daemon.impl.SeverityRegistrar;
 import com.intellij.codeInspection.InspectionEP;
 import com.intellij.codeInspection.InspectionProfileEntry;
+import com.intellij.concurrency.ConcurrentCollectionFactory;
 import com.intellij.configurationStore.SchemeDataHolder;
 import com.intellij.lang.annotation.HighlightSeverity;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.diagnostic.Logger;
+import com.intellij.openapi.editor.colors.TextAttributesKey;
 import com.intellij.openapi.options.SchemeState;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.Project;
@@ -46,7 +49,8 @@ public class InspectionProfileImpl extends NewInspectionProfile {
   public static boolean INIT_INSPECTIONS;
   protected final @NotNull InspectionToolsSupplier myToolSupplier;
   protected final Map<String, Element> myUninitializedSettings = new TreeMap<>(); // accessed in EDT
-  protected Map<String, ToolsImpl> myTools = new HashMap<>();
+   //addTool is possible from any thread at any moment
+  protected Map<String, ToolsImpl> myTools = ConcurrentCollectionFactory.createConcurrentMap();
   protected volatile Set<String> myChangedToolNames;
   @Attribute("is_locked")
   protected boolean myLockedProfile;
@@ -687,6 +691,22 @@ public class InspectionProfileImpl extends NewInspectionProfile {
   }
 
   @Override
+  public @Nullable TextAttributesKey getEditorAttributes(@NotNull String shortName, @Nullable PsiElement element) {
+    return getTools(shortName, element != null ? element.getProject() : null).getAttributesKey(element);
+  }
+
+  public void setEditorAttributesKey(@NotNull String shortName, @Nullable String keyName, String scopeName, @Nullable Project project) {
+    final ToolsImpl tools = getTools(shortName, project);
+    final var level = tools.getLevel(scopeName, project);
+    if (keyName == null) {
+      keyName = SeverityRegistrar.getSeverityRegistrar(project).getHighlightInfoTypeBySeverity(level.getSeverity()).getAttributesKey().getExternalName();
+    }
+    String attributes = tools.getDefaultState().getTool().getDefaultEditorAttributes();
+    tools.setEditorAttributesKey(Objects.equals(attributes, keyName) ? null : keyName, scopeName);
+    schemeState = SchemeState.POSSIBLY_CHANGED;
+  }
+  
+  @Override
   public boolean isExecutable(@Nullable Project project) {
     initInspectionTools();
     for (Tools tools : myTools.values()) {
@@ -848,6 +868,12 @@ public class InspectionProfileImpl extends NewInspectionProfile {
     return tools != null ? tools.getLevel(scope, project) : HighlightDisplayLevel.WARNING;
   }
 
+  @Transient
+  public @Nullable TextAttributesKey getEditorAttributesKey(@NotNull HighlightDisplayKey key, NamedScope scope, Project project) {
+    ToolsImpl tools = getToolsOrNull(key.toString(), project);
+    return tools != null ? tools.getEditorAttributesKey(scope, project) : null;
+  }
+
   public ScopeToolState addScope(@NotNull InspectionToolWrapper<?,?> toolWrapper,
                                  NamedScope scope,
                                  @NotNull HighlightDisplayLevel level,
@@ -864,6 +890,12 @@ public class InspectionProfileImpl extends NewInspectionProfile {
   public void setErrorLevel(@NotNull List<? extends HighlightDisplayKey> keys, @NotNull HighlightDisplayLevel level, String scopeName, Project project) {
     for (HighlightDisplayKey key : keys) {
       setErrorLevel(key, level, scopeName, project);
+    }
+  }
+
+  public void setEditorAttributesKey(@NotNull List<? extends HighlightDisplayKey> keys, @Nullable TextAttributesKey attributesKey, String scopeName, Project project) {
+    for (HighlightDisplayKey key : keys) {
+      setEditorAttributesKey(key.toString(), attributesKey == null ? null : attributesKey.getExternalName(), scopeName, project);
     }
   }
 

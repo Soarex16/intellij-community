@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.intellij.ide.actions.runAnything;
 
 import com.intellij.execution.Executor;
@@ -15,6 +15,7 @@ import com.intellij.ide.actions.runAnything.groups.RunAnythingCompletionGroup;
 import com.intellij.ide.actions.runAnything.groups.RunAnythingGroup;
 import com.intellij.ide.actions.runAnything.items.RunAnythingItem;
 import com.intellij.ide.actions.runAnything.ui.RunAnythingScrollingUtil;
+import com.intellij.ide.actions.searcheverywhere.GroupTitleRenderer;
 import com.intellij.ide.ui.UISettings;
 import com.intellij.ide.util.ElementsChooser;
 import com.intellij.openapi.actionSystem.*;
@@ -43,6 +44,7 @@ import com.intellij.openapi.wm.ToolWindowId;
 import com.intellij.ui.*;
 import com.intellij.ui.components.JBList;
 import com.intellij.ui.components.JBTextField;
+import com.intellij.ui.components.TextComponentEmptyText;
 import com.intellij.ui.components.fields.ExtendableTextComponent;
 import com.intellij.ui.components.fields.ExtendableTextField;
 import com.intellij.ui.dsl.gridLayout.builders.RowBuilder;
@@ -61,10 +63,8 @@ import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import javax.accessibility.Accessible;
 import javax.swing.*;
 import javax.swing.border.Border;
-import javax.swing.border.EmptyBorder;
 import javax.swing.event.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -513,11 +513,10 @@ public class RunAnythingPopupUI extends BigPopupUI {
   }
 
   public static void adjustEmptyText(@NotNull JBTextField textEditor,
-                                     @NotNull Predicate<? super JBTextField> function,
+                                     @NotNull Predicate<JBTextField> function,
                                      @NotNull @NlsContexts.StatusText String leftText,
                                      @NotNull @NlsContexts.StatusText String rightText) {
-
-    textEditor.putClientProperty("StatusVisibleFunction", function);
+    textEditor.putClientProperty(TextComponentEmptyText.STATUS_VISIBLE_FUNCTION, function);
     StatusText statusText = textEditor.getEmptyText();
     statusText.setShowAboveCenter(false);
     statusText.setText(leftText, SimpleTextAttributes.GRAY_ATTRIBUTES);
@@ -596,7 +595,7 @@ public class RunAnythingPopupUI extends BigPopupUI {
 
   private class MyListRenderer extends ColoredListCellRenderer<Object> {
 
-    private final RunAnythingMyAccessibleComponent myMainPanel = new RunAnythingMyAccessibleComponent(new BorderLayout());
+    private final GroupTitleRenderer groupTitleRenderer = new GroupTitleRenderer();
 
     private final RunAnythingMore runAnythingMore = new RunAnythingMore();
 
@@ -628,34 +627,25 @@ public class RunAnythingPopupUI extends BigPopupUI {
         cmp.setForeground(UIUtil.getListForeground(isSelected));
         foreground = cmp.getBackground();
       }
-      myMainPanel.removeAll();
       RunAnythingSearchListModel model = getSearchingModel(myResultsList);
-      if (model != null) {
-        String title = model.getTitle(index);
-        if (title != null) {
-          myMainPanel.add(RunAnythingUtil.createTitle(" " + title, list.getBackground()), BorderLayout.NORTH);
-        }
-      }
       SelectablePanel wrapped = SelectablePanel.wrap(cmp, list.getBackground());
       wrapped.setSelectionColor(bg);
       wrapped.setForeground(foreground);
       if (ExperimentalUI.isNewUI()) {
-        wrapped.setSelectionArc(JBUI.CurrentTheme.Popup.Selection.ARC.get());
-        wrapped.setBorder(new EmptyBorder(JBUI.CurrentTheme.Popup.Selection.innerInsets()));
-        int leftRightInset = JBUI.CurrentTheme.Popup.Selection.LEFT_RIGHT_INSET.get();
-        //noinspection UseDPIAwareBorders
-        myMainPanel.setBorder(new EmptyBorder(0, leftRightInset, 0, leftRightInset));
+        PopupUtil.configSelectablePanel(wrapped);
+        wrapped.setPreferredHeight(JBUI.CurrentTheme.List.rowHeight());
       }
       else {
         wrapped.setBorder(RENDERER_BORDER);
       }
-      myMainPanel.setBackground(list.getBackground());
-      myMainPanel.add(wrapped, BorderLayout.CENTER);
-      if (cmp instanceof Accessible) {
-        myMainPanel.setAccessible((Accessible)cmp);
+      if (model != null) {
+        String title = model.getTitle(index);
+        if (title != null) {
+          return groupTitleRenderer.withDisplayedData(title, wrapped);
+        }
       }
 
-      return myMainPanel;
+      return wrapped;
     }
 
     @Override
@@ -816,10 +806,8 @@ public class RunAnythingPopupUI extends BigPopupUI {
     return result;
   }
 
-
-  @NotNull
   @Override
-  protected @NlsContexts.PopupAdvertisement String[] getInitialHints() {
+  protected @NlsContexts.PopupAdvertisement String @NotNull [] getInitialHints() {
     return new String[]{IdeBundle.message("run.anything.hint.initial.text",
                                           KeymapUtil.getKeystrokeText(UP_KEYSTROKE),
                                           KeymapUtil.getKeystrokeText(DOWN_KEYSTROKE))};

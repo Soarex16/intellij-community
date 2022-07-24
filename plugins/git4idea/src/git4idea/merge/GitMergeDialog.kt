@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package git4idea.merge
 
 import com.intellij.dvcs.DvcsUtil
@@ -12,6 +12,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.openapi.util.NlsContexts
 import com.intellij.openapi.util.NlsSafe
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.CollectionComboBoxModel
@@ -23,6 +24,7 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import com.intellij.util.ui.JBDimension
 import com.intellij.util.ui.JBUI
+import git4idea.GitBranch
 import git4idea.branch.GitBranchUtil
 import git4idea.branch.GitBranchUtil.equalBranches
 import git4idea.commands.Git
@@ -35,12 +37,12 @@ import git4idea.i18n.GitBundle
 import git4idea.merge.dialog.*
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
+import git4idea.repo.GitRepositoryReader
 import git4idea.ui.ComboBoxWithAutoCompletion
 import net.miginfocom.layout.AC
 import net.miginfocom.layout.CC
 import net.miginfocom.layout.LC
 import net.miginfocom.swing.MigLayout
-import org.jetbrains.annotations.PropertyKey
 import java.awt.BorderLayout
 import java.awt.Insets
 import java.awt.event.ItemEvent
@@ -59,7 +61,6 @@ internal fun createRepositoryField(repositories: List<GitRepository>,
                                    defaultRoot: VirtualFile? = null) = ComboBox(CollectionComboBoxModel(repositories)).apply {
   item = repositories.find { repo -> repo.root == defaultRoot } ?: repositories.first()
   renderer = SimpleListCellRenderer.create("") { DvcsUtil.getShortRepositoryName(it) }
-  @Suppress("UsePropertyAccessSyntax")
   setUI(FlatComboBoxUI(outerInsets = Insets(BW.get(), BW.get(), BW.get(), 0)))
 }
 
@@ -71,10 +72,10 @@ internal fun createSouthPanelWithOptionsDropDown(southPanel: JComponent, optionD
 }
 
 internal fun validateBranchExists(branchField: ComboBoxWithAutoCompletion<String>,
-                                  @PropertyKey(resourceBundle = GitBundle.BUNDLE) emptyFieldMessage: String): ValidationInfo? {
+                                  emptyFieldMessage: @NlsContexts.DialogMessage String): ValidationInfo? {
   val value = branchField.getText()
   if (value.isNullOrEmpty()) {
-    return ValidationInfo(GitBundle.message(emptyFieldMessage), branchField)
+    return ValidationInfo(emptyFieldMessage, branchField)
   }
 
   val items = (branchField.model as CollectionComboBoxModel).items
@@ -97,7 +98,7 @@ class GitMergeDialog(private val project: Project,
 
   private val allBranches = collectAllBranches()
 
-  private val unmergedBranches = synchronizedMap(HashMap<GitRepository, List<String>?>())
+  private val unmergedBranches = synchronizedMap(HashMap<GitRepository, Set<GitBranch>?>())
 
   private val optionInfos = mutableMapOf<GitMergeOption, OptionInfo<GitMergeOption>>()
 
@@ -150,8 +151,9 @@ class GitMergeDialog(private val project: Project,
 
   fun getSelectedRoot(): VirtualFile = repositoryField.item.root
 
-  fun getSelectedBranch() = getSelectedRepository().branches.findBranchByName(branchField.getText().orEmpty())
-                            ?: error("Unable to find branch: ${branchField.getText().orEmpty()}")
+  fun getSelectedBranch() = tryGetSelectedBranch() ?: error("Unable to find branch: ${branchField.getText().orEmpty()}")
+
+  private fun tryGetSelectedBranch() = getSelectedRepository().branches.findBranchByName(branchField.getText().orEmpty())
 
   fun shouldCommitAfterMerge() = !isOptionSelected(GitMergeOption.NO_COMMIT)
 
@@ -183,8 +185,9 @@ class GitMergeDialog(private val project: Project,
           }
 
           sortedRoots.forEach { root ->
-            loadUnmergedBranchesForRoot(root)?.let { branches ->
-              unmergedBranches[getRepository(root)] = branches
+            val repository = getRepository(root)
+            loadUnmergedBranchesForRoot(repository)?.let { branches ->
+              unmergedBranches[repository] = branches
             }
           }
         }
@@ -193,27 +196,28 @@ class GitMergeDialog(private val project: Project,
 
   /**
    * ```
-   * $ git branch --all
-   * |  master
-   * |  feature
-   * |* checked-out
-   * |+ checked-out-by-worktree
-   * |  remotes/origin/master
-   * |  remotes/origin/feature
-   * |  remotes/origin/HEAD -> origin/master
+   * $ git branch --all --format=...
+   * |refs/heads/master []
+   * |refs/heads/feature []
+   * |refs/heads/checked-out []
+   * |refs/heads/checked-out-by-worktree []
+   * |refs/remotes/origin/master []
+   * |refs/remotes/origin/feature []
+   * |refs/remotes/origin/HEAD [refs/remotes/origin/master]
    * ```
    */
   @RequiresBackgroundThread
-  private fun loadUnmergedBranchesForRoot(root: VirtualFile): List<@NlsSafe String>? {
-    var result: List<String>? = null
-
-    val handler = GitLineHandler(project, root, GitCommand.BRANCH).apply {
-      addParameters("--no-color", "-a", "--no-merged")
-    }
+  private fun loadUnmergedBranchesForRoot(repository: GitRepository): Set<GitBranch>? {
+    val root = repository.root
     try {
-      result = Git.getInstance().runCommand(handler).getOutputOrThrow()
-        .lines()
-        .filter { line -> !LINK_REF_REGEX.matcher(line).matches() }
+      val handler = GitLineHandler(project, root, GitCommand.BRANCH)
+      handler.addParameters(UNMERGED_BRANCHES_FORMAT, "--no-color", "--all", "--no-merged")
+
+      val result = Git.getInstance().runCommand(handler)
+      result.throwOnError()
+
+      val remotes = repository.remotes
+      return result.output.asSequence()
         .mapNotNull { line ->
           val matcher = BRANCH_NAME_REGEX.matcher(line)
           when {
@@ -221,24 +225,24 @@ class GitMergeDialog(private val project: Project,
             else -> null
           }
         }
+        .mapNotNull { refName -> GitRepositoryReader.parseBranchRef(remotes, refName) }
+        .toSet()
     }
     catch (e: Exception) {
       LOG.warn("Failed to load unmerged branches for root: ${root}", e)
+      return null
     }
-
-    return result
   }
 
   private fun validateBranchField(): ValidationInfo? {
     val validationInfo = validateBranchExists(branchField, GitBundle.message("merge.no.branch.selected.error"))
     if (validationInfo != null) return validationInfo
 
-    val selectedBranch = branchField.getText()
-    if (selectedBranch.isNullOrBlank()) return null
+    val selectedBranch = tryGetSelectedBranch() ?: return ValidationInfo(GitBundle.message("merge.no.matching.branch.error"))
 
     val selectedRepository = getSelectedRepository()
     val unmergedBranches = unmergedBranches[selectedRepository] ?: return null
-    val selectedBranchMerged = unmergedBranches.none { equalBranches(it, selectedBranch) }
+    val selectedBranchMerged = !unmergedBranches.contains(selectedBranch)
 
     if (selectedBranchMerged) {
       return ValidationInfo(GitBundle.message("merge.branch.already.merged", selectedBranch), branchField)
@@ -362,7 +366,6 @@ class GitMergeDialog(private val project: Project,
                                                                project).apply {
     prototypeDisplayValue = GIT_REF_PROTOTYPE_VALUE
     setPlaceholder(GitBundle.message("merge.branch.field.placeholder"))
-    @Suppress("UsePropertyAccessSyntax")
     setUI(FlatComboBoxUI(
       outerInsets = Insets(BW.get(), 0, BW.get(), BW.get()),
       popupEmptyText = GitBundle.message("merge.branch.popup.empty.text")))
@@ -441,8 +444,13 @@ class GitMergeDialog(private val project: Project,
 
   companion object {
     private val LOG = logger<GitMergeDialog>()
-    private val LINK_REF_REGEX = Pattern.compile(".+\\s->\\s.+") // aka 'symrefs'
-    private val BRANCH_NAME_REGEX = Pattern.compile(". (\\S+)\\s*")
+
+    /**
+     * Filter out 'symrefs' (ex: 'remotes/origin/HEAD -> origin/master')
+     */
+    @Suppress("SpellCheckingInspection")
+    private val UNMERGED_BRANCHES_FORMAT = "--format=%(refname) [%(symref)]"
+    private val BRANCH_NAME_REGEX = Pattern.compile("(\\S+) \\[]")
 
     @NlsSafe
     private const val REMOTE_REF = "remotes/"

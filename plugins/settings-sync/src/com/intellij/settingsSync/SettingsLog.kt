@@ -19,7 +19,14 @@ internal interface SettingsLog {
    * false if the data was already there, and we've just created internal structures.
    */
   @RequiresBackgroundThread
-  fun initialize(): Boolean
+  fun initialize()
+
+  /**
+   * Records all shareable settings from the config directories in their current state.
+   * Happens on the very first settings sync initialization, and between IDE sessions.
+   */
+  @RequiresBackgroundThread
+  fun logExistingSettings()
 
   /**
    * Records the current local state of the settings.
@@ -61,4 +68,14 @@ internal interface SettingsLog {
    */
   fun advanceMaster(): Position
 
+  /**
+   * Applies the given state to the master branch of the settings without any merging (as opposed to [advanceMaster] which merges
+   * changes coming from different sources).
+   *
+   * This operation is used, for example, when initially taking all the settings from the server: they should be applied right away to
+   * the local state, and no merge should happen, since local settings are not needed at this point and should be overwritten.
+   *
+   * @return New position of 'master'.
+   */
+  fun forceWriteToMaster(snapshot: SettingsSnapshot) : Position
 }

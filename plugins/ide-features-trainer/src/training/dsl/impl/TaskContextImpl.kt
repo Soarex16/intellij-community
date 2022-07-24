@@ -141,6 +141,7 @@ internal class TaskContextImpl(private val lessonExecutor: LessonExecutor,
         if (!warningIsLogged) {
           warningIsLogged = true
           if (problem != null) {
+            this@TaskContextImpl.lessonExecutor.internalProblems.add(problem)
             StatisticBase.logLearningProblem(problem, this@TaskContextImpl.lessonExecutor.lesson)
             thisLogger().error("Detected important problem ($problem): $text")
           }
@@ -188,7 +189,10 @@ internal class TaskContextImpl(private val lessonExecutor: LessonExecutor,
       lessonExecutor.text(text)
 
     if (useBalloon != null) {
-      val ui = useBalloon.highlightingComponent ?: runtimeContext.previous.ui as? JComponent ?: return
+      val ui = useBalloon.highlightingComponent
+               ?: runtimeContext.previous.ui as? JComponent
+               ?: LearningUiHighlightingManager.highlightingComponents.getOrNull(0) as? JComponent
+               ?: return
       LessonExecutorUtil.showBalloonMessage(text,
                                             ui,
                                             useBalloon,

@@ -8,6 +8,7 @@ import com.intellij.codeInspection.GlobalInspectionContext;
 import com.intellij.codeInspection.ProblemDescriptorUtil;
 import com.intellij.codeInspection.lang.InspectionExtensionsFactory;
 import com.intellij.codeInspection.lang.RefManagerExtension;
+import com.intellij.ide.scratch.ScratchUtil;
 import com.intellij.lang.Language;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
@@ -46,6 +47,7 @@ import com.intellij.util.ObjectUtils;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.containers.Interner;
 import org.jdom.Element;
+import org.jetbrains.annotations.Async;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -86,7 +88,7 @@ public class RefManagerImpl extends RefManager {
   private final Map<Language, RefManagerExtension<?>> myLanguageExtensions = new HashMap<>();
   private final Interner<String> myNameInterner = Interner.createStringInterner();
 
-  private volatile BlockingQueue<Runnable> myTasks;
+  private volatile BlockingQueue<@NotNull Runnable> myTasks;
   private volatile List<Future<?>> myFutures;
 
   public RefManagerImpl(@NotNull Project project, @Nullable AnalysisScope scope, @NotNull GlobalInspectionContext context) {
@@ -197,7 +199,7 @@ public class RefManagerImpl extends RefManager {
     }
   }
 
-  public void fireBuildReferences(RefElement refElement) {
+  private void fireBuildReferences(RefElement refElement) {
     for (RefGraphAnnotator annotator : myGraphAnnotators) {
       annotator.onReferencesBuild(refElement);
     }
@@ -426,14 +428,17 @@ public class RefManagerImpl extends RefManager {
   }
 
   public void buildReferences(RefElement element) {
+    if (element.areReferencesBuilt()) return;
+    ((RefElementImpl)element).setReferencesBuilt(true);
     executeTask(() -> {
-      element.waitForInitialized();
+      element.initializeIfNeeded();
       element.buildReferences();
+      fireBuildReferences(element);
     });
   }
 
   @Override
-  public void executeTask(Runnable runnable) {
+  public void executeTask(@Async.Schedule @NotNull Runnable runnable) {
     if (myTasks != null) {
       try {
         myTasks.put(runnable);
@@ -449,7 +454,7 @@ public class RefManagerImpl extends RefManager {
     if (!Registry.is("batch.inspections.process.project.usages.in.parallel")) {
       return;
     }
-    final int threadsCount = Math.min(4, Runtime.getRuntime().availableProcessors() - 1);
+    final int threadsCount = Math.min(6, Runtime.getRuntime().availableProcessors() - 1);
     if (threadsCount == 0) {
       // need more than 1 core for parallel processing
       return;
@@ -468,9 +473,7 @@ public class RefManagerImpl extends RefManager {
             final Runnable task = myTasks.poll(50, TimeUnit.MILLISECONDS);
             ProgressManager.checkCanceled();
             if (task != null) {
-              DumbService.getInstance(myProject).runReadActionInSmartMode(
-                () -> progressManager.executeProcessUnderProgress(task, progressIndicator)
-              );
+              runTask(progressIndicator, task);
             }
           }
           catch (InterruptedException ignore) {}
@@ -478,6 +481,12 @@ public class RefManagerImpl extends RefManager {
       });
       myFutures.add(future);
     }
+  }
+
+  private void runTask(ProgressIndicator progressIndicator, @Async.Execute Runnable task) {
+    DumbService.getInstance(myProject).runReadActionInSmartMode(
+      () -> ProgressManager.getInstance().executeProcessUnderProgress(task, progressIndicator)
+    );
   }
 
   public boolean isDeclarationsFound() {
@@ -525,8 +534,9 @@ public class RefManagerImpl extends RefManager {
     ReadAction.run(() -> ContainerUtil.quickSort(list, (o1, o2) -> {
       VirtualFile v1 = ((RefElementImpl)o1).getVirtualFile();
       VirtualFile v2 = ((RefElementImpl)o2).getVirtualFile();
-      if (!Objects.equals(v1, v2)) {
-        return (v1==null?"":v1.getPath()).compareTo(v2==null?"":v2.getPath());
+      int v21 = VfsUtilCore.compareByPath(v1, v2);
+      if (v21 != 0) {
+        return v21;
       }
       Segment r1 = ObjectUtils.notNull(o1.getPointer().getRange(), TextRange.EMPTY_RANGE);
       Segment r2 = ObjectUtils.notNull(o2.getPointer().getRange(), TextRange.EMPTY_RANGE);
@@ -714,7 +724,7 @@ public class RefManagerImpl extends RefManager {
         }
         return null;
       }),
-      element -> ReadAction.run(() -> element.waitForInitialized()));
+      element -> ReadAction.run(() -> element.initializeIfNeeded()));
   }
 
   private RefManagerExtension<?> getExtension(final Language language) {
@@ -751,9 +761,9 @@ public class RefManagerImpl extends RefManager {
     return getFromRefTableOrCache(element, factory, null);
   }
 
-  private @Nullable <T extends RefElement> T getFromRefTableOrCache(@NotNull PsiElement element,
-                                                                    @NotNull NullableFactory<? extends T> factory,
-                                                                    @Nullable Consumer<? super T> whenCached) {
+  public @Nullable <T extends RefElement> T getFromRefTableOrCache(@NotNull PsiElement element,
+                                                                   @NotNull NullableFactory<? extends T> factory,
+                                                                   @Nullable Consumer<? super T> whenCached) {
     PsiAnchor psiAnchor = createAnchor(element);
     //noinspection unchecked
     T result = (T)myRefTable.get(psiAnchor);
@@ -808,7 +818,8 @@ public class RefManagerImpl extends RefManager {
       if (!extension.belongsToScope(psiElement)) return false;
     }
     final Boolean inProject = ReadAction.compute(() -> psiElement.getManager().isInProject(psiElement));
-    return inProject.booleanValue() && (ignoreScope || getScope() == null || getScope().contains(psiElement));
+    return (inProject.booleanValue() || ScratchUtil.isScratch(containingFile.getVirtualFile())) &&
+           (ignoreScope || getScope() == null || getScope().contains(psiElement));
   }
 
   @Override
@@ -822,6 +833,7 @@ public class RefManagerImpl extends RefManager {
 
   @Override
   public void removeRefElement(@NotNull RefElement refElement, @NotNull List<? super RefElement> deletedRefs) {
+    refElement.initializeIfNeeded();
     List<RefEntity> children = refElement.getChildren();
     RefElement[] refElements = children.toArray(new RefElement[0]);
     for (RefElement refChild : refElements) {

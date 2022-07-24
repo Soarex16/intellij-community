@@ -33,6 +33,14 @@ public abstract class ProgressManager extends ProgressIndicatorProvider {
     return result;
   }
 
+  /**
+   * @return ProgressManager or null if not yet initialized
+   */
+  @ApiStatus.Internal
+  @Nullable
+  public static ProgressManager getInstanceOrNull() {
+    return ourInstance;
+  }
   public abstract boolean hasProgressIndicator();
   public abstract boolean hasModalProgressIndicator();
   public abstract boolean hasUnsafeProgressIndicator();
@@ -262,5 +270,5 @@ public abstract class ProgressManager extends ProgressIndicatorProvider {
    * Makes {@link #getProgressIndicator()} return {@code null} within {@code computable}.
    */
   @ApiStatus.Internal
-  public abstract <X> X silenceGlobalIndicator(@NotNull Supplier<X> computable);
+  public abstract <X> X silenceGlobalIndicator(@NotNull Supplier<? extends X> computable);
 }

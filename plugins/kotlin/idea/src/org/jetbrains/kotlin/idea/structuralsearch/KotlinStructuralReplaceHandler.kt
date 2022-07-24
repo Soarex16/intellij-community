@@ -18,12 +18,12 @@ import com.intellij.structuralsearch.impl.matcher.compiler.PatternCompiler
 import com.intellij.structuralsearch.plugin.replace.ReplaceOptions
 import com.intellij.structuralsearch.plugin.replace.ReplacementInfo
 import com.intellij.util.containers.tail
+import org.jetbrains.kotlin.idea.base.util.reformatted
 import org.jetbrains.kotlin.idea.caches.resolve.resolveImportReference
 import org.jetbrains.kotlin.idea.core.ShortenReferences
 import org.jetbrains.kotlin.idea.core.addTypeParameter
 import org.jetbrains.kotlin.idea.core.setDefaultValue
 import org.jetbrains.kotlin.idea.util.ImportInsertHelper
-import org.jetbrains.kotlin.idea.util.reformatted
 import org.jetbrains.kotlin.js.translate.declaration.hasCustomGetter
 import org.jetbrains.kotlin.js.translate.declaration.hasCustomSetter
 import org.jetbrains.kotlin.lexer.KtModifierKeywordToken
@@ -179,7 +179,10 @@ class KotlinStructuralReplaceHandler(private val project: Project) : StructuralR
     private fun PsiElement.fixWhiteSpace(match: PsiElement) {
         val indentationLength = IndentHelper.getInstance().getIndent(match.containingFile, match.node, true)
         collectDescendantsOfType<PsiWhiteSpace> { it.text.contains("\n") }.forEach {
-            it.replace(KtPsiFactory(this).createWhiteSpace("\n${" ".repeat(indentationLength + it.text.length - 1)}"))
+            val newLineCount = it.text.count { char -> char == '\n' }
+            it.replace(KtPsiFactory(this).createWhiteSpace(
+                "\n".repeat(newLineCount) + " ".repeat(indentationLength + it.text.length - 1))
+            )
         }
     }
 

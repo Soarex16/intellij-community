@@ -1,4 +1,4 @@
-// Copyright 2000-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 package com.jetbrains.jsonSchema.impl;
 
 import com.intellij.openapi.diagnostic.Logger;
@@ -37,7 +37,7 @@ import static com.jetbrains.jsonSchema.JsonPointerUtil.*;
 /**
  * @author Irina.Chernushina on 8/28/2015.
  */
-public final class JsonSchemaObject extends UserDataHolderBase {
+public final class JsonSchemaObject {
   private static final Logger LOG = Logger.getInstance(JsonSchemaObject.class);
 
   public static final String MOCK_URL = "mock:///";
@@ -131,6 +131,8 @@ public final class JsonSchemaObject extends UserDataHolderBase {
   @Nullable private Map<String, Map<String, String>> myEnumMetadata;
 
   private boolean myForceCaseInsensitive = false;
+
+  private final UserDataHolderBase myUserDataHolder = new UserDataHolderBase();
 
   public boolean isValidByExclusion() {
     return myIsValidByExclusion;
@@ -1015,7 +1017,7 @@ public final class JsonSchemaObject extends UserDataHolderBase {
       return false;
     } catch (Exception e) {
       // catch exceptions around to prevent things like:
-      // https://bugs.openjdk.java.net/browse/JDK-6984178
+      // https://bugs.openjdk.org/browse/JDK-6984178
       Logger.getInstance(JsonSchemaObject.class).info(e);
       return false;
     }
@@ -1158,7 +1160,7 @@ public final class JsonSchemaObject extends UserDataHolderBase {
 
   private ConcurrentMap<String, JsonSchemaObject> getComputedRefsStorage(@NotNull Project project) {
     return CachedValuesManager.getManager(project).getCachedValue(
-      this,
+      myUserDataHolder,
       () -> CachedValueProvider.Result.create(new ConcurrentHashMap<String, JsonSchemaObject>(), JsonDependencyModificationTracker.forProject(project))
     );
   }

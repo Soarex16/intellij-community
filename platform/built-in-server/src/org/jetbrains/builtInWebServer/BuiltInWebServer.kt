@@ -1,5 +1,5 @@
 // Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-@file:Suppress("HardCodedStringLiteral", "ReplaceGetOrSet")
+@file:Suppress("ReplaceGetOrSet")
 package org.jetbrains.builtInWebServer
 
 import com.github.benmanes.caffeine.cache.Caffeine
@@ -219,10 +219,10 @@ private fun doProcess(urlDecoder: QueryStringDecoder, request: FullHttpRequest, 
       isCandidateFromReferer = true
     }
     return false
-  }) ?: candidateByDirectoryName ?: return false
+  }) ?: candidateByDirectoryName
 
   if (isActivatable() && !PropertiesComponent.getInstance().getBoolean("ide.built.in.web.server.active")) {
-    notificationManager.notify("", BuiltInServerBundle.message("notification.content.built.in.web.server.is.deactivated"), project)
+    notificationManager.notify("", BuiltInServerBundle.message("notification.content.built.in.web.server.is.deactivated"), project) { }
     return false
   }
 

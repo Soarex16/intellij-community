@@ -2,7 +2,6 @@
 package com.jetbrains.python.psi;
 
 import com.google.common.collect.Maps;
-import com.intellij.codeInsight.FileModificationService;
 import com.intellij.codeInsight.completion.PrioritizedLookupElement;
 import com.intellij.codeInsight.lookup.LookupElement;
 import com.intellij.codeInsight.lookup.LookupElementBuilder;
@@ -199,9 +198,6 @@ public final class PyUtil {
    */
   public static void addListNode(PsiElement parent, PsiElement newItem, ASTNode beforeThis,
                                  boolean isFirst, boolean isLast, boolean addWhitespace) {
-    if (!FileModificationService.getInstance().preparePsiElementForWrite(parent)) {
-      return;
-    }
     ASTNode node = parent.getNode();
     assert node != null;
     ASTNode itemNode = newItem.getNode();
@@ -765,7 +761,8 @@ public final class PyUtil {
   @Nullable
   public static <T> T updateDocumentUnblockedAndCommitted(@NotNull PsiElement anchor, @NotNull Function<? super Document, ? extends T> func) {
     final PsiDocumentManager manager = PsiDocumentManager.getInstance(anchor.getProject());
-    final Document document = manager.getDocument(anchor.getContainingFile());
+    // manager.getDocument(anchor.getContainingFile()) doesn't work with intention preview
+    final Document document = anchor.getContainingFile().getViewProvider().getDocument();
     if (document != null) {
       manager.doPostponedOperationsAndUnblockDocument(document);
       try {
@@ -827,7 +824,7 @@ public final class PyUtil {
   }
 
   public static boolean isRoot(@NotNull VirtualFile directory, @NotNull Project project) {
-    ProjectFileIndex fileIndex = ProjectFileIndex.SERVICE.getInstance(project);
+    ProjectFileIndex fileIndex = ProjectFileIndex.getInstance(project);
     return Comparing.equal(fileIndex.getClassRootForFile(directory), directory) ||
            Comparing.equal(fileIndex.getContentRootForFile(directory), directory) ||
            Comparing.equal(fileIndex.getSourceRootForFile(directory), directory);

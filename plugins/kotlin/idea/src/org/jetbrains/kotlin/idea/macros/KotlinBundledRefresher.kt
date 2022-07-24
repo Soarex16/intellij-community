@@ -10,7 +10,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFileVisitor
 import com.intellij.openapi.vfs.newvfs.NewVirtualFile
-import org.jetbrains.kotlin.idea.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinIdePlugin
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinPluginLayout
 import org.jetbrains.kotlin.idea.util.application.isUnitTestMode
@@ -36,7 +36,7 @@ internal class KotlinBundledRefresher : StartupActivity.DumbAware {
 
         if (KotlinIdePlugin.version != installedKotlinVersion) {
             // Force refresh jar handlers
-            requestKotlinDistRefresh(KotlinPluginLayout.instance.kotlinc.toPath())
+            requestKotlinDistRefresh(KotlinPluginLayout.kotlinc.toPath())
 
             propertiesComponent.setValue(INSTALLED_KOTLIN_VERSION, KotlinIdePlugin.version)
         }

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.fir.highlighter.visitors
 
@@ -8,9 +8,9 @@ import org.jetbrains.kotlin.analysis.api.symbols.KtBackingFieldSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KtSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KtSyntheticJavaPropertySymbol
 import org.jetbrains.kotlin.analysis.api.symbols.KtVariableSymbol
-import org.jetbrains.kotlin.idea.KotlinIdeaAnalysisBundle
-import org.jetbrains.kotlin.idea.highlighter.NameHighlighter
-import org.jetbrains.kotlin.idea.highlighter.textAttributesKeyForPropertyDeclaration
+import org.jetbrains.kotlin.idea.base.highlighting.KotlinBaseHighlightingBundle
+import org.jetbrains.kotlin.idea.base.highlighting.isNameHighlightingEnabled
+import org.jetbrains.kotlin.idea.base.highlighting.textAttributesKeyForPropertyDeclaration
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtInstanceExpressionWithLabel
@@ -24,7 +24,7 @@ internal class VariableReferenceHighlightingVisitor(
     holder: AnnotationHolder
 ) : FirAfterResolveHighlightingVisitor(analysisSession, holder) {
     override fun visitSimpleNameExpression(expression: KtSimpleNameExpression) {
-        if (!NameHighlighter.namesHighlightingEnabled) return
+        if (!expression.project.isNameHighlightingEnabled) return
         if (expression.isAssignmentReference()) return
         if (expression.isByNameArgumentReference()) return
         if (expression.parent is KtInstanceExpressionWithLabel) return
@@ -32,7 +32,7 @@ internal class VariableReferenceHighlightingVisitor(
         if (expression.isAutoCreatedItParameter()) {
             createInfoAnnotation(
                 expression,
-                KotlinIdeaAnalysisBundle.message("automatically.declared.based.on.the.expected.type"),
+                KotlinBaseHighlightingBundle.message("automatically.declared.based.on.the.expected.type"),
                 Colors.FUNCTION_LITERAL_DEFAULT_PARAMETER
             )
             return
@@ -57,7 +57,7 @@ internal class VariableReferenceHighlightingVisitor(
         }
     }
 
-    @Suppress("unused")
+    @Suppress("UnusedReceiverParameter")
     private fun KtAnalysisSession.isBackingFieldReferencingMutableVariable(symbol: KtSymbol): Boolean {
         if (symbol !is KtBackingFieldSymbol) return false
         return !symbol.owningProperty.isVal
@@ -72,7 +72,7 @@ internal class VariableReferenceHighlightingVisitor(
     }
 }
 
-@Suppress("unused")
+@Suppress("UnusedReceiverParameter")
 private fun KtAnalysisSession.isMutableVariable(symbol: KtSymbol?): Boolean = when (symbol) {
     is KtVariableSymbol -> !symbol.isVal
     else -> false

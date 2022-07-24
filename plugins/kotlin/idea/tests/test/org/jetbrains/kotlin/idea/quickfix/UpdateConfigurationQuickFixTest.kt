@@ -20,20 +20,19 @@ import com.intellij.util.ThrowableRunnable
 import org.jetbrains.kotlin.config.CompilerSettings.Companion.DEFAULT_ADDITIONAL_ARGUMENTS
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.LanguageVersion
-import org.jetbrains.kotlin.idea.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.projectStructure.languageVersionSettings
+import org.jetbrains.kotlin.idea.base.util.findLibrary
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCommonCompilerArgumentsHolder
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCompilerSettings
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinPluginLayout
 import org.jetbrains.kotlin.idea.facet.KotlinFacetType
 import org.jetbrains.kotlin.idea.facet.getRuntimeLibraryVersion
-import org.jetbrains.kotlin.idea.project.getLanguageVersionSettings
-import org.jetbrains.kotlin.idea.project.languageVersionSettings
+import org.jetbrains.kotlin.idea.projectConfiguration.LibraryJarDescriptor
 import org.jetbrains.kotlin.idea.test.ConfigLibraryUtil
 import org.jetbrains.kotlin.idea.test.IDEA_TEST_DATA_DIR
 import org.jetbrains.kotlin.idea.test.configureKotlinFacet
 import org.jetbrains.kotlin.idea.test.runAll
-import org.jetbrains.kotlin.idea.util.projectStructure.findLibrary
-import org.jetbrains.kotlin.idea.versions.LibraryJarDescriptor
 import org.junit.internal.runners.JUnit38ClassRunner
 import org.junit.runner.RunWith
 import java.io.File
@@ -92,7 +91,7 @@ class UpdateConfigurationQuickFixTest : BasePlatformTestCase() {
         assertEquals("1.1", KotlinCommonCompilerArgumentsHolder.getInstance(project).settings.apiVersion)
 
         val actualVersion = getRuntimeLibraryVersion(myFixture.module)?.kotlinVersion
-        assertEquals(KotlinPluginLayout.instance.standaloneCompilerVersion.kotlinVersion, actualVersion)
+        assertEquals(KotlinPluginLayout.standaloneCompilerVersion.kotlinVersion, actualVersion)
     }
 
     fun testIncreaseLangLevelFacet_10() {
@@ -109,7 +108,7 @@ class UpdateConfigurationQuickFixTest : BasePlatformTestCase() {
         assertEquals(LanguageVersion.KOTLIN_1_1, module.languageVersionSettings.languageVersion)
 
         val actualVersion = getRuntimeLibraryVersion(myFixture.module)
-        assertEquals(KotlinPluginLayout.instance.standaloneCompilerVersion.artifactVersion, actualVersion?.artifactVersion)
+        assertEquals(KotlinPluginLayout.standaloneCompilerVersion.artifactVersion, actualVersion?.artifactVersion)
     }
 
     fun testAddKotlinReflect() {
@@ -136,14 +135,14 @@ class UpdateConfigurationQuickFixTest : BasePlatformTestCase() {
         val sources = kotlinRuntime!!.getFiles(OrderRootType.SOURCES)
         assertContainsElements(
             sources.map { it.name },
-            "kotlin-reflect-${KotlinPluginLayout.instance.standaloneCompilerVersion.artifactVersion}-sources.jar"
+            "kotlin-reflect-${KotlinPluginLayout.standaloneCompilerVersion.artifactVersion}-sources.jar"
         )
     }
 
     private fun configureRuntime(path: String) {
         val name = if (path == "mockRuntime106") "kotlin-runtime.jar" else "kotlin-stdlib.jar"
         val sourcePath = when (path) {
-            "actualRuntime" -> KotlinArtifacts.instance.kotlinStdlib
+            "actualRuntime" -> KotlinArtifacts.kotlinStdlib
             else -> File(IDEA_TEST_DATA_DIR, "configuration/$path/$name")
         }
 
@@ -171,11 +170,11 @@ class UpdateConfigurationQuickFixTest : BasePlatformTestCase() {
     }
 
     private val inlineClassesSupport: LanguageFeature.State
-        get() = project.getLanguageVersionSettings().getFeatureSupport(LanguageFeature.InlineClasses)
+        get() = project.languageVersionSettings.getFeatureSupport(LanguageFeature.InlineClasses)
 
     override fun tearDown() {
         runAll(
-            ThrowableRunnable { resetProjectSettings(KotlinPluginLayout.instance.standaloneCompilerVersion.languageVersion) },
+            ThrowableRunnable { resetProjectSettings(KotlinPluginLayout.standaloneCompilerVersion.languageVersion) },
             ThrowableRunnable {
                 FacetManager.getInstance(module).getFacetByType(KotlinFacetType.TYPE_ID)?.let {
                     FacetUtil.deleteFacet(it)
