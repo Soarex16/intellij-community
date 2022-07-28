@@ -27,6 +27,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.SystemInfoRt
 import com.intellij.openapi.util.UserDataHolderBase
 import com.intellij.util.ArrayUtil
+import com.intellij.util.childScope
 import com.intellij.util.messages.*
 import com.intellij.util.messages.impl.MessageBusEx
 import com.intellij.util.messages.impl.MessageBusImpl
@@ -138,8 +139,8 @@ abstract class ComponentManagerImpl(
   internal var componentContainerIsReadonly: String? = null
 
   private val coroutineScope: CoroutineScope? = when {
-    parent == null -> Main.mainScope?.let(::createSupervisorCoroutineScope) ?: CoroutineScope(SupervisorJob())
-    parent.parent == null -> createSupervisorCoroutineScope(parent.coroutineScope!!)
+    parent == null -> Main.mainScope?.childScope() ?: CoroutineScope(SupervisorJob())
+    parent.parent == null -> parent.coroutineScope!!.childScope()
     else -> null
   }
 
@@ -234,7 +235,7 @@ abstract class ComponentManagerImpl(
                        listenerCallbacks = null)
   }
 
-  open fun registerComponents(modules: Sequence<IdeaPluginDescriptorImpl>,
+  open fun registerComponents(modules: List<IdeaPluginDescriptorImpl>,
                               app: Application?,
                               precomputedExtensionModel: PrecomputedExtensionModel?,
                               listenerCallbacks: MutableList<in Runnable>?) {
@@ -412,7 +413,7 @@ abstract class ComponentManagerImpl(
 
     for (componentAdapter in componentAdapters.getImmutableSet()) {
       if (componentAdapter is MyComponentAdapter) {
-        componentAdapter.getInstance<Any>(this, keyClass = null)
+        componentAdapter.getInstanceUncached<Any>(this, keyClass = null, indicator = null)
       }
     }
 
@@ -988,31 +989,31 @@ abstract class ComponentManagerImpl(
 
   open fun activityNamePrefix(): String? = null
 
-  fun preloadServices(modules: Sequence<IdeaPluginDescriptorImpl>,
+  fun preloadServices(modules: List<IdeaPluginDescriptorImpl>,
                       activityPrefix: String,
                       syncScope: CoroutineScope,
                       onlyIfAwait: Boolean = false) {
     val asyncScope = coroutineScope!!
     for (plugin in modules) {
-      serviceLoop@ for (service in getContainerDescriptor(plugin).services) {
+      for (service in getContainerDescriptor(plugin).services) {
         if (!isServiceSuitable(service) || (service.os != null && !isSuitableForOs(service.os))) {
-          continue@serviceLoop
+          continue
         }
 
-        val scope: CoroutineScope? = when (service.preload) {
+        val scope: CoroutineScope = when (service.preload) {
           PreloadMode.TRUE -> if (onlyIfAwait) null else asyncScope
           PreloadMode.NOT_HEADLESS -> if (onlyIfAwait || getApplication()!!.isHeadlessEnvironment) null else asyncScope
           PreloadMode.NOT_LIGHT_EDIT -> if (onlyIfAwait || Main.isLightEdit()) null else asyncScope
           PreloadMode.AWAIT -> syncScope
           PreloadMode.FALSE -> null
           else -> throw IllegalStateException("Unknown preload mode ${service.preload}")
+        } ?: continue
+
+        if (isServicePreloadingCancelled) {
+          return
         }
 
-        scope?.launch {
-          if (isServicePreloadingCancelled || isDisposed) {
-            return@launch
-          }
-
+        scope.launch {
           val activity = StartUpMeasurer.startActivity("${service.`interface`} preloading")
           try {
             preloadService(service)
@@ -1031,7 +1032,7 @@ abstract class ComponentManagerImpl(
     postPreloadServices(modules, activityPrefix, syncScope, onlyIfAwait)
   }
 
-  protected open fun postPreloadServices(modules: Sequence<IdeaPluginDescriptorImpl>,
+  protected open fun postPreloadServices(modules: List<IdeaPluginDescriptorImpl>,
                                          activityPrefix: String,
                                          syncScope: CoroutineScope,
                                          onlyIfAwait: Boolean) {
@@ -1044,13 +1045,11 @@ abstract class ComponentManagerImpl(
       return
     }
 
-    val instance = adapter.getInstance<Any>(this, null)
-    if (instance != null) {
-      val implClass = instance.javaClass
-      // well, we don't know the interface class, so, we cannot add any service to a hot cache
-      if (Modifier.isFinal(implClass.modifiers)) {
-        serviceInstanceHotCache.putIfAbsent(implClass, instance)
-      }
+    val instance = adapter.getInstanceUncached<Any>(componentManager = this, keyClass = null, indicator = null)
+    // well, we don't know the interface class, so, we cannot add any service to a hot cache
+    val implClass = instance.javaClass
+    if (Modifier.isFinal(implClass.modifiers)) {
+      serviceInstanceHotCache.putIfAbsent(implClass, instance)
     }
   }
 
@@ -1304,6 +1303,21 @@ abstract class ComponentManagerImpl(
         }
       }
     }
+  }
+
+  fun <T : Any> collectInitializedComponents(aClass: Class<T>): List<T> {
+    // we must use instances only from our adapter (could be service or something else).
+    val result = mutableListOf<T>()
+    for (adapter in componentAdapters.getImmutableSet()) {
+      if (adapter is MyComponentAdapter) {
+        val component = adapter.getInitializedInstance()
+        if (component != null && aClass.isAssignableFrom(component.javaClass)) {
+          @Suppress("UNCHECKED_CAST")
+          result.add(component as T)
+        }
+      }
+    }
+    return result
   }
 
   final override fun getActivityCategory(isExtension: Boolean): ActivityCategory {

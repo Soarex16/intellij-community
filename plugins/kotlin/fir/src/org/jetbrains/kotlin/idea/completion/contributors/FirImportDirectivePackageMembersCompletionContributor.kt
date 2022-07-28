@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.completion.contributors
 
@@ -23,11 +23,11 @@ internal class FirImportDirectivePackageMembersCompletionContributor(
         val weighingContext = createEmptyWeighingContext(basicContext.fakeKtFile)
 
         scope.getClassifierSymbols(scopeNameFilter)
-            .filter { with(visibilityChecker) { isVisible(it) } }
+            .filter { visibilityChecker.isVisible(it) }
             .forEach { addClassifierSymbolToCompletion(it, weighingContext, ImportStrategy.DoNothing) }
 
         scope.getCallableSymbols(scopeNameFilter)
-            .filter { with(visibilityChecker) { isVisible(it) } }
+            .filter { visibilityChecker.isVisible(it) }
             .forEach {
                 addCallableSymbolToCompletion(
                     createEmptyWeighingContext(basicContext.fakeKtFile),

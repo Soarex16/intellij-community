@@ -1072,7 +1072,7 @@ public final class HighlightMethodUtil {
   }
 
   @NotNull
-  public static @NlsContexts.Tooltip String createMismatchedArgumentCountTooltip(int expected, int actual) {
+  static @NlsContexts.Tooltip String createMismatchedArgumentCountTooltip(int expected, int actual) {
     return HtmlChunk.text(JavaAnalysisBundle.message("arguments.count.mismatch", expected, actual))
       .wrapWith("html").toString();
   }
@@ -1485,7 +1485,7 @@ public final class HighlightMethodUtil {
       HighlightInfo info = isWeaker(method, modifierList, accessModifier, accessLevel, superMethod, true);
       if (info != null) return info;
       info = checkSuperMethodIsFinal(method, superMethod);
-      if (info != null) return info;
+      return info;
     }
     return null;
   }
@@ -1644,13 +1644,10 @@ public final class HighlightMethodUtil {
 
   @NotNull
   public static TextRange getFixRange(@NotNull PsiElement element) {
-    TextRange range = element.getTextRange();
-    int start = range.getStartOffset();
-    int end = range.getEndOffset();
-
     PsiElement nextSibling = element.getNextSibling();
+    TextRange range = element.getTextRange();
     if (PsiUtil.isJavaToken(nextSibling, JavaTokenType.SEMICOLON)) {
-      return new TextRange(start, end + 1);
+      return range.grown(1);
     }
     return range;
   }

@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.intentions
 
@@ -35,7 +35,7 @@ class IntroduceBackingPropertyIntention : SelfTargetingIntention<KtProperty>(
 
             val bindingContext = property.getResolutionFacade().analyzeWithAllCompilerChecks(property).bindingContext
             val descriptor = bindingContext.get(BindingContext.DECLARATION_TO_DESCRIPTOR, property) as? PropertyDescriptor ?: return false
-            if (bindingContext.get(BindingContext.BACKING_FIELD_REQUIRED, descriptor) == false) return false
+            if (bindingContext.get(BindingContext.BACKING_FIELD_REQUIRED, descriptor) != true) return false
 
             val containingClass = property.getStrictParentOfType<KtClassOrObject>() ?: return false
             if (containingClass.isExpectDeclaration()) return false

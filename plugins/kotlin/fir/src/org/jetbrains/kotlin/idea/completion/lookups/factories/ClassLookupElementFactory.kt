@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.completion.lookups.factories
 
@@ -15,7 +15,7 @@ import org.jetbrains.kotlin.analysis.api.KtAnalysisSession
 import org.jetbrains.kotlin.analysis.api.symbols.KtClassLikeSymbol
 import org.jetbrains.kotlin.analysis.api.symbols.nameOrAnonymous
 import org.jetbrains.kotlin.idea.base.analysis.api.utils.shortenReferencesInRange
-import org.jetbrains.kotlin.name.ClassId
+import org.jetbrains.kotlin.idea.completion.lookups.TailTextProvider.getTailText
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.renderer.render
@@ -28,6 +28,7 @@ internal class ClassLookupElementFactory {
         val name = symbol.nameOrAnonymous
         return LookupElementBuilder.create(ClassifierLookupObject(name, importingStrategy), name.asString())
             .withInsertHandler(ClassifierInsertionHandler)
+            .withTailText(getTailText(symbol))
             .let { withSymbolInfo(symbol, it) }
     }
 }

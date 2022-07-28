@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.uast.test.common.kotlin
 
 import com.intellij.openapi.project.Project
@@ -947,6 +947,12 @@ interface UastResolveApiFixtureTestBase : UastPluginSelection {
         TestCase.assertEquals("PsiType:long", setResolved.parameters[0].type.toString())
         TestCase.assertEquals("PsiType:E", setResolved.parameters[1].type.toString())
         TestCase.assertEquals("PsiType:void", setResolved.returnType?.toString())
+
+        val op = uFile.findElementByTextFromPsi<UBinaryExpression>("array[42L] =", strict = false)
+            .orFail("cant convert to UBinaryExpression")
+        val opResolved = op.resolveOperator()
+            .orFail("cant resolve from $op")
+        TestCase.assertEquals(setResolved, opResolved)
 
         val get = uFile.findElementByTextFromPsi<UArrayAccessExpression>("array[42]", strict = false)
             .orFail("cant convert to UArrayAccessExpression")

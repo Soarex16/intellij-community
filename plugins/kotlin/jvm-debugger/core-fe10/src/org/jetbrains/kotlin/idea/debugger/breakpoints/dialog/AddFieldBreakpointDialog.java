@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger.breakpoints.dialog;
 
@@ -21,7 +21,7 @@ import org.jetbrains.kotlin.asJava.classes.KtLightClass;
 import org.jetbrains.kotlin.asJava.classes.KtLightClassForFacade;
 import org.jetbrains.kotlin.idea.base.codeInsight.KotlinPsiElementMemberChooserObject;
 import org.jetbrains.kotlin.idea.core.KotlinPluginDisposable;
-import org.jetbrains.kotlin.idea.debugger.KotlinDebuggerCoreBundle;
+import org.jetbrains.kotlin.idea.debugger.core.KotlinDebuggerCoreBundle;
 import org.jetbrains.kotlin.psi.KtClassOrObject;
 import org.jetbrains.kotlin.psi.KtDeclaration;
 import org.jetbrains.kotlin.psi.KtProperty;

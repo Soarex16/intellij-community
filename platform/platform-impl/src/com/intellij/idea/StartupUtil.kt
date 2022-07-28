@@ -6,9 +6,7 @@ package com.intellij.idea
 
 import com.intellij.accessibility.AccessibilityUtils
 import com.intellij.concurrency.IdeaForkJoinWorkerThreadFactory
-import com.intellij.diagnostic.Activity
-import com.intellij.diagnostic.LoadingState
-import com.intellij.diagnostic.StartUpMeasurer
+import com.intellij.diagnostic.*
 import com.intellij.ide.*
 import com.intellij.ide.customize.CommonCustomizeIDEWizardDialog
 import com.intellij.ide.gdpr.ConsentOptions
@@ -17,7 +15,6 @@ import com.intellij.ide.gdpr.showDataSharingAgreement
 import com.intellij.ide.gdpr.showEndUserAndDataSharingAgreements
 import com.intellij.ide.instrument.WriteIntentLockInstrumenter
 import com.intellij.ide.plugins.PluginManagerCore
-import com.intellij.ide.plugins.StartupAbortedException
 import com.intellij.ide.ui.laf.IntelliJLaf
 import com.intellij.ide.ui.laf.darcula.DarculaLaf
 import com.intellij.idea.SocketLock.ActivationStatus
@@ -98,6 +95,7 @@ internal var shellEnvLoadFuture: Deferred<Boolean?>? = null
   private set
 
 /** Called via reflection from [Main.bootstrap].  */
+@OptIn(ExperimentalCoroutinesApi::class)
 fun start(mainClass: String,
           isHeadless: Boolean,
           setFlagsAgain: Boolean,
@@ -119,9 +117,7 @@ fun start(mainClass: String,
 
   // runBlocking must be used - coroutine's thread is a daemon and doesn't stop application to exit,
   // see ApplicationImpl.preventAwtAutoShutdown
-  runBlocking(CoroutineExceptionHandler { _, error ->
-    StartupAbortedException.processException(error)
-  }) {
+  runBlocking(StartupAbortedExceptionHandler) {
     launch {
       val activity = StartUpMeasurer.startActivity("ForkJoin CommonPool configuration")
       IdeaForkJoinWorkerThreadFactory.setupForkJoinCommonPool(isHeadless)
@@ -251,6 +247,12 @@ fun start(mainClass: String,
     // don't load EnvironmentUtil class in the main thread
     shellEnvLoadFuture = async(Dispatchers.IO) {
       EnvironmentUtil.loadEnvironment(StartUpMeasurer.startActivity("environment loading"))
+    }
+
+    if (java.lang.Boolean.getBoolean("idea.enable.coroutine.dump")) {
+      launchAndMeasure("coroutine debug probes init") {
+        enableCoroutineDump()
+      }
     }
 
     if (!configImportNeeded) {

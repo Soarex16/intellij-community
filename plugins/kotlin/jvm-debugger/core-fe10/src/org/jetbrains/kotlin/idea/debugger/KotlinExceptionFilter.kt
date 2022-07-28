@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.debugger
 
@@ -10,6 +10,8 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
+import org.jetbrains.kotlin.idea.debugger.core.DebuggerUtils
+import org.jetbrains.kotlin.idea.debugger.base.util.KotlinSourceMapCache
 import org.jetbrains.kotlin.idea.debugger.base.util.isInlineFrameLineNumber
 import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.resolve.jvm.JvmClassName

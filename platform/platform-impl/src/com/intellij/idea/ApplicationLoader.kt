@@ -33,7 +33,6 @@ import com.intellij.openapi.util.SystemPropertyBean
 import com.intellij.openapi.util.io.OSAgnosticPathUtil
 import com.intellij.openapi.wm.WeakFocusStackManager
 import com.intellij.openapi.wm.WindowManager
-import com.intellij.serviceContainer.AlreadyDisposedException
 import com.intellij.ui.AnimatedIcon
 import com.intellij.ui.AppIcon
 import com.intellij.util.PlatformUtils
@@ -65,9 +64,8 @@ private val LOG = Logger.getInstance("#com.intellij.idea.ApplicationLoader")
 
 // for non-technical reasons this method cannot return CompletableFuture
 fun initApplication(rawArgs: List<String>, prepareUiFuture: Deferred<Any>) {
+  val initAppActivity = startupStart!!.endAndStart(Activities.INIT_APP)
   runBlocking {
-    val initAppActivity = startupStart!!.endAndStart(Activities.INIT_APP)
-
     // event queue is replaced as part of "prepareUiFuture" task - application must be created only after that
     val prepareUiFutureWaitActivity = initAppActivity.startChild("prepare ui waiting")
 
@@ -219,7 +217,7 @@ fun initApplication(rawArgs: List<String>, prepareUiFuture: Deferred<Any>) {
         }
       }
       else {
-        // todo run "IDEA - generate project shared index" to check why wrapping is required
+        // todo https://youtrack.jetbrains.com/issue/IDEA-298594
         CompletableFuture.runAsync {
           starter.main(args)
         }.asDeferred().join()
@@ -257,12 +255,14 @@ private fun CoroutineScope.runPostAppInitTasks(app: ApplicationImpl) {
   }
 
   if (!app.isUnitTestMode && !app.isHeadlessEnvironment && System.getProperty("enable.activity.preloading", "true").toBoolean()) {
-    // do not execute as a single long task, make sure that other more important tasks may slip in between
-    launchAndMeasure("preloading activity executing") {
-      coroutineScope {
-        executePreloadActivities(app)
+    val extensionPoint = app.extensionArea.getExtensionPoint<PreloadingActivity>("com.intellij.preloadingActivity")
+    val isDebugEnabled = LOG.isDebugEnabled
+    ExtensionPointName<PreloadingActivity>("com.intellij.preloadingActivity").processExtensions { preloadingActivity, pluginDescriptor ->
+      async {
+        executePreloadActivity(preloadingActivity, pluginDescriptor, isDebugEnabled)
       }
     }
+    extensionPoint.reset()
   }
 
   if (!Main.isLightEdit()) {
@@ -464,9 +464,10 @@ private fun processProgramArguments(args: List<String>): List<String> {
 
 
 fun CoroutineScope.callAppInitialized(listeners: List<ApplicationInitializedListener>) {
+  val asyncScope = ApplicationManager.getApplication().coroutineScope
   for (listener in listeners) {
     launch {
-      listener.execute()
+      listener.execute(asyncScope)
     }
   }
 }
@@ -491,17 +492,6 @@ internal inline fun <T> ExtensionPointName<T>.processExtensions(consumer: (exten
   }
 }
 
-private fun CoroutineScope.executePreloadActivities(app: ApplicationImpl) {
-  val extensionPoint = app.extensionArea.getExtensionPoint<PreloadingActivity>("com.intellij.preloadingActivity")
-  val isDebugEnabled = LOG.isDebugEnabled
-  ExtensionPointName<PreloadingActivity>("com.intellij.preloadingActivity").processExtensions { preloadingActivity, pluginDescriptor ->
-    async {
-      executePreloadActivity(preloadingActivity, pluginDescriptor, isDebugEnabled)
-    }
-  }
-  extensionPoint.reset()
-}
-
 private suspend fun executePreloadActivity(activity: PreloadingActivity, descriptor: PluginDescriptor?, isDebugEnabled: Boolean) {
   val measureActivity = if (descriptor == null) {
     null
@@ -515,8 +505,6 @@ private suspend fun executePreloadActivity(activity: PreloadingActivity, descrip
     if (isDebugEnabled) {
       LOG.debug("${activity.javaClass.name} finished")
     }
-  }
-  catch (ignore: AlreadyDisposedException) {
   }
   catch (e: CancellationException) {
     throw e

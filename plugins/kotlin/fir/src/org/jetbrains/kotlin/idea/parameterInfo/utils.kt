@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.parameterInfo
 
 import org.jetbrains.kotlin.analysis.api.KtAnalysisSession
@@ -20,6 +20,7 @@ internal fun KtAnalysisSession.collectCallCandidates(callElement: KtElement): Li
             val explicitReceiver = callElement.getQualifiedExpressionForSelector()?.receiverExpression
             callElement.collectCallCandidates() to explicitReceiver
         }
+
         is KtArrayAccessExpression -> callElement.collectCallCandidates() to callElement.arrayExpression
         else -> return emptyList()
     }
@@ -48,16 +49,17 @@ private fun KtAnalysisSession.filterCandidate(
 ): Boolean {
     val candidateCall = candidateInfo.candidate
     if (candidateCall !is KtFunctionCall<*>) return false
-    val candidateSymbol = candidateCall.partiallyAppliedSymbol.signature.symbol
-    return filterCandidate(candidateSymbol, callElement, fileSymbol, explicitReceiver)
+    val signature = candidateCall.partiallyAppliedSymbol.signature
+    return filterCandidate(signature, callElement, fileSymbol, explicitReceiver)
 }
 
 internal fun KtAnalysisSession.filterCandidate(
-    candidateSymbol: KtSymbol,
+    signature: KtFunctionLikeSignature<KtFunctionLikeSymbol>,
     callElement: KtElement,
     fileSymbol: KtFileSymbol,
     explicitReceiver: KtExpression?
 ): Boolean {
+    val candidateSymbol: KtSymbol = signature.symbol
     if (callElement is KtConstructorDelegationCall) {
         // Exclude caller from candidates for `this(...)` delegated constructor calls.
         // The parent of KtDelegatedConstructorCall should be the KtConstructor. We don't need to get the symbol for the constructor
@@ -97,7 +99,7 @@ internal fun KtAnalysisSession.filterCandidate(
             scopeContext.implicitReceivers.map { it.type }
         }
 
-        val candidateReceiverType = candidateSymbol.receiverType
+        val candidateReceiverType = signature.receiverType
         if (candidateReceiverType != null && receiverTypes.none { it.isSubTypeOf(candidateReceiverType) }) return false
     }
 

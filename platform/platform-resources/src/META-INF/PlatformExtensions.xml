@@ -844,12 +844,9 @@
     <applicationService serviceInterface="com.intellij.openapi.application.AsyncExecutionService"
                         serviceImplementation="com.intellij.openapi.application.impl.AsyncExecutionServiceImpl"/>
 
-    <preloadingActivity implementation="com.intellij.ide.ui.OptionsTopHitProvider$Activity"/>
     <postStartupActivity implementation="com.intellij.ide.ui.OptionsTopHitProvider$Activity" order="last"/>
     <search.topHitProvider implementation="com.intellij.ide.ui.OptionsTopHitProvider$ProjectLevelProvidersAdapter"/>
     <applicationService serviceImplementation="com.intellij.ide.ui.TopHitCache"/>
-
-    <startupActivity implementation="com.intellij.openapi.fileEditor.impl.OpenFilesActivity"/>
 
     <backgroundPostStartupActivity implementation="com.intellij.ide.util.TipsOrderUtil$RecommendationsStartupActivity"/>
     <postStartupActivity id="TipOfTheDayActivity" implementation="com.intellij.ide.TipOfTheDayStartupActivity"/>
@@ -915,13 +912,6 @@
     <applicationService serviceImplementation="com.intellij.openapi.updateSettings.impl.pluginsAdvertisement.GlobalIgnoredPluginSuggestionState"/>
     <actionPromoter implementation="com.intellij.ui.ToolbarDecoratorActionPromoter"/>
     <actionPromoter implementation="com.intellij.ide.actions.WindowActionPromoter"/>
-
-    <projectService serviceInterface="com.intellij.internal.statistic.local.FileTypeUsageSummaryProvider"
-                    serviceImplementation="com.intellij.internal.statistic.local.FileTypeUsageLocalSummary"
-                    testServiceImplementation="com.intellij.internal.statistic.local.TestFileTypeUsageSummaryProvider"/>
-
-    <projectService serviceInterface="com.intellij.internal.statistic.local.LanguageUsageStatisticsProvider"
-                    serviceImplementation="com.intellij.internal.statistic.local.LanguageUsageStatisticsProviderImpl"/>
 
     <projectService serviceInterface="com.intellij.workspaceModel.ide.WorkspaceModelCache"
                     serviceImplementation="com.intellij.workspaceModel.ide.impl.WorkspaceModelCacheImpl"/>
@@ -1181,8 +1171,6 @@
 
     <editorFactoryListener implementation="com.intellij.codeInsight.preview.ImageOrColorPreviewManager"/>
 
-    <preloadingActivity implementation="com.intellij.ide.SystemHealthMonitor"/>
-
     <registryKey key="run.anything.context.recent.directory.number" defaultValue="5"
                  description="Defines storing Run Anything context combobox directories number."/>
 
@@ -1238,6 +1226,7 @@
     <applicationService serviceImplementation="com.intellij.openapi.updateSettings.impl.UpdateCheckerService" headlessImplementation=""/>
     <postStartupActivity implementation="com.intellij.openapi.updateSettings.impl.UpdateCheckerService$MyActivity" order="last"/>
 
+    <notificationGroup id="IDE-errors" displayType="BALLOON" bundle="messages.IdeBundle" key="notification.group.ide.errors" isLogByDefault="false"/>
     <notificationGroup id="System Clipboard" displayType="BALLOON" bundle="messages.IdeBundle" key="notification.group.system.clipboard"/>
     <notificationGroup id="Project Startup Tasks Messages" displayType="NONE" bundle="messages.ExecutionBundle" key="notification.group.startup.task"/>
     <notificationGroup id="scrolling-capabilities-debug" displayType="NONE" hideFromSettings="true"/>

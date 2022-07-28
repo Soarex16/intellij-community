@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.debugger
 
@@ -21,7 +21,7 @@ import org.jetbrains.kotlin.idea.base.projectStructure.RootKindFilter
 import org.jetbrains.kotlin.idea.base.projectStructure.matches
 import org.jetbrains.kotlin.idea.base.projectStructure.scope.KotlinSourceFilterScope
 import org.jetbrains.kotlin.idea.base.util.caching.ConcurrentFactoryCache
-import org.jetbrains.kotlin.idea.debugger.breakpoints.getLambdasAtLineIfAny
+import org.jetbrains.kotlin.idea.debugger.core.breakpoints.getLambdasAtLineIfAny
 import org.jetbrains.kotlin.idea.refactoring.isInterfaceClass
 import org.jetbrains.kotlin.idea.search.isImportUsage
 import org.jetbrains.kotlin.idea.util.application.isDispatchThread
@@ -34,6 +34,7 @@ import org.jetbrains.kotlin.psi.psiUtil.isAncestor
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.collections.ArrayList
 import org.jetbrains.kotlin.idea.debugger.base.util.ClassNameCalculator
+import org.jetbrains.kotlin.idea.debugger.core.KotlinDebuggerCoreBundle
 
 class ClassNameProvider(
     private val project: Project,

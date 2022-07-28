@@ -47,16 +47,13 @@ import org.jetbrains.kotlin.idea.base.psi.getLineStartOffset
 import org.jetbrains.kotlin.idea.base.psi.getStartLineOffset
 import org.jetbrains.kotlin.idea.base.util.KOTLIN_FILE_TYPES
 import org.jetbrains.kotlin.idea.core.syncNonBlockingReadAction
-import org.jetbrains.kotlin.idea.debugger.DebuggerUtils.getBorders
-import org.jetbrains.kotlin.idea.debugger.DebuggerUtils.isGeneratedIrBackendLambdaMethodName
+import org.jetbrains.kotlin.idea.debugger.core.DebuggerUtils.getBorders
+import org.jetbrains.kotlin.idea.debugger.core.DebuggerUtils.isGeneratedIrBackendLambdaMethodName
 import org.jetbrains.kotlin.idea.debugger.base.util.*
 import org.jetbrains.kotlin.idea.debugger.breakpoints.SourcePositionRefiner
-import org.jetbrains.kotlin.idea.debugger.breakpoints.getElementsAtLineIfAny
-import org.jetbrains.kotlin.idea.debugger.breakpoints.getLambdasAtLineIfAny
-import org.jetbrains.kotlin.idea.debugger.core.AnalysisApiBasedInlineUtil
-import org.jetbrains.kotlin.idea.debugger.core.containsKotlinStrata
-import org.jetbrains.kotlin.idea.debugger.core.isInKotlinSources
-import org.jetbrains.kotlin.idea.debugger.core.isInsideInlineArgument
+import org.jetbrains.kotlin.idea.debugger.core.*
+import org.jetbrains.kotlin.idea.debugger.core.breakpoints.getElementsAtLineIfAny
+import org.jetbrains.kotlin.idea.debugger.core.breakpoints.getLambdasAtLineIfAny
 import org.jetbrains.kotlin.idea.debugger.stackFrame.InlineStackTraceCalculator
 import org.jetbrains.kotlin.idea.debugger.stackFrame.KotlinStackFrame
 import org.jetbrains.kotlin.idea.debugger.stepping.getLineRange
@@ -244,9 +241,6 @@ class KotlinPositionManager(private val debugProcess: DebugProcess) : MultiReque
             .filter { it.start.safeSourceName() == sourceFileName }
             .toList()
     }
-
-    class KotlinSourcePositionWithEntireLineHighlighted(delegate: SourcePosition) : DelegateSourcePosition(delegate)
-    class KotlinReentrantSourcePosition(delegate: SourcePosition) : DelegateSourcePosition(delegate)
 
     private fun getAlternativeSource(location: Location): PsiFile? {
         val manager = PsiManager.getInstance(debugProcess.project)
@@ -539,7 +533,7 @@ private fun decorateSourcePosition(location: Location, sourcePosition: SourcePos
     if (lambda !is KtFunctionLiteral) return sourcePosition
     val lines = lambda.getLineRange() ?: return sourcePosition
     if (!location.hasVisibleInlineLambdasOnLines(lines)) {
-        return KotlinPositionManager.KotlinSourcePositionWithEntireLineHighlighted(sourcePosition)
+        return KotlinSourcePositionWithEntireLineHighlighted(sourcePosition)
     }
     return sourcePosition
 }

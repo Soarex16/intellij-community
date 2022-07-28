@@ -33,7 +33,7 @@ import com.intellij.util.ThrowableRunnable
 import com.intellij.util.ui.UIUtil
 import com.intellij.xdebugger.XDebugSession
 import org.jetbrains.kotlin.config.JvmTarget
-import org.jetbrains.kotlin.idea.base.plugin.artifacts.KotlinArtifacts
+import org.jetbrains.kotlin.idea.base.plugin.artifacts.TestKotlinArtifacts
 import org.jetbrains.kotlin.idea.debugger.evaluate.KotlinEvaluator
 import org.jetbrains.kotlin.idea.debugger.test.preference.*
 import org.jetbrains.kotlin.idea.debugger.test.util.BreakpointCreator
@@ -271,36 +271,6 @@ abstract class KotlinDescriptorTestCase : DescriptorTestCase() {
     open fun addMavenDependency(compilerFacility: DebuggerTestCompilerFacility, library: String) {
     }
 
-    private fun createTestFiles(wholeFile: File, wholeFileContents: String): TestFiles {
-        val testFiles = createTestFiles(
-            wholeFile.name,
-            wholeFileContents,
-            object : TestFileFactory<DebuggerTestModule, TestFileWithModule> {
-                override fun createFile(
-                    module: DebuggerTestModule?,
-                    fileName: String,
-                    text: String,
-                    directives: Directives
-                ): TestFileWithModule {
-                    return TestFileWithModule(module ?: DebuggerTestModule.Jvm, fileName, text, directives)
-                }
-
-                override fun createModule(
-                    name: String,
-                    dependencies: MutableList<String>,
-                    friends: MutableList<String>
-                ) =
-                    when {
-                        name == JVM_MODULE_NAME -> DebuggerTestModule.Jvm
-                        else -> DebuggerTestModule.Common(name)
-                    }
-            }
-        )
-
-        val wholeTestFile = TestFile(wholeFile.name, wholeFileContents)
-        return TestFiles(wholeFile, wholeTestFile, testFiles)
-    }
-
     abstract fun doMultiFileTest(files: TestFiles, preferences: DebuggerPreferences)
 
     override fun initOutputChecker(): OutputChecker {
@@ -334,7 +304,7 @@ abstract class KotlinDescriptorTestCase : DescriptorTestCase() {
     override fun createJavaParameters(mainClass: String?): JavaParameters {
         return super.createJavaParameters(mainClass).apply {
             ModuleRootManager.getInstance(myModule).orderEntries.asSequence().filterIsInstance<LibraryOrderEntry>()
-            classPath.add(KotlinArtifacts.kotlinStdlib)
+            classPath.add(TestKotlinArtifacts.kotlinStdlib)
             classPath.add(libraryOutputDirectory)
         }
     }
@@ -346,8 +316,8 @@ abstract class KotlinDescriptorTestCase : DescriptorTestCase() {
             try {
                 attachLibrary(
                   model, KOTLIN_LIBRARY_NAME,
-                  listOf(KotlinArtifacts.kotlinStdlib, KotlinArtifacts.jetbrainsAnnotations),
-                  listOf(KotlinArtifacts.kotlinStdlibSources)
+                  listOf(TestKotlinArtifacts.kotlinStdlib, TestKotlinArtifacts.jetbrainsAnnotations),
+                  listOf(TestKotlinArtifacts.kotlinStdlibSources, TestKotlinArtifacts.kotlinStdlibCommonSources)
                 )
 
                 attachLibrary(model, TEST_LIBRARY_NAME, listOf(libraryOutputDirectory), listOf(librarySrcDirectory))
@@ -395,6 +365,36 @@ abstract class KotlinDescriptorTestCase : DescriptorTestCase() {
 
         return super.getData(dataId)
     }
+}
+
+internal fun createTestFiles(wholeFile: File, wholeFileContents: String): TestFiles {
+    val testFiles = createTestFiles(
+        wholeFile.name,
+        wholeFileContents,
+        object : TestFileFactory<DebuggerTestModule, TestFileWithModule> {
+            override fun createFile(
+                module: DebuggerTestModule?,
+                fileName: String,
+                text: String,
+                directives: Directives
+            ): TestFileWithModule {
+                return TestFileWithModule(module ?: DebuggerTestModule.Jvm, fileName, text, directives)
+            }
+
+            override fun createModule(
+                name: String,
+                dependencies: MutableList<String>,
+                friends: MutableList<String>
+            ) =
+                when (name) {
+                    JVM_MODULE_NAME -> DebuggerTestModule.Jvm
+                    else -> DebuggerTestModule.Common(name)
+                }
+        }
+    )
+
+    val wholeTestFile = TestFile(wholeFile.name, wholeFileContents)
+    return TestFiles(wholeFile, wholeTestFile, testFiles)
 }
 
 class TestFiles(val originalFile: File, val wholeFile: TestFile, files: List<TestFileWithModule>) : List<TestFileWithModule> by files

@@ -348,7 +348,7 @@ private fun fileNameIsLikeVersionedLibraryName(name: String): Boolean {
 
 private fun CoroutineScope.loadDescriptorsFromProperty(context: DescriptorListLoadingContext,
                                                        pool: ZipFilePool?): List<Deferred<IdeaPluginDescriptorImpl?>> {
-  val pathProperty = System.getProperty(PluginManagerCore.PROPERTY_PLUGIN_PATH) ?: return emptyList()
+  val pathProperty = System.getProperty("plugin.path") ?: return emptyList()
 
   // gradle-intellij-plugin heavily depends on this property in order to have core class loader plugins during tests
   val useCoreClassLoaderForPluginsFromProperty = java.lang.Boolean.getBoolean("idea.use.core.classloader.for.plugin.path")
@@ -438,11 +438,10 @@ private fun logPlugins(plugins: Collection<IdeaPluginDescriptorImpl>,
     appendPlugin(descriptor, target)
   }
 
-  for (plugin in loadingResult.getIncompletePlugins()) {
+  for ((pluginId, descriptor) in loadingResult.getIncompleteIdMap()) {
     // log only explicitly disabled plugins
-    val pluginId = plugin.pluginId
     if (context.isPluginDisabled(pluginId) && !disabledPlugins.contains(pluginId)) {
-      appendPlugin(plugin, disabled)
+      appendPlugin(descriptor, disabled)
     }
   }
 
@@ -541,7 +540,7 @@ suspend fun loadDescriptors(
   loadingResult.addAll(descriptors = list, overrideUseIfCompatible = false, productBuildNumber = buildNumber)
   if (!extraList.isEmpty()) {
     // plugins added via property shouldn't be overridden to avoid plugin root detection issues when running external plugin tests
-    loadingResult.addAll(descriptors = list, overrideUseIfCompatible = true, productBuildNumber = buildNumber)
+    loadingResult.addAll(descriptors = extraList, overrideUseIfCompatible = true, productBuildNumber = buildNumber)
   }
 
   if (isUnitTestMode && loadingResult.enabledPluginsById.size <= 1) {

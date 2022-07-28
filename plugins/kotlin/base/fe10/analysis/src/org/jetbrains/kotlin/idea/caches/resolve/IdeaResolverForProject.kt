@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 
 package org.jetbrains.kotlin.idea.caches.resolve
 
@@ -25,6 +25,7 @@ import org.jetbrains.kotlin.idea.compiler.IdeSealedClassInheritorsProvider
 import org.jetbrains.kotlin.idea.project.IdeaEnvironment
 import org.jetbrains.kotlin.load.java.structure.JavaClass
 import org.jetbrains.kotlin.load.java.structure.impl.JavaClassImpl
+import org.jetbrains.kotlin.platform.CommonPlatforms
 import org.jetbrains.kotlin.platform.idePlatformKind
 import org.jetbrains.kotlin.platform.isCommon
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
@@ -152,7 +153,12 @@ class IdeaResolverForProject(
         )
 
         val commonPlatformParameters = CommonAnalysisParameters(
-            metadataPartProviderFactory = { IDEPackagePartProvider(it.moduleContentScope) }
+            metadataPartProviderFactory = { IDEPackagePartProvider(it.moduleContentScope) },
+            klibMetadataPackageFragmentProviderFactory = { context ->
+                CommonPlatforms.defaultCommonPlatform.idePlatformKind.resolution.createKlibPackageFragmentProvider(
+                    context.moduleInfo, context.storageManager, context.languageVersionSettings, context.moduleDescriptor
+                )
+            },
         )
 
         return if (settings !is CompositeAnalysisSettings) {

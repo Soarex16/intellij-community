@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.debugger
 
@@ -32,6 +32,7 @@ import org.jetbrains.kotlin.platform.konan.isNative
 import org.jetbrains.kotlin.psi.KtFile
 import java.util.function.Function
 import javax.swing.JComponent
+import org.jetbrains.kotlin.idea.debugger.core.KotlinDebuggerCoreBundle
 
 class KotlinAlternativeSourceNotificationProvider : EditorNotificationProvider {
 

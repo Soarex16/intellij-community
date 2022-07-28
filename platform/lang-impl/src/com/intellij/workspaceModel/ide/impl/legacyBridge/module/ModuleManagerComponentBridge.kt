@@ -4,6 +4,7 @@ package com.intellij.workspaceModel.ide.impl.legacyBridge.module
 import com.intellij.ProjectTopics
 import com.intellij.diagnostic.ActivityCategory
 import com.intellij.diagnostic.StartUpMeasurer
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.ServiceDescriptor
@@ -45,29 +46,34 @@ import com.intellij.workspaceModel.storage.url.VirtualFileUrlManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
-import java.nio.file.Paths
+import java.nio.file.Path
 
 class ModuleManagerComponentBridge(private val project: Project) : ModuleManagerBridgeImpl(project) {
   private val virtualFileManager: VirtualFileUrlManager = VirtualFileUrlManager.getInstance(project)
 
   internal class ModuleManagerInitProjectActivity : InitProjectActivity {
     override suspend fun run(project: Project) {
-      val activity = StartUpMeasurer.startActivity("firing modules_added event", ActivityCategory.DEFAULT)
       val moduleManager = ModuleManager.getInstance(project) as ModuleManagerComponentBridge
+      var activity = StartUpMeasurer.startActivity("firing modules_added event", ActivityCategory.DEFAULT)
       val modules = moduleManager.modules().toList()
-      withContext(Dispatchers.EDT) {
-        ApplicationManager.getApplication().runWriteAction {
-          for (module in modules) {
-            if (!module.isLoaded) {
-              module.moduleAdded()
+      moduleManager.fireModulesAdded(modules)
+
+      activity = activity.endAndStart("deprecated module component moduleAdded calling")
+      @Suppress("removal", "DEPRECATION")
+      val deprecatedComponents = mutableListOf<com.intellij.openapi.module.ModuleComponent>()
+      for (module in modules) {
+        if (!module.isLoaded) {
+          module.moduleAdded(deprecatedComponents)
+        }
+      }
+      if (!deprecatedComponents.isEmpty()) {
+        withContext(Dispatchers.EDT) {
+          ApplicationManager.getApplication().runWriteAction {
+            for (deprecatedComponent in deprecatedComponents) {
+              @Suppress("DEPRECATION", "removal")
+              deprecatedComponent.moduleAdded()
             }
           }
-        }
-
-        moduleManager.fireModulesAdded(modules)
-
-        for (module in modules) {
-          module.projectOpened()
         }
       }
       activity.end()
@@ -182,7 +188,14 @@ class ModuleManagerComponentBridge(private val project: Project) : ModuleManager
   }
 
   private fun addModule(moduleEntity: ModuleEntity): ModuleBridge {
-    val module = createModuleInstance(moduleEntity, entityStore, diff = null, isNew = true, null)
+    val plugins = PluginManagerCore.getPluginSet().getEnabledModules()
+    val module = createModuleInstance(moduleEntity = moduleEntity,
+                                      versionedStorage = entityStore,
+                                      diff = null,
+                                      isNew = true,
+                                      precomputedExtensionModel = null,
+                                      plugins = plugins,
+                                      corePlugin = plugins.firstOrNull { it.pluginId == PluginManagerCore.CORE_ID })
     WorkspaceModel.getInstance(project).updateProjectModelSilent {
       it.mutableModuleMap.addMapping(moduleEntity, module)
     }
@@ -295,7 +308,13 @@ class ModuleManagerComponentBridge(private val project: Project) : ModuleManager
   private fun fireModuleAddedInWriteAction(module: ModuleEx) {
     ApplicationManager.getApplication().runWriteAction {
       if (!module.isLoaded) {
-        module.moduleAdded()
+        @Suppress("removal", "DEPRECATION")
+        val oldComponents = mutableListOf<com.intellij.openapi.module.ModuleComponent>()
+        module.moduleAdded(oldComponents)
+        for (oldComponent in oldComponents) {
+          @Suppress("DEPRECATION", "removal")
+          oldComponent.moduleAdded()
+        }
         fireModulesAdded(listOf(module))
       }
     }
@@ -316,7 +335,7 @@ class ModuleManagerComponentBridge(private val project: Project) : ModuleManager
   override fun loadModuleToBuilder(moduleName: String, filePath: String, diff: MutableEntityStorage): ModuleEntity {
     val builder = MutableEntityStorage.create()
     var errorMessage: String? = null
-    JpsProjectEntitiesLoader.loadModule(Paths.get(filePath), getJpsProjectConfigLocation(project)!!, builder, object : ErrorReporter {
+    JpsProjectEntitiesLoader.loadModule(Path.of(filePath), getJpsProjectConfigLocation(project)!!, builder, object : ErrorReporter {
       override fun reportError(message: String, file: VirtualFileUrl) {
         errorMessage = message
       }
@@ -325,7 +344,7 @@ class ModuleManagerComponentBridge(private val project: Project) : ModuleManager
       throw IOException("Failed to load module from $filePath: $errorMessage")
     }
     diff.addDiff(builder)
-    val moduleEntity = diff.entities(ModuleEntity::class.java).find { it.name == moduleName }
+    val moduleEntity = diff.entities(ModuleEntity::class.java).firstOrNull { it.name == moduleName }
     if (moduleEntity == null) {
       throw IOException("Failed to load module from $filePath")
     }

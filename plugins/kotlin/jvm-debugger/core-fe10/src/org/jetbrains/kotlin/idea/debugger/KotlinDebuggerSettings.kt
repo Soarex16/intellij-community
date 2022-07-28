@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
 
 package org.jetbrains.kotlin.idea.debugger
 
@@ -13,6 +13,7 @@ import com.intellij.xdebugger.XDebuggerUtil
 import com.intellij.xdebugger.settings.DebuggerSettingsCategory
 import com.intellij.xdebugger.settings.XDebuggerSettings
 import org.jetbrains.kotlin.idea.debugger.stepping.KotlinSteppingConfigurableUi
+import org.jetbrains.kotlin.idea.debugger.core.KotlinDebuggerCoreBundle
 
 @State(name = "KotlinDebuggerSettings", storages = [Storage("kotlin_debug.xml")])
 class KotlinDebuggerSettings : XDebuggerSettings<KotlinDebuggerSettings>("kotlin_debugger"), Getter<KotlinDebuggerSettings> {
@@ -37,7 +38,7 @@ class KotlinDebuggerSettings : XDebuggerSettings<KotlinDebuggerSettings>("kotlin
                     this
                 )
             )
-        DebuggerSettingsCategory.DATA_VIEWS ->
+        DebuggerSettingsCategory.GENERAL ->
             listOf(
                 SimpleConfigurable.create(
                     "reference.idesettings.debugger.kotlin.data.view",

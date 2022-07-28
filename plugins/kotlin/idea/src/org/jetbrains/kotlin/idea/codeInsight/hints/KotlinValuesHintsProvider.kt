@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.codeInsight.hints
 
 import com.intellij.codeInsight.hints.*
@@ -65,5 +65,5 @@ class KotlinValuesHintsProvider : KotlinAbstractHintsProvider<KotlinValuesHintsP
 
 internal fun KtBinaryExpression.isRangeExpression(): Boolean =
     with(operationReference.getReferencedNameAsName().asString()) {
-        return this == ".." || this == "rangeTo" || this == "downTo" || this == "until"
+        return this == ".." || this == "..<" || this == "downTo" || this == "until"
     }

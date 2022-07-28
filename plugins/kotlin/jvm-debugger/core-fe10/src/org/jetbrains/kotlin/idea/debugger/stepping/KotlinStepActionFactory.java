@@ -1,4 +1,4 @@
-// Copyright 2000-2021 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+// Copyright 2000-2022 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
 package org.jetbrains.kotlin.idea.debugger.stepping;
 
 import com.intellij.debugger.engine.DebugProcessImpl;
@@ -11,7 +11,7 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.sun.jdi.request.StepRequest;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.kotlin.idea.debugger.KotlinDebuggerCoreBundle;
+import org.jetbrains.kotlin.idea.debugger.core.KotlinDebuggerCoreBundle;
 
 public class KotlinStepActionFactory {
     private final static Logger LOG = Logger.getInstance(KotlinStepActionFactory.class);
