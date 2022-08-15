@@ -17,15 +17,15 @@ const val JAVA_UTIL_FUNCTION_INT_CONSUMER = "java.util.function.IntConsumer"
 const val JAVA_UTIL_FUNCTION_LONG_CONSUMER = "java.util.function.LongConsumer"
 const val JAVA_UTIL_FUNCTION_DOUBLE_CONSUMER = "java.util.function.DoubleConsumer"
 
-const val OBJECT_COLLECTOR_CLASS_NAME = "com.intellij.debugger.streams.generated.java.collector.ObjectCollector"
-const val INT_COLLECTOR_CLASS_NAME = "com.intellij.debugger.streams.generated.java.collector.IntCollector"
-const val LONG_COLLECTOR_CLASS_NAME = "com.intellij.debugger.streams.generated.java.collector.LongCollector"
-const val DOUBLE_COLLECTOR_CLASS_NAME = "com.intellij.debugger.streams.generated.java.collector.DoubleCollector"
+const val OBJECT_COLLECTOR_CLASS_NAME = "com.intellij.debugger.stream.rt.java.collectors.ObjectCollector"
+const val INT_COLLECTOR_CLASS_NAME = "com.intellij.debugger.stream.rt.java.collectors.IntCollector"
+const val LONG_COLLECTOR_CLASS_NAME = "com.intellij.debugger.stream.rt.java.collectors.LongCollector"
+const val DOUBLE_COLLECTOR_CLASS_NAME = "com.intellij.debugger.stream.rt.java.collectors.DoubleCollector"
 
-const val OBJECT_COLLECTOR_CLASS_FILE = "/classes/compiled/ObjectCollector.class"
-const val INT_COLLECTOR_CLASS_FILE = "/classes/compiled/IntCollector.class"
-const val LONG_COLLECTOR_CLASS_FILE = "/classes/compiled/LongCollector.class"
-const val DOUBLE_COLLECTOR_CLASS_FILE = "/classes/compiled/DoubleCollector.class"
+const val OBJECT_COLLECTOR_CLASS_FILE = "com/intellij/debugger/stream/rt/java/collectors/ObjectCollector.class"
+const val INT_COLLECTOR_CLASS_FILE = "com/intellij/debugger/stream/rt/java/collectors/IntCollector.class"
+const val LONG_COLLECTOR_CLASS_FILE = "com/intellij/debugger/stream/rt/java/collectors/LongCollector.class"
+const val DOUBLE_COLLECTOR_CLASS_FILE = "com/intellij/debugger/stream/rt/java/collectors/DoubleCollector.class"
 
 const val COLLECTOR_SIGNATURE = "(Ljava/util/Map;Ljava/util/concurrent/atomic/AtomicInteger;)V"
 

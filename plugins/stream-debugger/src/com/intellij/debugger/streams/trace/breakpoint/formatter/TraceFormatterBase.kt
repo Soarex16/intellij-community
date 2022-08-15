@@ -3,8 +3,7 @@ package com.intellij.debugger.streams.trace.breakpoint.formatter
 
 import com.intellij.debugger.engine.DebuggerUtils
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
-import com.intellij.debugger.streams.trace.breakpoint.HelperClassUtils.STREAM_DEBUGGER_UTILS_CLASS_NAME
-import com.intellij.debugger.streams.trace.breakpoint.HelperClassUtils.getStreamDebuggerUtilsClass
+import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_NAME
 import com.intellij.debugger.streams.trace.breakpoint.ValueManager
 import com.intellij.debugger.streams.trace.breakpoint.ex.IncorrectValueTypeException
 import com.intellij.psi.CommonClassNames.JAVA_LANG_OBJECT
@@ -20,11 +19,6 @@ import com.sun.jdi.Value
  */
 open class TraceFormatterBase(private val valueManager: ValueManager,
                               private val evaluationContext: EvaluationContextImpl) : TraceFormatter {
-  init {
-    valueManager.defineClass(STREAM_DEBUGGER_UTILS_CLASS_NAME) {
-      getStreamDebuggerUtilsClass()
-    }
-  }
 
   /**
    * Converts the result of the intermediate operation to the following format:

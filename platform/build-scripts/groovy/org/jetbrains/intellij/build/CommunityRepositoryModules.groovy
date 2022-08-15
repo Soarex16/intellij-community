@@ -249,7 +249,9 @@ final class CommunityRepositoryModules {
     simplePlugin("intellij.vcs.hg"),
     simplePlugin("intellij.vcs.github"),
     simplePlugin("intellij.java.i18n"),
-    simplePlugin("intellij.java.debugger.streams"),
+    plugin("intellij.java.debugger.streams") {
+      withArtifact("stream-debugger-rt", "rt")
+    },
     simplePlugin("intellij.sh"),
     plugin("intellij.featuresTrainer") {
       withProjectLibrary("assertJ")

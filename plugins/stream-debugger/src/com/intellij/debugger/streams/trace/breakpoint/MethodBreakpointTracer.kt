@@ -13,7 +13,8 @@ import com.intellij.debugger.streams.trace.StreamTracer
 import com.intellij.debugger.streams.trace.TraceResultInterpreter
 import com.intellij.debugger.streams.trace.TracingCallback
 import com.intellij.debugger.streams.trace.TracingResult
-import com.intellij.debugger.streams.trace.breakpoint.HelperClassUtils.getCompiledClass
+import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_FILE
+import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_NAME
 import com.intellij.debugger.streams.trace.breakpoint.TracerUtils.tryExtractExceptionMessage
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointPlaceNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
@@ -65,6 +66,7 @@ class MethodBreakpointTracer(private val session: XDebugSession,
         val objectStorage: ObjectStorage = DisableCollectionObjectStorage()
         val valueManager: ValueManager = createValueManager(objectStorage)
 
+        // TODO: temp stub
         val handlerFactory: RuntimeHandlerFactory = object: RuntimeHandlerFactory {
           override fun getForSource(): RuntimeSourceCallHandler = object: RuntimeSourceCallHandler {
             override fun afterCall(evaluationContextImpl: EvaluationContextImpl, chainInstance: ObjectReference): ObjectReference {
@@ -117,10 +119,10 @@ class MethodBreakpointTracer(private val session: XDebugSession,
           //  завершения дебага, не будет ли течь память
 
           // TODO: посмотреть куда будут вываливаться исключения, созданные в коллбеках брейкпоинтов
-          tracingManager.evaluateChain(evalContext, chain) { context, reference ->
-            if (reference is ArrayReference) {
+          tracingManager.evaluateChain(evalContext, chain) { context, result ->
+            if (result is ArrayReference) {
               val interpretedResult: TracingResult = try {
-                resultInterpreter.interpret(chain, reference)
+                resultInterpreter.interpret(chain, result)
               }
               catch (t: Throwable) {
                 callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
@@ -130,15 +132,15 @@ class MethodBreakpointTracer(private val session: XDebugSession,
               return@evaluateChain
             }
 
-            if (reference is ObjectReference) {
-              val type = reference.referenceType()
+            if (result is ObjectReference) {
+              val type = result.referenceType()
               if (type is ClassType) {
                 var classType: ClassType? = type
                 while (classType != null && CommonClassNames.JAVA_LANG_THROWABLE != classType.name()) {
                   classType = classType.superclass()
                 }
                 if (classType != null) {
-                  val exceptionMessage = tryExtractExceptionMessage(reference)
+                  val exceptionMessage = tryExtractExceptionMessage(result)
                   val description = "Evaluation failed: " + type.name() + " exception thrown"
                   val descriptionWithReason = if (exceptionMessage == null) description else "$description: $exceptionMessage"
                   callback.evaluationFailed("", descriptionWithReason)
@@ -165,18 +167,12 @@ class MethodBreakpointTracer(private val session: XDebugSession,
 
   private fun createValueManager(objectStorage: ObjectStorage): ValueManager {
     val container = ValueManagerImpl(objectStorage)
-    container.defineClass(OBJECT_COLLECTOR_CLASS_NAME) {
-      getCompiledClass(OBJECT_COLLECTOR_CLASS_FILE)
-    }
-    container.defineClass(INT_COLLECTOR_CLASS_NAME) {
-      getCompiledClass(INT_COLLECTOR_CLASS_FILE)
-    }
-    container.defineClass(LONG_COLLECTOR_CLASS_NAME) {
-      getCompiledClass(LONG_COLLECTOR_CLASS_FILE)
-    }
-    container.defineClass(DOUBLE_COLLECTOR_CLASS_NAME) {
-      getCompiledClass(DOUBLE_COLLECTOR_CLASS_FILE)
-    }
+    container.defineClass(OBJECT_COLLECTOR_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(OBJECT_COLLECTOR_CLASS_FILE))
+    container.defineClass(INT_COLLECTOR_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(INT_COLLECTOR_CLASS_FILE))
+    container.defineClass(LONG_COLLECTOR_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(LONG_COLLECTOR_CLASS_FILE))
+    container.defineClass(DOUBLE_COLLECTOR_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(DOUBLE_COLLECTOR_CLASS_FILE))
+    container.defineClass(STREAM_DEBUGGER_UTILS_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(STREAM_DEBUGGER_UTILS_CLASS_FILE))
+
     return container
   }
 
