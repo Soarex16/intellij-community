@@ -2,21 +2,20 @@
 package com.intellij.debugger.streams.trace.breakpoint
 
 import com.intellij.Patches
-import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.impl.DebuggerUtilsImpl
 import com.sun.jdi.ObjectReference
 
 class DisableCollectionObjectStorage : ObjectStorage {
   private val registeredObjects: MutableSet<ObjectReference> = mutableSetOf()
 
-  override fun keep(evaluationContext: EvaluationContextImpl, obj: ObjectReference) {
+  override fun keep(obj: ObjectReference) {
     if (!Patches.IBM_JDK_DISABLE_COLLECTION_BUG) {
       DebuggerUtilsImpl.disableCollection(obj)
     }
     registeredObjects.add(obj)
   }
 
-  override fun free(evaluationContext: EvaluationContextImpl, obj: ObjectReference) {
+  override fun free(obj: ObjectReference) {
     if (!Patches.IBM_JDK_DISABLE_COLLECTION_BUG) {
       DebuggerUtilsImpl.enableCollection(obj)
     }
