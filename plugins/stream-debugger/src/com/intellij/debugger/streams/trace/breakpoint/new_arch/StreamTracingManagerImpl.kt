@@ -38,11 +38,15 @@ class StreamTracingManagerImpl(private val breakpointFactory: MethodBreakpointFa
 
   // if exception occurred during stream execution here will be thrown exception
   private var exceptionInstance: ObjectReference? = null
+  private lateinit var streamLocation: Location
+  // it is safe to assume 0 as default value, because if for some reason we did not assign a value,
+  // then when looking for a frame, we will simply reach the bottom of the stack
+  private var streamSurroundingStackFrameDepth: Int = 0
 
   override fun evaluateChain(evaluationContextImpl: EvaluationContextImpl, chain: StreamChain, callback: ChainEvaluationCallback) {
     val firstRequestor = createRequestors(evaluationContextImpl, chain, breakpointResolver.findBreakpointPlaces(chain))
     firstRequestor.enable()
-    //initExceptionGuard(evaluationContextImpl) TODO: better exception handling
+    initExceptionGuard(evaluationContextImpl)
 
     val session = debugProcess.session
     val sessionListener = createTraceFinishListener(chain, session, callback)
@@ -51,19 +55,35 @@ class StreamTracingManagerImpl(private val breakpointFactory: MethodBreakpointFa
   }
 
   private fun initExceptionGuard(evaluationContext: EvaluationContextImpl) {
-    exceptionGuard = breakpointFactory.createExceptionBreakpoint(evaluationContext) { suspendContext, location, exception ->
-      if (location == null || affectsStreamExecution(location, exception)) { // unhandled
+    val frameProxy = evaluationContext.frameProxy!!
+    streamLocation = frameProxy.location()
+    streamSurroundingStackFrameDepth = frameProxy.indexFromBottom
+    exceptionGuard = breakpointFactory.createExceptionBreakpoint(evaluationContext) { suspendContext, catchLocation, exception ->
+      val ctx = suspendContext as SuspendContextImpl
+      if (catchLocation == null || !isHandlerInsideStream(ctx, catchLocation)) {
         disableBreakpointRequests()
-        exceptionInstance = exception
-        // TODO: possible early exit?
+        valueManager.watch(evalContextFactory.createContext(ctx)) {
+          keep(exception)
+          exceptionInstance = exception
+        }
+        // TODO: early exit
       }
     }
     exceptionGuard!!.enable()
   }
 
   // This method should check if exception handler is outside the stream
-  private fun affectsStreamExecution(location: Location?, exception: ObjectReference): Boolean {
-    return false // so far only unhandled exceptions
+  private fun isHandlerInsideStream(suspendContext: SuspendContextImpl, catchLocation: Location): Boolean {
+    val streamSurroundingFrameIndex = suspendContext.frameCount() - streamSurroundingStackFrameDepth
+    val thread = suspendContext.thread!!
+    for (frameIndex in 0 until streamSurroundingFrameIndex) {
+      val frame = thread.frame(frameIndex)
+      // so far we do not handle recursion
+      if (frame.location().method() == catchLocation.method()) {
+        return true
+      }
+    }
+    return false
   }
 
   private fun createTraceFinishListener(chain: StreamChain,
