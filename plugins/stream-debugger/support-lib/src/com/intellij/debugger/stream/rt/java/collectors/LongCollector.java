@@ -8,14 +8,16 @@ package com.intellij.debugger.stream.rt.java.collectors;
 class LongCollector implements java.util.function.LongConsumer {
     private final java.util.Map<Integer, Object> storage;
     private final java.util.concurrent.atomic.AtomicInteger time;
+    private final boolean tick;
 
-    LongCollector(java.util.Map<Integer, Object> storage, java.util.concurrent.atomic.AtomicInteger time) {
+    LongCollector(java.util.Map<Integer, Object> storage, java.util.concurrent.atomic.AtomicInteger time, boolean tick) {
         this.storage = storage;
         this.time = time;
+        this.tick = tick;
     }
 
     @Override
     public void accept(long t) {
-        storage.put(time.incrementAndGet(), t);
+        storage.put(tick ? time.incrementAndGet() : time.get(), t);
     }
 }

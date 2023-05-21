@@ -19,9 +19,10 @@ private val LOG = logger<JDIMethodBreakpointFactory>()
 class JDIMethodBreakpointFactory : MethodBreakpointFactory {
   override fun createMethodEntryBreakpoint(evaluationContext: EvaluationContextImpl,
                                            signature: MethodSignature,
+                                           pauseExecution: Boolean,
                                            transformer: ArgumentsTransformer): MethodEntryRequest {
     val vmMethod = findVmMethod(evaluationContext, signature) ?: throw MethodNotFoundException(signature)
-    val requestor = MethodEntryRequestor(evaluationContext.project, vmMethod) { requestor, suspendContext, event ->
+    val requestor = MethodEntryRequestor(evaluationContext.project, vmMethod, pauseExecution) { requestor, suspendContext, event ->
       event.request().disable()
       suspendContext.debugProcess.requestsManager.deleteRequest(requestor)
 
@@ -106,9 +107,10 @@ class JDIMethodBreakpointFactory : MethodBreakpointFactory {
 
   override fun createMethodExitBreakpoint(evaluationContext: EvaluationContextImpl,
                                           signature: MethodSignature,
+                                          pauseExecution: Boolean,
                                           transformer: ReturnValueTransformer): MethodExitRequest {
     val vmMethod = findVmMethod(evaluationContext, signature) ?: throw MethodNotFoundException(signature)
-    val requestor = MethodExitRequestor(evaluationContext.project, vmMethod) { requestor, suspendContext, event ->
+    val requestor = MethodExitRequestor(evaluationContext.project, vmMethod, pauseExecution) { requestor, suspendContext, event ->
       event.request().disable()
       suspendContext.debugProcess.requestsManager.deleteRequest(requestor)
 
@@ -162,10 +164,12 @@ class JDIMethodBreakpointFactory : MethodBreakpointFactory {
                                          exceptionType: ReferenceType?,
                                          callback: ExceptionHandler): ExceptionRequest {
     val requestor = ExceptionBreakpointRequestor(evaluationContext.project) { requestor, suspendContext, event ->
-      event.request().disable()
-      suspendContext.debugProcess.requestsManager.deleteRequest(requestor)
-
-      callback(suspendContext, event.catchLocation(), event.exception())
+      val breakpointHit = callback(suspendContext, event.catchLocation(), event.exception())
+      if (breakpointHit) {
+        event.request().disable()
+        suspendContext.debugProcess.requestsManager.deleteRequest(requestor)
+      }
+      breakpointHit
     }
 
     return evaluationContext.debugProcess.requestsManager.createExceptionRequest(requestor, exceptionType, true, true)

@@ -7,17 +7,18 @@ import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeSource
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeTerminalCallHandler
 import com.intellij.debugger.streams.wrapper.IntermediateStreamCall
 import com.intellij.debugger.streams.wrapper.TerminatorStreamCall
+import com.sun.jdi.ObjectReference
 
 class StandardLibraryRuntimeHandlerFactory : RuntimeHandlerFactory {
   override fun getForSource(): RuntimeSourceCallHandler {
     TODO("Not yet implemented")
   }
 
-  override fun getForIntermediate(call: IntermediateStreamCall): RuntimeIntermediateCallHandler {
+  override fun getForIntermediate(number: Int, call: IntermediateStreamCall, time: ObjectReference): RuntimeIntermediateCallHandler {
     TODO("Not yet implemented")
   }
 
-  override fun getForTermination(call: TerminatorStreamCall): RuntimeTerminalCallHandler {
+  override fun getForTermination(call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler {
     TODO("Not yet implemented")
   }
 

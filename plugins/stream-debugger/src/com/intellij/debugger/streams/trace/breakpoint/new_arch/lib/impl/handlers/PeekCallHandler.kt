@@ -2,6 +2,7 @@
 package com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.impl.handlers
 
 import com.intellij.debugger.engine.DebuggerUtils
+import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_NAME
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.*
 import com.intellij.debugger.streams.trace.breakpoint.ex.IncorrectValueTypeException
@@ -17,10 +18,10 @@ import com.sun.jdi.ObjectReference
 import com.sun.jdi.Value
 
 open class PeekCallHandler(protected val valueManager: ValueManager,
+                           protected val number: Int? = null,
                            protected val typeBefore: GenericType?,
-                           protected val typeAfter: GenericType?) : RuntimeIntermediateCallHandler, RuntimeTerminalCallHandler {
-
-  private var time: ObjectReference? = null
+                           protected val typeAfter: GenericType?,
+                           protected val time: ObjectReference) : RuntimeIntermediateCallHandler, RuntimeTerminalCallHandler {
   private var beforeValuesMap: ObjectReference? = null
   private var afterValuesMap: ObjectReference? = null
 
@@ -57,7 +58,7 @@ open class PeekCallHandler(protected val valueManager: ValueManager,
     if (typeBefore != null && value is ObjectReference) {
       beforeValuesMap = instance(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
       val streamTypeInfo = StreamTypeInfo.forType(typeBefore.genericTypeName)
-      createInterceptor(value, streamTypeInfo, beforeValuesMap!!)
+      createInterceptor(value, streamTypeInfo, beforeValuesMap!!, number == 0)
     }
     else {
       value
@@ -69,7 +70,7 @@ open class PeekCallHandler(protected val valueManager: ValueManager,
     if (typeAfter != null && value is ObjectReference) {
       afterValuesMap = instance(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
       val streamTypeInfo = StreamTypeInfo.forType(typeAfter.genericTypeName)
-      createInterceptor(value, streamTypeInfo, beforeValuesMap!!)
+      createInterceptor(value, streamTypeInfo, afterValuesMap!!, true)
     }
     else {
       value
@@ -78,13 +79,9 @@ open class PeekCallHandler(protected val valueManager: ValueManager,
 
   private fun ValueContext.createInterceptor(chainInstance: ObjectReference,
                                              streamTypeInfo: StreamTypeInfo,
-                                             valuesMap: ObjectReference): ObjectReference {
-    // because one of beforeCall/afterCall may not be called
-    if (time == null) {
-      time = instance(ATOMIC_INTEGER_CLASS_NAME)
-    }
-
-    val collectorMirror = instance(streamTypeInfo.valueCollectorType, COLLECTOR_CONSTRUCTOR_SIGNATURE, listOf(valuesMap, time!!))
+                                             valuesMap: ObjectReference,
+                                             tick: Boolean): ObjectReference {
+    val collectorMirror = instance(streamTypeInfo.valueCollectorType, COLLECTOR_CONSTRUCTOR_SIGNATURE, listOf(valuesMap, time, tick.mirror))
 
     val peekReceiverType = chainInstance.referenceType() as ClassType
     val peekArgs = listOf(collectorMirror)
@@ -109,7 +106,7 @@ open class PeekCallHandler(protected val valueManager: ValueManager,
   }
   else {
     checkType(valueMap)
-    val helperClass = getType(com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_NAME) as ClassType
+    val helperClass = getType(STREAM_DEBUGGER_UTILS_CLASS_NAME) as ClassType
     val formatMap = helperClass.method(streamTypeInfo.formatterMethod, "(Ljava/util/Map;)[Ljava/lang/Object;")
     formatMap.invoke(helperClass, listOf(valueMap)) as ArrayReference
   }

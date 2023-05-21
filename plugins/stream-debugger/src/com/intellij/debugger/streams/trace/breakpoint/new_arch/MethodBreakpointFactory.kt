@@ -17,7 +17,7 @@ import com.sun.jdi.request.MethodExitRequest
  * */
 typealias ReturnValueTransformer = (SuspendContext, Method, Value?) -> Value?
 typealias ArgumentsTransformer = (SuspendContext, Method, List<Value?>) -> List<Value?>
-typealias ExceptionHandler = (SuspendContext, Location?, ObjectReference) -> Unit
+typealias ExceptionHandler = (SuspendContext, Location?, ObjectReference) -> Boolean
 
 /**
  * @author Shumaf Lovpache
@@ -28,14 +28,18 @@ interface MethodBreakpointFactory {
    * @return disabled method enter request for passed method
    * @throws MethodNotFoundException
    */
-  fun createMethodEntryBreakpoint(evaluationContext: EvaluationContextImpl, signature: MethodSignature,
+  fun createMethodEntryBreakpoint(evaluationContext: EvaluationContextImpl,
+                                  signature: MethodSignature,
+                                  pauseExecution: Boolean = false,
                                   transformer: ArgumentsTransformer): MethodEntryRequest
 
   /**
    * @return disabled method exit request for passed method
    * @throws MethodNotFoundException
    */
-  fun createMethodExitBreakpoint(evaluationContext: EvaluationContextImpl, signature: MethodSignature,
+  fun createMethodExitBreakpoint(evaluationContext: EvaluationContextImpl,
+                                 signature: MethodSignature,
+                                 pauseExecution: Boolean = false,
                                  transformer: ReturnValueTransformer): MethodExitRequest
 
   /**

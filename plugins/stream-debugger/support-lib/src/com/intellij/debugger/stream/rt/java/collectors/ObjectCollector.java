@@ -8,14 +8,16 @@ package com.intellij.debugger.stream.rt.java.collectors;
 class ObjectCollector<T> implements java.util.function.Consumer<T> {
     private final java.util.Map<java.lang.Integer, T> storage;
     private final java.util.concurrent.atomic.AtomicInteger time;
+    private final boolean tick;
 
-    ObjectCollector(java.util.Map<Integer, T> storage, java.util.concurrent.atomic.AtomicInteger time) {
+    ObjectCollector(java.util.Map<Integer, T> storage, java.util.concurrent.atomic.AtomicInteger time, boolean tick) {
         this.storage = storage;
         this.time = time;
+        this.tick = tick;
     }
 
     @Override
     public void accept(T t) {
-        storage.put(time.incrementAndGet(), t);
+        storage.put(tick ? time.incrementAndGet() : time.get(), t);
     }
 }

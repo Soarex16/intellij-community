@@ -5,12 +5,17 @@ import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.ValueManager
 import com.intellij.debugger.streams.trace.impl.handler.type.GenericType
 import com.intellij.psi.CommonClassNames
+import com.sun.jdi.ObjectReference
 import com.sun.jdi.Value
 import com.sun.jdi.VoidValue
 
-class PeekTerminalCallHandler(valueManager: ValueManager, typeBefore: GenericType?, typeAfter: GenericType?) : PeekCallHandler(valueManager,
-                                                                                                                               typeBefore,
-                                                                                                                               typeAfter) {
+class PeekTerminalCallHandler(valueManager: ValueManager,
+                              time: ObjectReference,
+                              typeBefore: GenericType?,
+                              typeAfter: GenericType?) : PeekCallHandler(valueManager,
+                                                                         typeBefore = typeBefore,
+                                                                         typeAfter = typeAfter,
+                                                                         time = time) {
   private var streamResult: Value? = null
 
   override fun result(evaluationContextImpl: EvaluationContextImpl): Value = valueManager.watch(evaluationContextImpl) {
@@ -21,9 +26,20 @@ class PeekTerminalCallHandler(valueManager: ValueManager, typeBefore: GenericTyp
       array(streamResult)
     }
     array(
-      super.result(evaluationContextImpl),
+      array(
+        super.result(evaluationContextImpl),
+        formatTime(evaluationContext)
+      ),
       wrappedStreamResult
     )
+  }
+
+  private fun formatTime(evaluationContext: EvaluationContextImpl): Value = valueManager.watch(evaluationContext) {
+    val getTime = time.method("get", "()I")
+    val timeValue = getTime.invoke(time, emptyList())
+    val timeArr = array("int", 1)
+    timeArr.setValue(0, timeValue)
+    timeArr
   }
 
   override fun afterCall(evaluationContextImpl: EvaluationContextImpl, value: Value?): Value? {

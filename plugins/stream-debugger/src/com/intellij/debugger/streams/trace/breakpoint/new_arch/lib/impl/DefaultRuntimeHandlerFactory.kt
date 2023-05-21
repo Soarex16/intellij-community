@@ -11,15 +11,16 @@ import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.impl.handlers
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.impl.handlers.PeekTerminalCallHandler
 import com.intellij.debugger.streams.wrapper.IntermediateStreamCall
 import com.intellij.debugger.streams.wrapper.TerminatorStreamCall
+import com.sun.jdi.ObjectReference
 
 class DefaultRuntimeHandlerFactory(private val valueManager: ValueManager) : RuntimeHandlerFactory {
   override fun getForSource(): RuntimeSourceCallHandler = NopCallHandler()
 
-  override fun getForIntermediate(call: IntermediateStreamCall): RuntimeIntermediateCallHandler {
-    return PeekCallHandler(valueManager, call.typeBefore, call.typeAfter)
+  override fun getForIntermediate(number: Int, call: IntermediateStreamCall, time: ObjectReference): RuntimeIntermediateCallHandler {
+    return PeekCallHandler(valueManager, number, call.typeBefore, call.typeAfter, time)
   }
 
-  override fun getForTermination(call: TerminatorStreamCall): RuntimeTerminalCallHandler {
-    return PeekTerminalCallHandler(valueManager, call.typeBefore, call.resultType)
+  override fun getForTermination(call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler {
+    return PeekTerminalCallHandler(valueManager, time, call.typeBefore, call.resultType)
   }
 }

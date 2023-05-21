@@ -18,7 +18,7 @@ const val LONG_COLLECTOR_CLASS_FILE = "com/intellij/debugger/stream/rt/java/coll
 const val DOUBLE_COLLECTOR_CLASS_FILE = "com/intellij/debugger/stream/rt/java/collectors/DoubleCollector.class"
 const val OBJECT_COLLECTOR_CLASS_FILE = "com/intellij/debugger/stream/rt/java/collectors/ObjectCollector.class"
 
-const val COLLECTOR_CONSTRUCTOR_SIGNATURE = "(Ljava/util/Map;Ljava/util/concurrent/atomic/AtomicInteger;)V"
+const val COLLECTOR_CONSTRUCTOR_SIGNATURE = "(Ljava/util/Map;Ljava/util/concurrent/atomic/AtomicInteger;Z)V"
 
 const val OBJECT_CONSUMER_SIGNATURE = "(Ljava/util/function/Consumer;)Ljava/util/stream/Stream;"
 const val INT_CONSUMER_SIGNATURE = "(Ljava/util/function/IntConsumer;)Ljava/util/stream/IntStream;"

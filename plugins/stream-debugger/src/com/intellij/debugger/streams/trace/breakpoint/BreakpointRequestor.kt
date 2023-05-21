@@ -19,12 +19,12 @@ private val LOG = logger<MethodBreakpointRequestor>()
 
 typealias MethodEntryCallback = (requestor: FilteredRequestor, suspendContext: SuspendContextImpl, event: MethodEntryEvent) -> Unit
 typealias MethodExitCallback = (requestor: FilteredRequestor, suspendContext: SuspendContextImpl, event: MethodExitEvent) -> Unit
-typealias ExceptionCallback = (requestor: FilteredRequestor, suspendContext: SuspendContextImpl, event: ExceptionEvent) -> Unit
+typealias ExceptionCallback = (requestor: FilteredRequestor, suspendContext: SuspendContextImpl, event: ExceptionEvent) -> Boolean
 
 /**
  * @author Shumaf Lovpache
  */
-abstract class MethodBreakpointRequestor(project: Project, private val method: Method) : FilteredRequestorImpl(project) {
+abstract class MethodBreakpointRequestor(project: Project, private val method: Method, private val requestHit: Boolean) : FilteredRequestorImpl(project) {
   override fun processLocatableEvent(action: SuspendContextCommandImpl, event: LocatableEvent?): Boolean {
     if (event == null) return false
     val context = action.suspendContext ?: return false
@@ -41,7 +41,7 @@ abstract class MethodBreakpointRequestor(project: Project, private val method: M
       }
     }
 
-    return false
+    return requestHit
   }
 
   abstract fun invokeCallback(requestor: MethodBreakpointRequestor, context: SuspendContextImpl, event: LocatableEvent)
@@ -52,8 +52,9 @@ abstract class MethodBreakpointRequestor(project: Project, private val method: M
 class MethodEntryRequestor(
   project: Project,
   method: Method,
+  requestHit: Boolean,
   private val callback: MethodEntryCallback
-) : MethodBreakpointRequestor(project, method) {
+) : MethodBreakpointRequestor(project, method, requestHit) {
   override fun invokeCallback(requestor: MethodBreakpointRequestor, context: SuspendContextImpl, event: LocatableEvent) {
     if (event !is MethodEntryEvent) return
 
@@ -64,8 +65,9 @@ class MethodEntryRequestor(
 class MethodExitRequestor(
   project: Project,
   method: Method,
+  requestHit: Boolean,
   private val callback: MethodExitCallback
-) : MethodBreakpointRequestor(project, method) {
+) : MethodBreakpointRequestor(project, method, requestHit) {
   override fun invokeCallback(requestor: MethodBreakpointRequestor, context: SuspendContextImpl, event: LocatableEvent) {
     if (event !is MethodExitEvent) return
 
@@ -79,7 +81,7 @@ class ExceptionBreakpointRequestor(project: Project, private val callback: Excep
     val context = action.suspendContext ?: return false
     if (context.thread?.isSuspended == true) {
       try {
-        callback(this, context, event)
+        return callback(this, context, event)
       }
       catch (e: Throwable) {
         LOG.info(e)

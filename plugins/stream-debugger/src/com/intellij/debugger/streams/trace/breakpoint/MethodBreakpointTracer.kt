@@ -15,21 +15,16 @@ import com.intellij.debugger.streams.trace.TracingCallback
 import com.intellij.debugger.streams.trace.TracingResult
 import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_FILE
 import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_NAME
-import com.intellij.debugger.streams.trace.breakpoint.TracerUtils.tryExtractExceptionMessage
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointPlaceNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.JDIMethodBreakpointFactory
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.StreamTracingManager
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.StreamTracingManagerImpl
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointTracingSupport
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeHandlerFactory
 import com.intellij.debugger.streams.wrapper.StreamChain
 import com.intellij.openapi.diagnostic.logger
-import com.intellij.psi.CommonClassNames
 import com.intellij.xdebugger.XDebugSession
 import com.sun.jdi.ArrayReference
-import com.sun.jdi.ClassType
-import com.sun.jdi.ObjectReference
 
 private val LOG = logger<MethodBreakpointTracer>()
 
@@ -63,47 +58,38 @@ class MethodBreakpointTracer(private val session: XDebugSession,
         val handlerFactory: RuntimeHandlerFactory = breakpointTracingSupport.createRuntimeHandlerFactory(valueManager)
 
         val breakpointFactory: com.intellij.debugger.streams.trace.breakpoint.new_arch.MethodBreakpointFactory = JDIMethodBreakpointFactory()
-        val tracingManager: StreamTracingManager = StreamTracingManagerImpl(breakpointFactory, breakpointResolver, evalContextFactory,
-                                                                            handlerFactory, valueManager, debugProcess)
-        try {
-          // TODO: после трассировки проверять, что брейкпоинты,
-          //  которые мы расставили были подчищены. Также полезно
-          //  рассмотреть как поведет себя control flow в случае
-          //  завершения дебага, не будет ли течь память
-
-          // TODO: посмотреть куда будут вываливаться исключения, созданные в коллбеках брейкпоинтов
-          tracingManager.evaluateChain(evalContext, chain) { context, result ->
-            if (result is ArrayReference) {
-              val interpretedResult: TracingResult = try {
-                resultInterpreter.interpret(chain, result)
-              }
-              catch (t: Throwable) {
-                callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
-                throw t
-              }
-              callback.evaluated(interpretedResult, context)
-              return@evaluateChain
+        // TODO: очень много параметров, нужно порефакторить
+        val tracingManager = StreamTracingManager(breakpointFactory, breakpointResolver, evalContextFactory,
+                                                  handlerFactory, valueManager, debugProcess,
+                                                  chain) cb@{ context, result ->
+          if (result is ArrayReference) {
+            val interpretedResult: TracingResult = try {
+              resultInterpreter.interpret(chain, result)
             }
-
-            if (result is ObjectReference) {
-              val type = result.referenceType()
-              if (type is ClassType) {
-                var classType: ClassType? = type
-                while (classType != null && CommonClassNames.JAVA_LANG_THROWABLE != classType.name()) {
-                  classType = classType.superclass()
-                }
-                if (classType != null) {
-                  val exceptionMessage = tryExtractExceptionMessage(result)
-                  val description = "Evaluation failed: " + type.name() + " exception thrown"
-                  val descriptionWithReason = if (exceptionMessage == null) description else "$description: $exceptionMessage"
-                  callback.evaluationFailed("", descriptionWithReason)
-                  return@evaluateChain
-                }
-              }
+            catch (t: Throwable) {
+              callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
+              throw t
             }
-
-            callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.unknown.result.type"))
+            callback.evaluated(interpretedResult, context)
+            return@cb
           }
+
+          // TODO: pass some onException callback to debugger commands because of async stacks
+          //val exceptionMessage = tryExtractExceptionMessage(result)
+          //val description = "Evaluation failed: " + type.name() + " exception thrown"
+          //val descriptionWithReason = if (exceptionMessage == null) description else "$description: $exceptionMessage"
+          //callback.evaluationFailed("", descriptionWithReason)
+
+          callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.unknown.result.type"))
+        }
+        // TODO: после трассировки проверять, что брейкпоинты,
+        //  которые мы расставили были подчищены. Также полезно
+        //  рассмотреть как поведет себя control flow в случае
+        //  завершения дебага, не будет ли течь память
+
+        // TODO: посмотреть куда будут вываливаться исключения, созданные в коллбеках брейкпоинтов
+        try {
+          tracingManager.evaluateChain(evalContext)
         }
         catch (e: BreakpointPlaceNotFoundException) {
           callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.find.places.for.breakpoints"))

@@ -6,6 +6,7 @@ import com.intellij.debugger.streams.trace.StreamTracer
 import com.intellij.debugger.streams.trace.TraceResultInterpreter
 import com.intellij.debugger.streams.trace.breakpoint.JavaBreakpointResolver
 import com.intellij.debugger.streams.trace.breakpoint.MethodBreakpointTracer
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointTracingSupport
 import com.intellij.openapi.application.runReadAction
 import com.intellij.psi.PsiManager
 import com.intellij.xdebugger.XDebugSession
@@ -21,7 +22,8 @@ open class BreakpointBasedTraceExecutionTestCase : TraceExecutionTestCase() {
       psiManager.findFile(currentPosition.file)!!
     }
     val breakpointResolver = JavaBreakpointResolver(currentFile)
+    val breakpointTracingSupport: BreakpointTracingSupport = librarySupportProvider.breakpointTracingSupport!!
 
-    return MethodBreakpointTracer(session, breakpointResolver, resultInterpreter)
+    return MethodBreakpointTracer(session, breakpointTracingSupport, breakpointResolver, resultInterpreter)
   }
 }

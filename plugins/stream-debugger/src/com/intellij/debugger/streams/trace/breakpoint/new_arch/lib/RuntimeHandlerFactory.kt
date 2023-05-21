@@ -3,6 +3,7 @@ package com.intellij.debugger.streams.trace.breakpoint.new_arch.lib
 
 import com.intellij.debugger.streams.wrapper.IntermediateStreamCall
 import com.intellij.debugger.streams.wrapper.TerminatorStreamCall
+import com.sun.jdi.ObjectReference
 
 /**
  * @author Shumaf Lovpache
@@ -13,6 +14,6 @@ interface RuntimeHandlerFactory {
    * we can't determine source call (for ex. we can get stream as return value from user code)
    */
   fun getForSource(): RuntimeSourceCallHandler
-  fun getForIntermediate(call: IntermediateStreamCall): RuntimeIntermediateCallHandler
-  fun getForTermination(call: TerminatorStreamCall): RuntimeTerminalCallHandler
+  fun getForIntermediate(number: Int, call: IntermediateStreamCall, time: ObjectReference): RuntimeIntermediateCallHandler
+  fun getForTermination(call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler
 }
