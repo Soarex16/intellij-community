@@ -19,7 +19,7 @@ import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointPlaceNotFound
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.JDIMethodBreakpointFactory
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.StreamTracingManager
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointTracingSupport
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointBasedLibrarySupport
 import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeHandlerFactory
 import com.intellij.debugger.streams.wrapper.StreamChain
 import com.intellij.openapi.diagnostic.logger
@@ -32,7 +32,7 @@ private val LOG = logger<MethodBreakpointTracer>()
  * @author Shumaf Lovpache
  */
 class MethodBreakpointTracer(private val session: XDebugSession,
-                             private val breakpointTracingSupport: BreakpointTracingSupport,
+                             private val breakpointTracingSupport: BreakpointBasedLibrarySupport,
                              private val breakpointResolver: BreakpointResolver,
                              private val resultInterpreter: TraceResultInterpreter) : StreamTracer {
   override fun trace(chain: StreamChain, callback: TracingCallback) {

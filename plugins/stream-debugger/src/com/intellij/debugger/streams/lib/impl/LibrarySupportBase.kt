@@ -6,16 +6,20 @@ import com.intellij.debugger.streams.resolve.ValuesOrderResolver
 import com.intellij.debugger.streams.trace.CallTraceInterpreter
 import com.intellij.debugger.streams.trace.IntermediateCallHandler
 import com.intellij.debugger.streams.trace.TerminatorCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.JavaBreakpointResolver
+import com.intellij.debugger.streams.trace.breakpoint.ValueManager
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.*
 import com.intellij.debugger.streams.trace.dsl.Dsl
 import com.intellij.debugger.streams.wrapper.IntermediateStreamCall
 import com.intellij.debugger.streams.wrapper.TerminatorStreamCall
+import com.sun.jdi.ObjectReference
 
 /**
  * @author Vitaliy.Bibaev
  */
-abstract class LibrarySupportBase(private val compatibleLibrary: LibrarySupport = LibrarySupportBase.EMPTY) : LibrarySupport {
+abstract class LibrarySupportBase(private val compatibleLibrary: UniversalLibrarySupport = LibrarySupportBase.EMPTY) : UniversalLibrarySupport {
   companion object {
-    val EMPTY: LibrarySupport = DefaultLibrarySupport()
+    val EMPTY: UniversalLibrarySupport = DefaultLibrarySupport()
   }
 
   private val mySupportedIntermediateOperations: MutableMap<String, IntermediateOperation> = mutableMapOf()
@@ -36,6 +40,60 @@ abstract class LibrarySupportBase(private val compatibleLibrary: LibrarySupport 
                ?: compatibleLibraryFactory.getForTermination(call, resultExpression)
       }
     }
+  }
+
+  override fun createRuntimeHandlerFactory(valueManager: ValueManager): RuntimeHandlerFactory {
+    // TODO: factory
+    // Terminal operations:
+    // void forEach(Consumer<? super T> action)
+    // void forEachOrdered(Consumer<? super T> action)
+
+    // Object[] toArray()
+    // <A> A[] toArray(IntFunction<A[]> generator)
+    // T reduce(T identity, BinaryOperator<T> accumulator)
+    // <U> U reduce(U identity, BiFunction<U,? super T,U> accumulator, BinaryOperator<U> combiner)
+    // <R> R collect(Supplier<R> supplier, BiConsumer<R,? super T> accumulator, BiConsumer<R,R> combiner)
+    // <R,A> R collect(Collector<? super T,A,R> collector)
+    // long count()
+    // default List<T> toList()
+
+    // boolean anyMatch(Predicate<? super T> predicate)
+    // boolean allMatch(Predicate<? super T> predicate)
+    // boolean noneMatch(Predicate<? super T> predicate)
+
+    // Optional<T> reduce(BinaryOperator<T> accumulator)
+    // Optional<T> miсn(Comparator<? super T> comparator)
+    // Optional<T> max(Comparator<? super T> comparator)
+    // Optional<T> findFirst()
+    // Optional<T> findAny()
+    //private fun getTerminationOperationFormatter(valueManager: ValueManager, evaluationContext: EvaluationContextImpl, streamCall: StreamCall): TerminationOperationTraceFormatter = when(streamCall.name) {
+    //  "findAny", "findFirst", "min", "max", "reduce" -> OptionalTraceFormatter(valueManager, evaluationContext)
+    //  "forEach", "forEachOrdered" -> ForEachTraceFormatter(valueManager, evaluationContext)
+    //  "anyMatch", "allMatch", "noneMatch" -> TODO("Not implemented")
+    //  else -> ToCollectionTraceFormatter(valueManager, evaluationContext)
+    //}
+    return object : RuntimeHandlerFactory {
+      val compatibleRuntimeHandlerFactory = compatibleLibrary.createRuntimeHandlerFactory(valueManager)
+      override fun getForSource(): RuntimeSourceCallHandler {
+        return compatibleRuntimeHandlerFactory.getForSource()
+      }
+
+      override fun getForIntermediate(number: Int, call: IntermediateStreamCall, time: ObjectReference): RuntimeIntermediateCallHandler {
+        val operation = mySupportedIntermediateOperations[call.name]
+        return operation?.getRuntimeTraceHandler(number, call, valueManager, time)
+               ?: compatibleRuntimeHandlerFactory.getForIntermediate(number, call, time)
+      }
+
+      override fun getForTermination(number: Int, call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler {
+        val terminalOperation = mySupportedTerminalOperations[call.name]
+        return terminalOperation?.getRuntimeTraceHandler(number, call, valueManager, time)
+               ?: compatibleRuntimeHandlerFactory.getForTermination(number, call, time)
+      }
+    }
+  }
+
+  override val breakpointResolverFactory: BreakpointResolverFactory = BreakpointResolverFactory {
+    JavaBreakpointResolver(it)
   }
 
   final override val interpreterFactory: InterpreterFactory = object : InterpreterFactory {

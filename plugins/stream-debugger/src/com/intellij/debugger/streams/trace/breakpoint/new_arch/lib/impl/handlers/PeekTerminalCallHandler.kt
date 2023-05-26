@@ -10,12 +10,10 @@ import com.sun.jdi.Value
 import com.sun.jdi.VoidValue
 
 class PeekTerminalCallHandler(valueManager: ValueManager,
+                              number: Int,
                               time: ObjectReference,
                               typeBefore: GenericType?,
-                              typeAfter: GenericType?) : PeekCallHandler(valueManager,
-                                                                         typeBefore = typeBefore,
-                                                                         typeAfter = typeAfter,
-                                                                         time = time) {
+                              typeAfter: GenericType?) : PeekCallHandler(valueManager, number, typeBefore, typeAfter, time) {
   private var streamResult: Value? = null
 
   override fun result(evaluationContextImpl: EvaluationContextImpl): Value = valueManager.watch(evaluationContextImpl) {

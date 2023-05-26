@@ -15,5 +15,5 @@ interface RuntimeHandlerFactory {
    */
   fun getForSource(): RuntimeSourceCallHandler
   fun getForIntermediate(number: Int, call: IntermediateStreamCall, time: ObjectReference): RuntimeIntermediateCallHandler
-  fun getForTermination(call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler
+  fun getForTermination(number: Int, call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler
 }

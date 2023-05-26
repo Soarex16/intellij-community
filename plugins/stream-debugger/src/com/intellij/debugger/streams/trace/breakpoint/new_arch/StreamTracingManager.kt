@@ -151,7 +151,9 @@ class StreamTracingManager(private val breakpointFactory: MethodBreakpointFactor
         createIntermediateOperationRequestors(evaluationContext, time, callOrder, call, methodSignature)
       }
 
-    terminalOperationBreakpoint = createTerminalOperationRequestors(evaluationContext, time, chain.terminationCall,
+    terminalOperationBreakpoint = createTerminalOperationRequestors(evaluationContext, time,
+                                                                    chain.intermediateCalls.size,
+                                                                    chain.terminationCall,
                                                                     locations.terminationOperationMethod)
 
     return qualifierExpressionBreakpoint
@@ -193,9 +195,9 @@ class StreamTracingManager(private val breakpointFactory: MethodBreakpointFactor
   }
 
   private fun createTerminalOperationRequestors(evaluationContext: EvaluationContextImpl, time: ObjectReference,
-                                                call: TerminatorStreamCall,
+                                                callOrder: Int, call: TerminatorStreamCall,
                                                 methodSignature: MethodSignature): StreamCallRuntimeInfo {
-    val handler = handlerFactory.getForTermination(call, time)
+    val handler = handlerFactory.getForTermination(callOrder, call, time)
     val exitRequest = breakpointFactory.createMethodExitBreakpoint(evaluationContext, methodSignature) { suspendContext, _, value ->
       val context = evalContextFactory.createContext(checkSuspendContext(suspendContext))
       val stepOutRequest = createStepOutRequest(context.suspendContext)

@@ -11,7 +11,7 @@ import com.intellij.debugger.streams.psi.DebuggerPositionResolver;
 import com.intellij.debugger.streams.psi.impl.DebuggerPositionResolverImpl;
 import com.intellij.debugger.streams.trace.*;
 import com.intellij.debugger.streams.trace.breakpoint.*;
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointTracingSupport;
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointBasedLibrarySupport;
 import com.intellij.debugger.streams.trace.impl.TraceResultInterpreterImpl;
 import com.intellij.debugger.streams.ui.ChooserOption;
 import com.intellij.debugger.streams.ui.impl.ElementChooserImpl;
@@ -151,7 +151,8 @@ public final class TraceStreamAction extends AnAction {
 
   @NotNull
   private static StreamTracer getStreamTracer(@NotNull XDebugSession session, @NotNull Project project, @NotNull LibrarySupportProvider provider) {
-    final TraceResultInterpreter resultInterpreter = new TraceResultInterpreterImpl(provider.getLibrarySupport().getInterpreterFactory());
+    final var librarySupport = provider.getLibrarySupport();
+    final TraceResultInterpreter resultInterpreter = new TraceResultInterpreterImpl(librarySupport.getInterpreterFactory());
 
     String tracingEngine = Registry.get(TRACING_ENGINE_REGISTRY_KEY).getSelectedOption();
     if (tracingEngine == null) {
@@ -169,16 +170,17 @@ public final class TraceStreamAction extends AnAction {
         if (currentFile == null) {
           throw new DebuggerLocationNotFoundException("Cannot find current file PSI representation");
         }
-        final BreakpointTracingSupport breakpointTracingSupport = provider.getBreakpointTracingSupport();
-        if (breakpointTracingSupport == null) {
-          LOG.warn(String.format("Breakpoint based tracing not supported for language %s. Falling back to evaluate expression tracer", provider.getLanguageId()));
-          final TraceExpressionBuilder expressionBuilder = provider.getExpressionBuilder(project);
-          yield new EvaluateExpressionTracer(session, expressionBuilder, resultInterpreter);
+
+        if (librarySupport instanceof BreakpointBasedLibrarySupport breakpointTracingSupport) {
+          final BreakpointResolver breakpointResolver = breakpointTracingSupport
+            .getBreakpointResolverFactory()
+            .getBreakpointResolver(currentFile);
+          yield new MethodBreakpointTracer(session, breakpointTracingSupport, breakpointResolver, resultInterpreter);
         }
-        final BreakpointResolver breakpointResolver = breakpointTracingSupport
-          .getBreakpointResolverFactory()
-          .getBreakpointResolver(currentFile);
-        yield new MethodBreakpointTracer(session, breakpointTracingSupport, breakpointResolver, resultInterpreter);
+
+        LOG.warn(String.format("Breakpoint based tracing not supported for language %s. Falling back to evaluate expression tracer", provider.getLanguageId()));
+        final TraceExpressionBuilder expressionBuilder = provider.getExpressionBuilder(project);
+        yield new EvaluateExpressionTracer(session, expressionBuilder, resultInterpreter);
       }
       case EVALUATE_EXPRESSION_TRACER -> {
         final TraceExpressionBuilder expressionBuilder = provider.getExpressionBuilder(project);

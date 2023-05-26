@@ -2,6 +2,7 @@
 
 package org.jetbrains.kotlin.idea.debugger.sequence.lib.sequence
 
+import com.intellij.debugger.streams.lib.ExpressionBasedLibrarySupport
 import com.intellij.debugger.streams.lib.LibrarySupport
 import com.intellij.debugger.streams.lib.LibrarySupportProvider
 import com.intellij.debugger.streams.trace.TraceExpressionBuilder
@@ -25,7 +26,7 @@ class KotlinSequenceSupportProvider : LibrarySupportProvider {
         KotlinChainTransformerImpl(SequenceTypeExtractor()),
         SequenceCallCheckerWithNameHeuristics(SequenceCallChecker())
     )
-    private val support: LibrarySupport by lazy { KotlinSequencesSupport() }
+    private val support: ExpressionBasedLibrarySupport by lazy { KotlinSequencesSupport() }
     private val dsl: DslImpl by lazy { DslImpl(KotlinStatementFactory(KotlinCollectionsPeekCallFactory())) }
 
     override fun getChainBuilder(): StreamChainBuilder = builder

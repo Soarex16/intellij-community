@@ -7,12 +7,7 @@ import com.intellij.debugger.streams.psi.impl.JavaChainTransformerImpl
 import com.intellij.debugger.streams.psi.impl.JavaStreamChainBuilder
 import com.intellij.debugger.streams.psi.impl.PackageChainDetector
 import com.intellij.debugger.streams.trace.TraceExpressionBuilder
-import com.intellij.debugger.streams.trace.breakpoint.JavaBreakpointResolver
-import com.intellij.debugger.streams.trace.breakpoint.ValueManager
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointResolverFactory
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointTracingSupport
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeHandlerFactory
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.impl.DefaultRuntimeHandlerFactory
+import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.UniversalLibrarySupport
 import com.intellij.debugger.streams.trace.dsl.Dsl
 import com.intellij.debugger.streams.trace.dsl.impl.DslImpl
 import com.intellij.debugger.streams.trace.dsl.impl.java.JavaStatementFactory
@@ -27,7 +22,7 @@ internal class StandardLibrarySupportProvider : LibrarySupportProvider {
   private companion object {
     val builder: StreamChainBuilder = JavaStreamChainBuilder(JavaChainTransformerImpl(),
                                                              PackageChainDetector.forJavaStreams("java.util.stream"))
-    val support: LibrarySupport = StandardLibrarySupport()
+    val support: UniversalLibrarySupport = StandardLibrarySupport()
     val dsl: Dsl = DslImpl(JavaStatementFactory())
   }
 
@@ -39,14 +34,4 @@ internal class StandardLibrarySupportProvider : LibrarySupportProvider {
   override fun getChainBuilder(): StreamChainBuilder = builder
 
   override fun getLibrarySupport(): LibrarySupport = support
-
-  override fun getBreakpointTracingSupport(): BreakpointTracingSupport = object : BreakpointTracingSupport {
-    override fun createRuntimeHandlerFactory(valueManager: ValueManager): RuntimeHandlerFactory {
-      return DefaultRuntimeHandlerFactory(valueManager)
-    }
-
-    override val breakpointResolverFactory: BreakpointResolverFactory = BreakpointResolverFactory {
-      JavaBreakpointResolver(it)
-    }
-  }
 }

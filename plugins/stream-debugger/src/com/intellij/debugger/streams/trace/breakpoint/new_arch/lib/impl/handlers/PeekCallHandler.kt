@@ -18,7 +18,7 @@ import com.sun.jdi.ObjectReference
 import com.sun.jdi.Value
 
 open class PeekCallHandler(protected val valueManager: ValueManager,
-                           protected val number: Int? = null,
+                           protected val number: Int,
                            protected val typeBefore: GenericType?,
                            protected val typeAfter: GenericType?,
                            protected val time: ObjectReference) : RuntimeIntermediateCallHandler, RuntimeTerminalCallHandler {
@@ -89,16 +89,7 @@ open class PeekCallHandler(protected val valueManager: ValueManager,
     val peekMethod = DebuggerUtils.findMethod(peekReceiverType, "peek", streamTypeInfo.peekSignature)
                      ?: throw MethodNotFoundException("peek", streamTypeInfo.peekSignature, peekReceiverType.name())
 
-    //if (!checkStreamMethodArguments(peekMethod, peekArgs)) throw ArgumentTypeMismatchException(peekMethod, peekArgs)
-
-    return evaluationContext.debugProcess.invokeInstanceMethod(
-      evaluationContext,
-      chainInstance,
-      peekMethod,
-      peekArgs,
-      0,
-      true
-    ) as ObjectReference
+    return peekMethod.invoke(chainInstance, peekArgs) as ObjectReference
   }
 
   private fun ValueContext.formatMap(valueMap: ObjectReference?, streamTypeInfo: StreamTypeInfo): ArrayReference = if (valueMap == null) {

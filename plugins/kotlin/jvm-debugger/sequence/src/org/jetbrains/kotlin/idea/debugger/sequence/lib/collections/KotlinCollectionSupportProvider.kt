@@ -2,6 +2,7 @@
 
 package org.jetbrains.kotlin.idea.debugger.sequence.lib.collections
 
+import com.intellij.debugger.streams.lib.ExpressionBasedLibrarySupport
 import com.intellij.debugger.streams.lib.LibrarySupport
 import com.intellij.debugger.streams.lib.LibrarySupportProvider
 import com.intellij.debugger.streams.trace.TraceExpressionBuilder
@@ -16,7 +17,7 @@ import org.jetbrains.kotlin.idea.debugger.sequence.trace.impl.KotlinTraceExpress
 
 class KotlinCollectionSupportProvider : LibrarySupportProvider {
     private val builder: StreamChainBuilder = KotlinCollectionChainBuilder()
-    private val support: LibrarySupport by lazy { KotlinCollectionLibrarySupport() }
+    private val support: ExpressionBasedLibrarySupport by lazy { KotlinCollectionLibrarySupport() }
     private val dsl by lazy { DslImpl(KotlinStatementFactory(KotlinCollectionsPeekCallFactory())) }
 
     override fun getLanguageId(): String = KotlinLanguage.INSTANCE.id
