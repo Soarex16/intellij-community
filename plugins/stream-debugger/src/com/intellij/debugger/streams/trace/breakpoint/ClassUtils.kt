@@ -53,7 +53,7 @@ fun compileJavaCode(className: String, sourceCode: String, evaluationContext: Ev
   if (languageLevel != null && languageLevel.isPreview) {
     options.add(JavaParameters.JAVA_ENABLE_PREVIEW_PROPERTY)
   }
-  val runtime: Pair<Sdk, JavaSdkVersion> = BuildManager.getJavacRuntimeSdk(project)
+  val runtime = BuildManager.getJavacRuntimeSdk(project)
   val buildRuntimeVersion = runtime.getSecond()
   // if compiler or debuggee version or both are unknown, let source and target be the compiler's defaults
   if (buildRuntimeVersion != null && debuggeeVersion != null) {
