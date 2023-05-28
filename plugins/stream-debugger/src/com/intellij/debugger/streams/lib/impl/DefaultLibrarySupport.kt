@@ -8,10 +8,10 @@ import com.intellij.debugger.streams.trace.CallTraceInterpreter
 import com.intellij.debugger.streams.trace.IntermediateCallHandler
 import com.intellij.debugger.streams.trace.TerminatorCallHandler
 import com.intellij.debugger.streams.trace.breakpoint.ValueManager
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.*
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.impl.handlers.NopCallHandler
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.impl.handlers.PeekCallHandler
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.impl.handlers.PeekTerminalCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.lib.*
+import com.intellij.debugger.streams.trace.breakpoint.lib.impl.handlers.NopCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.lib.impl.handlers.PeekCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.lib.impl.handlers.PeekTerminalCallHandler
 import com.intellij.debugger.streams.trace.dsl.Dsl
 import com.intellij.debugger.streams.trace.impl.handler.unified.PeekTraceHandler
 import com.intellij.debugger.streams.trace.impl.handler.unified.TerminatorTraceHandler

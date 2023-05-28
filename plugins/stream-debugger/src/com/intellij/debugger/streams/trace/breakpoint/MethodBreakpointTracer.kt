@@ -17,10 +17,8 @@ import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUG
 import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_NAME
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointPlaceNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.JDIMethodBreakpointFactory
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.StreamTracingManager
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointBasedLibrarySupport
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeHandlerFactory
+import com.intellij.debugger.streams.trace.breakpoint.lib.BreakpointBasedLibrarySupport
+import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeHandlerFactory
 import com.intellij.debugger.streams.wrapper.StreamChain
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.xdebugger.XDebugSession
@@ -57,7 +55,7 @@ class MethodBreakpointTracer(private val session: XDebugSession,
         val valueManager: ValueManager = createValueManager(objectStorage)
         val handlerFactory: RuntimeHandlerFactory = breakpointTracingSupport.createRuntimeHandlerFactory(valueManager)
 
-        val breakpointFactory: com.intellij.debugger.streams.trace.breakpoint.new_arch.MethodBreakpointFactory = JDIMethodBreakpointFactory()
+        val breakpointFactory: MethodBreakpointFactory = JDIMethodBreakpointFactory()
         // TODO: очень много параметров, нужно порефакторить
         val tracingManager = StreamTracingManager(breakpointFactory, breakpointResolver, evalContextFactory,
                                                   handlerFactory, valueManager, debugProcess,

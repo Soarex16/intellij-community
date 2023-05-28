@@ -1,5 +1,5 @@
 // Copyright 2000-2023 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.
-package com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.impl.handlers
+package com.intellij.debugger.streams.trace.breakpoint.lib.impl.handlers
 
 import com.intellij.debugger.engine.DebuggerUtils
 import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_NAME
@@ -8,8 +8,8 @@ import com.intellij.debugger.streams.trace.breakpoint.*
 import com.intellij.debugger.streams.trace.breakpoint.ex.IncorrectValueTypeException
 import com.intellij.debugger.streams.trace.breakpoint.ex.MethodNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.ValueInstantiationException
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeIntermediateCallHandler
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.RuntimeTerminalCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeIntermediateCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeTerminalCallHandler
 import com.intellij.debugger.streams.trace.impl.handler.type.GenericType
 import com.intellij.psi.CommonClassNames
 import com.sun.jdi.ArrayReference

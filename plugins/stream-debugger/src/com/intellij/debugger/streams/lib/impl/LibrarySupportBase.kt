@@ -8,7 +8,7 @@ import com.intellij.debugger.streams.trace.IntermediateCallHandler
 import com.intellij.debugger.streams.trace.TerminatorCallHandler
 import com.intellij.debugger.streams.trace.breakpoint.JavaBreakpointResolver
 import com.intellij.debugger.streams.trace.breakpoint.ValueManager
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.*
+import com.intellij.debugger.streams.trace.breakpoint.lib.*
 import com.intellij.debugger.streams.trace.dsl.Dsl
 import com.intellij.debugger.streams.wrapper.IntermediateStreamCall
 import com.intellij.debugger.streams.wrapper.TerminatorStreamCall

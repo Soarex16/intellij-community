@@ -11,7 +11,7 @@ import com.intellij.debugger.streams.psi.DebuggerPositionResolver;
 import com.intellij.debugger.streams.psi.impl.DebuggerPositionResolverImpl;
 import com.intellij.debugger.streams.trace.*;
 import com.intellij.debugger.streams.trace.breakpoint.*;
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointBasedLibrarySupport;
+import com.intellij.debugger.streams.trace.breakpoint.lib.BreakpointBasedLibrarySupport;
 import com.intellij.debugger.streams.trace.impl.TraceResultInterpreterImpl;
 import com.intellij.debugger.streams.ui.ChooserOption;
 import com.intellij.debugger.streams.ui.impl.ElementChooserImpl;

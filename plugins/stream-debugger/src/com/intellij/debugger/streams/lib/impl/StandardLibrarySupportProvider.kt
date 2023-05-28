@@ -7,7 +7,7 @@ import com.intellij.debugger.streams.psi.impl.JavaChainTransformerImpl
 import com.intellij.debugger.streams.psi.impl.JavaStreamChainBuilder
 import com.intellij.debugger.streams.psi.impl.PackageChainDetector
 import com.intellij.debugger.streams.trace.TraceExpressionBuilder
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.UniversalLibrarySupport
+import com.intellij.debugger.streams.trace.breakpoint.lib.UniversalLibrarySupport
 import com.intellij.debugger.streams.trace.dsl.Dsl
 import com.intellij.debugger.streams.trace.dsl.impl.DslImpl
 import com.intellij.debugger.streams.trace.dsl.impl.java.JavaStatementFactory

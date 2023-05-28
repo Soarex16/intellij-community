@@ -6,7 +6,7 @@ import com.intellij.debugger.streams.trace.StreamTracer
 import com.intellij.debugger.streams.trace.TraceResultInterpreter
 import com.intellij.debugger.streams.trace.breakpoint.JavaBreakpointResolver
 import com.intellij.debugger.streams.trace.breakpoint.MethodBreakpointTracer
-import com.intellij.debugger.streams.trace.breakpoint.new_arch.lib.BreakpointBasedLibrarySupport
+import com.intellij.debugger.streams.trace.breakpoint.lib.BreakpointBasedLibrarySupport
 import com.intellij.openapi.application.runReadAction
 import com.intellij.psi.PsiManager
 import com.intellij.xdebugger.XDebugSession
