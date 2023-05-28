@@ -6,7 +6,6 @@ import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUG
 import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.*
 import com.intellij.debugger.streams.trace.breakpoint.ex.IncorrectValueTypeException
-import com.intellij.debugger.streams.trace.breakpoint.ex.MethodNotFoundException
 import com.intellij.debugger.streams.trace.breakpoint.ex.ValueInstantiationException
 import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeIntermediateCallHandler
 import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeTerminalCallHandler
@@ -86,10 +85,9 @@ open class PeekCallHandler(protected val valueManager: ValueManager,
     val peekReceiverType = chainInstance.referenceType() as ClassType
     val peekArgs = listOf(collectorMirror)
 
-    val peekMethod = DebuggerUtils.findMethod(peekReceiverType, "peek", streamTypeInfo.peekSignature)
-                     ?: throw MethodNotFoundException("peek", streamTypeInfo.peekSignature, peekReceiverType.name())
-
-    return peekMethod.invoke(chainInstance, peekArgs) as ObjectReference
+    return peekReceiverType
+      .method("peek", streamTypeInfo.peekSignature)
+      .invoke(chainInstance, peekArgs) as ObjectReference
   }
 
   private fun ValueContext.formatMap(valueMap: ObjectReference?, streamTypeInfo: StreamTypeInfo): ArrayReference = if (valueMap == null) {

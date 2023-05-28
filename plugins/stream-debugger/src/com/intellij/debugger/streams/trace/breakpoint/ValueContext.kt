@@ -44,8 +44,8 @@ interface ValueContext {
   fun ObjectReference.method(name: String, signature: String): Method
   fun ReferenceType.method(name: String, signature: String): Method
 
-  fun Method.invoke(cls: ClassType, arguments: List<Value?>): Value?
-  fun Method.invoke(obj: ObjectReference, arguments: List<Value?>): Value?
+  fun Method.invoke(cls: ClassType, arguments: List<Value?> = emptyList()): Value?
+  fun Method.invoke(obj: ObjectReference, arguments: List<Value?> = emptyList()): Value?
 
   fun keep(value: Value?)
 }
