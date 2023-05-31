@@ -18,7 +18,7 @@ interface ValueContext {
    * @throws IncompatibleThreadStateException
    * @throws InvocationException
    */
-  fun instance(className: String, constructorSignature: String, args: List<Value>): ObjectReference
+  fun instance(className: String, constructorSignature: String, args: List<Value?>): ObjectReference
 
   fun instance(className: String): ObjectReference = instance(className, EMPTY_CONSTRUCTOR_SIGNATURE, emptyList())
 

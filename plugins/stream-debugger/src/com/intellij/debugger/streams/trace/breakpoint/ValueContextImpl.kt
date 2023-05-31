@@ -16,7 +16,7 @@ import com.sun.jdi.*
 class ValueContextImpl(private val bytecodeFactories: Map<String, BytecodeFactory>,
                        private val objectStorage: ObjectStorage,
                        override val evaluationContext: EvaluationContextImpl) : ValueContext {
-  override fun instance(className: String, constructorSignature: String, args: List<Value>): ObjectReference {
+  override fun instance(className: String, constructorSignature: String, args: List<Value?>): ObjectReference {
     val instance = when (val type = getType(className)) {
       // Array type don't have constructor method
       is ArrayType -> {
