@@ -107,7 +107,7 @@ class StreamTracingManager(private val breakpointFactory: MethodBreakpointFactor
         val ctx = debugProcess.session.suspendContext as SuspendContextImpl
         val frame = session.currentStackFrame
         val stackDepth = ctx.frameCount()
-        if (stackDepth > streamSurroundingStackFrameDepth) {
+        if (exceptionInstance != null && stackDepth > streamSurroundingStackFrameDepth) {
           val debugProcess = ctx.debugProcess
           val stepCommand = debugProcess.createStepIntoCommand(ctx, true, null, StepRequest.STEP_MIN)
           debugProcess.session.setSteppingThrough(stepCommand.contextThread)
@@ -135,12 +135,12 @@ class StreamTracingManager(private val breakpointFactory: MethodBreakpointFactor
 
     val qualifierExpressionBreakpoint = if (locations.qualifierExpressionMethod == null) {
       // if qualifier expression is variable we need to replace it in current stack frame
-      replaceQualifierExpressionValue(evaluationContext, chain.qualifierExpression)
+      replaceQualifierExpressionValue(evaluationContext, chain.qualifierExpression, time)
       null
     }
     else {
       // if it is a method call, then we set additional breakpoint as for an intermediate operation
-      sourceOperationBreakpoint = createSourceOperationRequestor(evaluationContext, locations.qualifierExpressionMethod)
+      sourceOperationBreakpoint = createSourceOperationRequestor(evaluationContext, locations.qualifierExpressionMethod, time)
       sourceOperationBreakpoint
     }
 
@@ -151,7 +151,6 @@ class StreamTracingManager(private val breakpointFactory: MethodBreakpointFactor
       }
 
     terminalOperationBreakpoint = createTerminalOperationRequestors(evaluationContext, time,
-                                                                    chain.intermediateCalls.size,
                                                                     chain.terminationCall,
                                                                     locations.terminationOperationMethod)
 
@@ -161,12 +160,13 @@ class StreamTracingManager(private val breakpointFactory: MethodBreakpointFactor
   }
 
   private fun createSourceOperationRequestor(evaluationContext: EvaluationContextImpl,
-                                             methodSignature: MethodSignature): MethodExitRequest {
+                                             methodSignature: MethodSignature,
+                                             time: ObjectReference): MethodExitRequest {
     return breakpointFactory.createMethodExitBreakpoint(evaluationContext, methodSignature) { suspendContext, _, value ->
       enableNextBreakpoint(-1)
       transformIfObjectReference(value) {
         val context = evalContextFactory.createContext(checkSuspendContext(suspendContext))
-        val handler = handlerFactory.getForSource()
+        val handler = handlerFactory.getForSource(time)
         val nextHandler = getNextCallTransformer(-1)
 
         nextHandler.beforeCall(context, handler.afterCall(context, it))
@@ -185,28 +185,27 @@ class StreamTracingManager(private val breakpointFactory: MethodBreakpointFactor
       val nextTransformer = getNextCallTransformer(callOrder)
       nextTransformer.beforeCall(context, handler.afterCall(context, value))
     }
-    val entryRequest = breakpointFactory.createMethodEntryBreakpoint(evaluationContext, methodSignature) { suspendContext, _, args ->
+    val entryRequest = breakpointFactory.createMethodEntryBreakpoint(evaluationContext, methodSignature) { suspendContext, method, args ->
       exitRequest.enable()
       val context = evalContextFactory.createContext(checkSuspendContext(suspendContext))
-      handler.transformArguments(context, args)
+      handler.transformArguments(context, method, args)
     }
     return StreamCallRuntimeInfo(handler, entryRequest, exitRequest)
   }
 
   private fun createTerminalOperationRequestors(evaluationContext: EvaluationContextImpl, time: ObjectReference,
-                                                callOrder: Int, call: TerminatorStreamCall,
-                                                methodSignature: MethodSignature): StreamCallRuntimeInfo {
-    val handler = handlerFactory.getForTermination(callOrder, call, time)
+                                                call: TerminatorStreamCall, methodSignature: MethodSignature): StreamCallRuntimeInfo {
+    val handler = handlerFactory.getForTermination(call, time)
     val exitRequest = breakpointFactory.createMethodExitBreakpoint(evaluationContext, methodSignature) { suspendContext, _, value ->
       val context = evalContextFactory.createContext(checkSuspendContext(suspendContext))
       val stepOutRequest = createStepOutRequest(context.suspendContext)
       stepOutRequest.enable()
       handler.afterCall(context, value)
     }
-    val entryRequest = breakpointFactory.createMethodEntryBreakpoint(evaluationContext, methodSignature) { suspendContext, _, args ->
+    val entryRequest = breakpointFactory.createMethodEntryBreakpoint(evaluationContext, methodSignature) { suspendContext, method, args ->
       exitRequest.enable()
       val context = evalContextFactory.createContext(checkSuspendContext(suspendContext))
-      handler.transformArguments(context, args)
+      handler.transformArguments(context, method, args)
     }
     return StreamCallRuntimeInfo(handler, entryRequest, exitRequest)
   }
@@ -312,13 +311,15 @@ class StreamTracingManager(private val breakpointFactory: MethodBreakpointFactor
    * ```
    * we can't determine where we should place breakpoint
    */
-  private fun replaceQualifierExpressionValue(evaluationContext: EvaluationContextImpl, qualifierExpression: QualifierExpression) {
+  private fun replaceQualifierExpressionValue(evaluationContext: EvaluationContextImpl,
+                                              qualifierExpression: QualifierExpression,
+                                              time: ObjectReference) {
     // not null assertion fails only if incorrect evaluationContext passed to method
     val frameProxy = evaluationContext.frameProxy!!
     val qualifierVariable = frameProxy.visibleVariableByName(qualifierExpression.text)
     val qualifierValue = frameProxy.getValue(qualifierVariable) as ObjectReference
 
-    val handler = handlerFactory.getForSource()
+    val handler = handlerFactory.getForSource(time)
     val transformedQualifierValue = handler.afterCall(evaluationContext, qualifierValue)
     frameProxy.setValue(qualifierVariable, transformedQualifierValue)
 

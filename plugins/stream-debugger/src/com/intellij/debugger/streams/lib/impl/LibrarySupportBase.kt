@@ -43,11 +43,6 @@ abstract class LibrarySupportBase(private val compatibleLibrary: UniversalLibrar
   }
 
   override fun createRuntimeHandlerFactory(valueManager: ValueManager): RuntimeHandlerFactory {
-    // TODO: factory
-    // Terminal operations:
-    // void forEach(Consumer<? super T> action)
-    // void forEachOrdered(Consumer<? super T> action)
-
     // Object[] toArray()
     // <A> A[] toArray(IntFunction<A[]> generator)
     // T reduce(T identity, BinaryOperator<T> accumulator)
@@ -70,12 +65,13 @@ abstract class LibrarySupportBase(private val compatibleLibrary: UniversalLibrar
     //  "findAny", "findFirst", "min", "max", "reduce" -> OptionalTraceFormatter(valueManager, evaluationContext)
     //  "forEach", "forEachOrdered" -> ForEachTraceFormatter(valueManager, evaluationContext)
     //  "anyMatch", "allMatch", "noneMatch" -> TODO("Not implemented")
-    //  else -> ToCollectionTraceFormatter(valueManager, evaluationContext)
     //}
+    // COMPLETED:
+    //  else -> ToCollectionTraceFormatter(valueManager, evaluationContext)
     return object : RuntimeHandlerFactory {
       val compatibleRuntimeHandlerFactory = compatibleLibrary.createRuntimeHandlerFactory(valueManager)
-      override fun getForSource(): RuntimeSourceCallHandler {
-        return compatibleRuntimeHandlerFactory.getForSource()
+      override fun getForSource(time: ObjectReference): RuntimeSourceCallHandler {
+        return compatibleRuntimeHandlerFactory.getForSource(time)
       }
 
       override fun getForIntermediate(number: Int, call: IntermediateStreamCall, time: ObjectReference): RuntimeIntermediateCallHandler {
@@ -84,10 +80,10 @@ abstract class LibrarySupportBase(private val compatibleLibrary: UniversalLibrar
                ?: compatibleRuntimeHandlerFactory.getForIntermediate(number, call, time)
       }
 
-      override fun getForTermination(number: Int, call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler {
+      override fun getForTermination(call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler {
         val terminalOperation = mySupportedTerminalOperations[call.name]
-        return terminalOperation?.getRuntimeTraceHandler(number, call, valueManager, time)
-               ?: compatibleRuntimeHandlerFactory.getForTermination(number, call, time)
+        return terminalOperation?.getRuntimeTraceHandler(call, valueManager, time)
+               ?: compatibleRuntimeHandlerFactory.getForTermination(call, time)
       }
     }
   }

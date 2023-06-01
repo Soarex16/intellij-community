@@ -9,11 +9,12 @@ import com.intellij.debugger.streams.resolve.ValuesOrderResolver
 import com.intellij.debugger.streams.trace.CallTraceInterpreter
 import com.intellij.debugger.streams.trace.IntermediateCallHandler
 import com.intellij.debugger.streams.trace.TerminatorCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.JavaBreakpointResolver
 import com.intellij.debugger.streams.trace.breakpoint.ValueManager
 import com.intellij.debugger.streams.trace.breakpoint.lib.*
 import com.intellij.debugger.streams.trace.breakpoint.lib.impl.handlers.PeekCallHandler
 import com.intellij.debugger.streams.trace.breakpoint.lib.impl.handlers.PeekTerminalCallHandler
-import com.intellij.debugger.streams.trace.breakpoint.lib.impl.handlers.Sequentializer
+import com.intellij.debugger.streams.trace.breakpoint.lib.impl.handlers.StreamPreparer
 import com.intellij.debugger.streams.trace.dsl.Dsl
 import com.intellij.debugger.streams.trace.impl.handler.unified.PeekTraceHandler
 import com.intellij.debugger.streams.trace.impl.handler.unified.TerminatorTraceHandler
@@ -34,21 +35,22 @@ class DefaultLibrarySupport : UniversalLibrarySupport {
   }
 
   override fun createRuntimeHandlerFactory(valueManager: ValueManager): RuntimeHandlerFactory = object : RuntimeHandlerFactory {
-    override fun getForSource(): RuntimeSourceCallHandler {
-      return Sequentializer(valueManager)
+    override fun getForSource(time: ObjectReference): RuntimeSourceCallHandler {
+      return StreamPreparer(valueManager, time)
     }
 
     override fun getForIntermediate(number: Int, call: IntermediateStreamCall, time: ObjectReference): RuntimeIntermediateCallHandler {
-      return PeekCallHandler(valueManager, number, call.typeBefore, call.typeAfter, time)
+      return PeekCallHandler(valueManager, time, call.typeBefore, call.typeAfter)
     }
 
-    override fun getForTermination(number: Int, call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler {
-      return PeekTerminalCallHandler(valueManager, number, time, call.typeBefore, call.resultType)
+    override fun getForTermination(call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler {
+      return PeekTerminalCallHandler(valueManager, time, call.typeBefore, call.resultType)
     }
   }
 
-  override val breakpointResolverFactory: BreakpointResolverFactory
-    get() = TODO("Not yet implemented")
+  override val breakpointResolverFactory: BreakpointResolverFactory = BreakpointResolverFactory {
+    JavaBreakpointResolver(it)
+  }
 
   override val interpreterFactory: InterpreterFactory = object : InterpreterFactory {
     override fun getInterpreter(callName: String): CallTraceInterpreter {

@@ -13,7 +13,7 @@ interface RuntimeHandlerFactory {
    * Source call handler doesn't accept any information about the source call, because in general
    * we can't determine source call (for ex. we can get stream as return value from user code)
    */
-  fun getForSource(): RuntimeSourceCallHandler
+  fun getForSource(time: ObjectReference): RuntimeSourceCallHandler
   fun getForIntermediate(number: Int, call: IntermediateStreamCall, time: ObjectReference): RuntimeIntermediateCallHandler
-  fun getForTermination(number: Int, call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler
+  fun getForTermination(call: TerminatorStreamCall, time: ObjectReference): RuntimeTerminalCallHandler
 }

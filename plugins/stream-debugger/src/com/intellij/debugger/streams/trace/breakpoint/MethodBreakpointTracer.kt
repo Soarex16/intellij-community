@@ -104,11 +104,13 @@ class MethodBreakpointTracer(private val session: XDebugSession,
 
   private fun createValueManager(objectStorage: ObjectStorage): ValueManager {
     val container = ValueManagerImpl(objectStorage)
-    container.defineClass(OBJECT_COLLECTOR_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(OBJECT_COLLECTOR_CLASS_FILE))
-    container.defineClass(INT_COLLECTOR_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(INT_COLLECTOR_CLASS_FILE))
-    container.defineClass(LONG_COLLECTOR_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(LONG_COLLECTOR_CLASS_FILE))
-    container.defineClass(DOUBLE_COLLECTOR_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(DOUBLE_COLLECTOR_CLASS_FILE))
+    container.defineClass(UNIVERSAL_COLLECTOR_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(UNIVERSAL_COLLECTOR_CLASS_FILE))
     container.defineClass(STREAM_DEBUGGER_UTILS_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(STREAM_DEBUGGER_UTILS_CLASS_FILE))
+
+    container.defineClass(OBJECT_MATCHER_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(OBJECT_MATCHER_CLASS_FILE))
+    container.defineClass(INT_MATCHER_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(INT_MATCHER_CLASS_FILE))
+    container.defineClass(LONG_MATCHER_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(LONG_MATCHER_CLASS_FILE))
+    container.defineClass(DOUBLE_MATCHER_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(DOUBLE_MATCHER_CLASS_FILE))
 
     return container
   }

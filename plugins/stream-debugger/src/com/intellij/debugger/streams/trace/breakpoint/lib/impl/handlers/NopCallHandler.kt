@@ -5,6 +5,7 @@ import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
 import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeIntermediateCallHandler
 import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeSourceCallHandler
 import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeTerminalCallHandler
+import com.sun.jdi.Method
 import com.sun.jdi.Value
 
 class NopCallHandler : RuntimeSourceCallHandler, RuntimeIntermediateCallHandler, RuntimeTerminalCallHandler {
@@ -12,7 +13,7 @@ class NopCallHandler : RuntimeSourceCallHandler, RuntimeIntermediateCallHandler,
 
   override fun beforeCall(evaluationContextImpl: EvaluationContextImpl, value: Value?): Value? = value
 
-  override fun transformArguments(evaluationContextImpl: EvaluationContextImpl, arguments: List<Value?>): List<Value?> = arguments
+  override fun transformArguments(evaluationContextImpl: EvaluationContextImpl, method: Method, arguments: List<Value?>): List<Value?> = arguments
 
   override fun afterCall(evaluationContextImpl: EvaluationContextImpl, value: Value?): Value? = value
 }

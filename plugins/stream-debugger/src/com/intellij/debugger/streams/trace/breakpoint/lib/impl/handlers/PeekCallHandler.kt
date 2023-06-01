@@ -11,16 +11,12 @@ import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeIntermediateCal
 import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeTerminalCallHandler
 import com.intellij.debugger.streams.trace.impl.handler.type.GenericType
 import com.intellij.psi.CommonClassNames
-import com.sun.jdi.ArrayReference
-import com.sun.jdi.ClassType
-import com.sun.jdi.ObjectReference
-import com.sun.jdi.Value
+import com.sun.jdi.*
 
 open class PeekCallHandler(protected val valueManager: ValueManager,
-                           protected val number: Int,
+                           protected val time: ObjectReference,
                            protected val typeBefore: GenericType?,
-                           protected val typeAfter: GenericType?,
-                           protected val time: ObjectReference) : RuntimeIntermediateCallHandler, RuntimeTerminalCallHandler {
+                           protected val typeAfter: GenericType?) : RuntimeIntermediateCallHandler, RuntimeTerminalCallHandler {
   private var beforeValuesMap: ObjectReference? = null
   private var afterValuesMap: ObjectReference? = null
 
@@ -57,7 +53,7 @@ open class PeekCallHandler(protected val valueManager: ValueManager,
     if (typeBefore != null && value is ObjectReference) {
       beforeValuesMap = instance(CommonClassNames.JAVA_UTIL_LINKED_HASH_MAP)
       val streamTypeInfo = StreamTypeInfo.forType(typeBefore.genericTypeName)
-      createInterceptor(value, streamTypeInfo, beforeValuesMap!!, number == 0)
+      createInterceptor(value, streamTypeInfo, beforeValuesMap!!, false)
     }
     else {
       value
@@ -80,72 +76,39 @@ open class PeekCallHandler(protected val valueManager: ValueManager,
                                              streamTypeInfo: StreamTypeInfo,
                                              valuesMap: ObjectReference,
                                              tick: Boolean): ObjectReference {
-    val collectorMirror = instance(streamTypeInfo.valueCollectorType, COLLECTOR_CONSTRUCTOR_SIGNATURE, listOf(valuesMap, time, tick.mirror))
-
-    val peekReceiverType = chainInstance.referenceType() as ClassType
+    val collectorMirror = instance(UNIVERSAL_COLLECTOR_CLASS_NAME, UNIVERSAL_COLLECTOR_CONSTRUCTOR_SIGNATURE, listOf(valuesMap, time, tick.mirror))
     val peekArgs = listOf(collectorMirror)
 
-    return peekReceiverType
+    return chainInstance
       .method("peek", streamTypeInfo.peekSignature)
       .invoke(chainInstance, peekArgs) as ObjectReference
   }
 
-  private fun ValueContext.formatMap(valueMap: ObjectReference?, streamTypeInfo: StreamTypeInfo): ArrayReference = if (valueMap == null) {
-    emptyResult()
-  }
-  else {
-    checkType(valueMap)
-    val helperClass = getType(STREAM_DEBUGGER_UTILS_CLASS_NAME) as ClassType
-    val formatMap = helperClass.method(streamTypeInfo.formatterMethod, "(Ljava/util/Map;)[Ljava/lang/Object;")
-    formatMap.invoke(helperClass, listOf(valueMap)) as ArrayReference
-  }
 
-  private fun ValueContext.emptyResult(): ArrayReference = array(
-    array("int", 0),
-    array(CommonClassNames.JAVA_LANG_OBJECT, 0)
-  )
 
-  private fun checkType(value: ObjectReference) {
-    if (!DebuggerUtils.instanceOf(value.type(), CommonClassNames.JAVA_UTIL_MAP)) {
-      throw IncorrectValueTypeException(CommonClassNames.JAVA_UTIL_MAP, value.type().name())
-    }
-  }
-
-  override fun transformArguments(evaluationContextImpl: EvaluationContextImpl, arguments: List<Value?>): List<Value?> = arguments
+  override fun transformArguments(evaluationContextImpl: EvaluationContextImpl, method: Method, arguments: List<Value?>): List<Value?> = arguments
 }
 
-enum class StreamTypeInfo(val type: String,
-                          val consumerType: String,
-                          val peekSignature: String,
-                          val valueCollectorType: String,
-                          val formatterMethod: String) {
+enum class StreamTypeInfo(val type: String, val peekSignature: String, val formatterMethod: String) {
   ObjectStream(
     CommonClassNames.JAVA_UTIL_STREAM_STREAM,
-    JAVA_UTIL_FUNCTION_CONSUMER,
     OBJECT_CONSUMER_SIGNATURE,
-    OBJECT_COLLECTOR_CLASS_NAME,
     "formatObjectMap"
   ),
   IntStream(
     CommonClassNames.JAVA_UTIL_STREAM_INT_STREAM,
-    JAVA_UTIL_FUNCTION_INT_CONSUMER,
     INT_CONSUMER_SIGNATURE,
-    INT_COLLECTOR_CLASS_NAME,
     "formatIntMap"
   ),
   LongStream(
     CommonClassNames.JAVA_UTIL_STREAM_LONG_STREAM,
-    JAVA_UTIL_FUNCTION_LONG_CONSUMER,
     LONG_CONSUMER_SIGNATURE,
-    LONG_COLLECTOR_CLASS_NAME,
     "formatLongMap"
   ),
   DoubleStream(
     CommonClassNames.JAVA_UTIL_STREAM_DOUBLE_STREAM,
-    JAVA_UTIL_FUNCTION_DOUBLE_CONSUMER,
     DOUBLE_CONSUMER_SIGNATURE,
-    DOUBLE_COLLECTOR_CLASS_NAME,
-    "formatBooleanMap"
+    "formatDoubleMap"
   );
 
   companion object {

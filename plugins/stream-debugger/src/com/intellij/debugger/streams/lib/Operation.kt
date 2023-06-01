@@ -35,5 +35,5 @@ interface IntermediateOperation : Operation {
 interface TerminalOperation : Operation {
   fun getTraceHandler(call: TerminatorStreamCall, resultExpression: String, dsl: Dsl): TerminatorCallHandler
 
-  fun getRuntimeTraceHandler(number: Int, call: TerminatorStreamCall, valueManager: ValueManager, time: ObjectReference): RuntimeTerminalCallHandler? = null
+  fun getRuntimeTraceHandler(call: TerminatorStreamCall, valueManager: ValueManager, time: ObjectReference): RuntimeTerminalCallHandler? = null
 }
