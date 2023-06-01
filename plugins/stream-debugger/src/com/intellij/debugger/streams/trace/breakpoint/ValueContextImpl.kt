@@ -89,13 +89,13 @@ class ValueContextImpl(private val bytecodeFactories: Map<String, BytecodeFactor
   override fun array(values: List<Value?>): ArrayReference {
     val valueTypes = values.map { it?.type() }.distinct()
     val componentType = when {
-      values.isEmpty() -> throw BreakpointTracingException("Could not infer type for empty array.")
+      values.isEmpty() -> throw ValueInstantiationException("Could not infer type for empty array.")
       valueTypes.all { it is ReferenceType || it == null } -> CommonClassNames.JAVA_LANG_OBJECT
-      valueTypes.size > 1 -> throw BreakpointTracingException(
+      valueTypes.size > 1 -> throw ValueInstantiationException(
         "Could not create array of non-reference types from a list of values with different types")
       valueTypes.first() is PrimitiveType -> valueTypes.first()!!.name()
       // All values of the same (but not primitive or reference) type. For ex. void value
-      else -> throw BreakpointTracingException("All values in an array must be of a reference type or of the same primitive type.")
+      else -> throw ValueInstantiationException("All values in an array must be of a reference type or of the same primitive type.")
     }
 
     val array = array(componentType, values.size)
@@ -106,13 +106,12 @@ class ValueContextImpl(private val bytecodeFactories: Map<String, BytecodeFactor
   override fun ObjectReference.method(name: String, signature: String): Method = referenceType().method(name, signature)
 
   override fun ReferenceType.method(name: String, signature: String): Method {
-    val method = DebuggerUtils.findMethod(this, name, signature)
+    return DebuggerUtils.findMethod(this, name, signature)
       ?: throw MethodNotFoundException(name, signature, this.name())
-    method.prepareArguments(evaluationContext)
-    return method
   }
 
   override fun Method.invoke(cls: ClassType, arguments: List<Value?>): Value? {
+    prepareArguments(evaluationContext)
     val returnValue = evaluationContext.debugProcess
       .invokeMethod(evaluationContext, cls, this, arguments, 0, true)
 
@@ -121,6 +120,7 @@ class ValueContextImpl(private val bytecodeFactories: Map<String, BytecodeFactor
   }
 
   override fun Method.invoke(obj: ObjectReference, arguments: List<Value?>): Value? {
+    prepareArguments(evaluationContext)
     val returnValue = evaluationContext.debugProcess
       .invokeInstanceMethod(evaluationContext, obj, this, arguments, 0, true)
 
