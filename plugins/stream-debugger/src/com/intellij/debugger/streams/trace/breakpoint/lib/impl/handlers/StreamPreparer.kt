@@ -42,7 +42,7 @@ import com.sun.jdi.Value
  */
 class StreamPreparer(private val valueManager: ValueManager, val time: ObjectReference) : RuntimeSourceCallHandler {
   override fun afterCall(evaluationContextImpl: EvaluationContextImpl, value: Value?): Value? = valueManager.watch(evaluationContextImpl) {
-    val streamObject = value as? ObjectReference ?: return@watch null
+    val streamObject = value as? ObjectReference ?: return@watch value
     val sequentializedStream = addSequentialOperator(streamObject)
     val streamWithTicker = addTicker(sequentializedStream)
     streamWithTicker
@@ -63,11 +63,5 @@ class StreamPreparer(private val valueManager: ValueManager, val time: ObjectRef
     // methodsByName may throw ClassNotPreparedException, but by the time we execute this method,
     // it is guaranteed that the stream class is loaded
     return streamObject.referenceType().methodsByName("peek").single()
-  }
-
-  private fun ValueContext.addSequentialOperator(streamObject: ObjectReference): ObjectReference {
-    return streamObject
-      .method("sequential", "()Ljava/util/stream/BaseStream;")
-      .invoke(streamObject) as ObjectReference
   }
 }
