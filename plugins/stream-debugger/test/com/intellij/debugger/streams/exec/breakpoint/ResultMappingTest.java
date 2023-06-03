@@ -101,15 +101,15 @@ public class ResultMappingTest extends BreakpointBasedTraceExecutionTestCase {
     doTest(false);
   }
 
-  public void testAllMatchExtraCalls() {
+  public void testAllMatchExtraCallsBreakpointBased() {
     doTest(false);
   }
 
-  public void testAnyMatchExtraCalls() {
+  public void testAnyMatchExtraCallsBreakpointBased() {
     doTest(false);
   }
 
-  public void testNoneMatchExtraCalls() {
+  public void testNoneMatchExtraCallsBreakpointBased() {
     doTest(false);
   }
 }
