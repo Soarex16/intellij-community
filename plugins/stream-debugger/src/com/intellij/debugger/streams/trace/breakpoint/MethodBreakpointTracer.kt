@@ -1,0 +1,127 @@
+// Copyright 2000-2022 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license that can be found in the LICENSE file.
+package com.intellij.debugger.streams.trace.breakpoint
+
+import com.intellij.debugger.engine.JavaDebugProcess
+import com.intellij.debugger.engine.SuspendContextImpl
+import com.intellij.debugger.engine.evaluation.EvaluationContextImpl
+import com.intellij.debugger.engine.events.DebuggerCommandImpl
+import com.intellij.debugger.engine.events.SuspendContextCommandImpl
+import com.intellij.debugger.impl.ClassLoadingUtils
+import com.intellij.debugger.impl.PrioritizedTask
+import com.intellij.debugger.streams.StreamDebuggerBundle
+import com.intellij.debugger.streams.trace.StreamTracer
+import com.intellij.debugger.streams.trace.TraceResultInterpreter
+import com.intellij.debugger.streams.trace.TracingCallback
+import com.intellij.debugger.streams.trace.TracingResult
+import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_FILE
+import com.intellij.debugger.streams.trace.breakpoint.DebuggerUtils.STREAM_DEBUGGER_UTILS_CLASS_NAME
+import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointPlaceNotFoundException
+import com.intellij.debugger.streams.trace.breakpoint.ex.BreakpointTracingException
+import com.intellij.debugger.streams.trace.breakpoint.lib.BreakpointBasedLibrarySupport
+import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeHandlerFactory
+import com.intellij.debugger.streams.wrapper.StreamChain
+import com.intellij.openapi.diagnostic.logger
+import com.intellij.xdebugger.XDebugSession
+import com.sun.jdi.ArrayReference
+
+private val LOG = logger<MethodBreakpointTracer>()
+
+/**
+ * @author Shumaf Lovpache
+ */
+class MethodBreakpointTracer(private val session: XDebugSession,
+                             private val breakpointTracingSupport: BreakpointBasedLibrarySupport,
+                             private val breakpointResolver: BreakpointResolver,
+                             private val resultInterpreter: TraceResultInterpreter) : StreamTracer {
+  override fun trace(chain: StreamChain, callback: TracingCallback) {
+    val xDebugProcess = session.debugProcess as? JavaDebugProcess ?: return
+
+    val runTraceCommand = object : DebuggerCommandImpl(PrioritizedTask.Priority.NORMAL) {
+      override fun action() {
+        trace(xDebugProcess, chain, callback)
+      }
+    }
+    val debuggerManagerThread = xDebugProcess.debuggerSession.process.managerThread
+    debuggerManagerThread.schedule(runTraceCommand)
+  }
+
+  private fun trace(debugProcess: JavaDebugProcess, chain: StreamChain, callback: TracingCallback) {
+    val process = debugProcess.debuggerSession.process
+    process.managerThread.schedule(object : SuspendContextCommandImpl(process.suspendManager.pausedContext) {
+      override fun contextAction(suspendContext: SuspendContextImpl) {
+        val evalContext = createEvaluationContext(debugProcess, suspendContext)
+        val evalContextFactory: EvaluationContextFactory = DefaultEvaluationContextFactory(evalContext.classLoader!!)
+        val objectStorage: ObjectStorage = DisableCollectionObjectStorage()
+        val valueManager: ValueManager = createValueManager(objectStorage)
+        val handlerFactory: RuntimeHandlerFactory = breakpointTracingSupport.createRuntimeHandlerFactory(valueManager)
+
+        val breakpointFactory: MethodBreakpointFactory = JDIMethodBreakpointFactory()
+        // TODO: очень много параметров, нужно порефакторить
+        val tracingManager = StreamTracingManager(breakpointFactory, breakpointResolver, evalContextFactory,
+                                                  handlerFactory, valueManager, debugProcess,
+                                                  chain) cb@{ context, result ->
+          if (result is ArrayReference) {
+            val interpretedResult: TracingResult = try {
+              resultInterpreter.interpret(chain, result)
+            }
+            catch (t: Throwable) {
+              callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.interpret.result", t.message!!))
+              throw t
+            }
+            callback.evaluated(interpretedResult, context)
+            return@cb
+          }
+
+          // TODO: pass some onException callback to debugger commands because of async stacks
+          //val exceptionMessage = tryExtractExceptionMessage(result)
+          //val description = "Evaluation failed: " + type.name() + " exception thrown"
+          //val descriptionWithReason = if (exceptionMessage == null) description else "$description: $exceptionMessage"
+          //callback.evaluationFailed("", descriptionWithReason)
+
+          callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.unknown.result.type"))
+        }
+        // TODO: после трассировки проверять, что брейкпоинты,
+        //  которые мы расставили были подчищены. Также полезно
+        //  рассмотреть как поведет себя control flow в случае
+        //  завершения дебага, не будет ли течь память
+
+        // TODO: посмотреть куда будут вываливаться исключения, созданные в коллбеках брейкпоинтов
+        try {
+          tracingManager.evaluateChain(evalContext)
+        }
+        catch (e: BreakpointPlaceNotFoundException) {
+          callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.find.places.for.breakpoints"))
+          LOG.error(e)
+        }
+        catch (e: BreakpointTracingException) {
+          callback.evaluationFailed("", StreamDebuggerBundle.message("evaluation.failed.cannot.initialize.breakpoints"))
+          objectStorage.dispose()
+          LOG.error(e)
+        }
+      }
+    })
+  }
+
+  private fun createValueManager(objectStorage: ObjectStorage): ValueManager {
+    val container = ValueManagerImpl(objectStorage)
+    container.defineClass(UNIVERSAL_COLLECTOR_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(UNIVERSAL_COLLECTOR_CLASS_FILE))
+    container.defineClass(STREAM_DEBUGGER_UTILS_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(STREAM_DEBUGGER_UTILS_CLASS_FILE))
+
+    container.defineClass(OBJECT_MATCHER_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(OBJECT_MATCHER_CLASS_FILE))
+    container.defineClass(INT_MATCHER_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(INT_MATCHER_CLASS_FILE))
+    container.defineClass(LONG_MATCHER_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(LONG_MATCHER_CLASS_FILE))
+    container.defineClass(DOUBLE_MATCHER_CLASS_NAME, RuntimeLibrary.getBytecodeLoader(DOUBLE_MATCHER_CLASS_FILE))
+
+    return container
+  }
+
+  private fun createEvaluationContext(debugProcess: JavaDebugProcess, suspendContext: SuspendContextImpl): EvaluationContextImpl {
+    val process = debugProcess.debuggerSession.process
+    val currentStackFrameProxy = suspendContext.frameProxy
+    val ctx = EvaluationContextImpl(suspendContext, currentStackFrameProxy)
+      .withAutoLoadClasses(true)
+    // explicitly setting class loader because we don't want to modify user's class loader
+    ctx.classLoader = ClassLoadingUtils.getClassLoader(ctx, process)
+    return ctx
+  }
+}

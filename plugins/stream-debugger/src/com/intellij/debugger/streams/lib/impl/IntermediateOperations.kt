@@ -3,6 +3,8 @@ package com.intellij.debugger.streams.lib.impl
 
 import com.intellij.debugger.streams.resolve.*
 import com.intellij.debugger.streams.trace.IntermediateCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.lib.impl.handlers.ParallelCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.lib.impl.handlers.PeekCallHandler
 import com.intellij.debugger.streams.trace.dsl.Dsl
 import com.intellij.debugger.streams.trace.impl.handler.unified.ParallelHandler
 import com.intellij.debugger.streams.trace.impl.handler.unified.PeekTraceHandler
@@ -18,7 +20,8 @@ open class OrderBasedOperation(name: String, orderResolver: ValuesOrderResolver)
   : IntermediateOperationBase(name,
                               { num, call, dsl -> PeekTraceHandler(num, call.name, call.typeBefore, call.typeAfter, dsl) },
                               SimplePeekCallTraceInterpreter(),
-                              orderResolver)
+                              orderResolver,
+                              { _, call, valueManager, time -> PeekCallHandler(valueManager, time, call.typeBefore, call.typeAfter) })
 
 class FilterOperation(name: String) : OrderBasedOperation(name, FilterResolver())
 class MappingOperation(name: String) : OrderBasedOperation(name, MapResolver())
@@ -28,9 +31,12 @@ class SortedOperation(name: String) : OrderBasedOperation(name, IdentityResolver
 class DistinctOperation(name: String, handlerFactory: (Int, IntermediateStreamCall, Dsl) -> IntermediateCallHandler)
   : IntermediateOperationBase(name, handlerFactory, DistinctCallTraceInterpreter(), DistinctResolver())
 
-class ParallelOperation(name: String) : IntermediateOperationBase(name,
-                                                                            { num, call, dsl -> ParallelHandler(num, call, dsl) },
-                                                                            SimplePeekCallTraceInterpreter(), FilterResolver())
+class ParallelOperation(name: String) :
+  IntermediateOperationBase(name,
+                            { num, call, dsl -> ParallelHandler(num, call, dsl) },
+                            SimplePeekCallTraceInterpreter(),
+                            FilterResolver(),
+                            { _, call, valueManager, time -> ParallelCallHandler(valueManager, time, call.typeBefore, call.typeAfter) })
 
 class ConcatOperation(name: String, orderResolver: ValuesOrderResolver) : OrderBasedOperation(name, orderResolver)
 class CollapseOperation(name: String) : OrderBasedOperation(name, CollapseResolver())

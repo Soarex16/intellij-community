@@ -5,16 +5,27 @@ import com.intellij.debugger.streams.lib.TerminalOperation
 import com.intellij.debugger.streams.resolve.ValuesOrderResolver
 import com.intellij.debugger.streams.trace.CallTraceInterpreter
 import com.intellij.debugger.streams.trace.TerminatorCallHandler
+import com.intellij.debugger.streams.trace.breakpoint.ValueManager
+import com.intellij.debugger.streams.trace.breakpoint.lib.RuntimeTerminalCallHandler
 import com.intellij.debugger.streams.trace.dsl.Dsl
 import com.intellij.debugger.streams.wrapper.TerminatorStreamCall
+import com.sun.jdi.ObjectReference
+
+typealias RuntimeTerminalCallHandlerFactory = (call: TerminatorStreamCall, valueManager: ValueManager, time: ObjectReference) -> RuntimeTerminalCallHandler
 
 /**
  * @author Vitaliy.Bibaev
  */
 abstract class TerminalOperationBase(override val name: String,
                                      private val handlerFactory: (TerminatorStreamCall, String, dsl: Dsl) -> TerminatorCallHandler,
+                                     private val runtimeHandlerFactory: RuntimeTerminalCallHandlerFactory? = null,
                                      override val traceInterpreter: CallTraceInterpreter,
                                      override val valuesOrderResolver: ValuesOrderResolver) : TerminalOperation {
   override fun getTraceHandler(call: TerminatorStreamCall, resultExpression: String, dsl: Dsl): TerminatorCallHandler =
     handlerFactory.invoke(call, resultExpression, dsl)
+
+  override fun getRuntimeTraceHandler(call: TerminatorStreamCall,
+                                      valueManager: ValueManager,
+                                      time: ObjectReference): RuntimeTerminalCallHandler? =
+    runtimeHandlerFactory?.invoke(call, valueManager, time)
 }
